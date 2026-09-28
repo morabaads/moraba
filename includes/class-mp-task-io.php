@@ -364,7 +364,7 @@ class MP_Task_IO {
 					'date'     => $x['date'],
 					'time'     => $x['time'],
 					'project'  => $x['project'],
-					'title'    => '' !== $x['goal'] ? $x['goal'] : ( '' !== $x['project'] ? $x['project'] : $x['title'] ),
+					'title'    => '',
 					'week'     => $x['week'],
 					'goal'     => $x['goal'],
 					'priority' => $x['priority'],
@@ -394,9 +394,16 @@ class MP_Task_IO {
 		foreach ( $out as &$g ) {
 			$st          = wp_list_pluck( $g['items'], 'status' );
 			$g['status'] = count( array_filter( $st, function ( $v ) { return 'done' === $v; } ) ) === count( $st ) ? 'done' : ( array_intersect( array( 'doing', 'done' ), $st ) ? 'doing' : 'todo' );
-			if ( 1 === count( $g['items'] ) && '' === $g['project'] && '' === $g['goal'] ) {
-				$g['title'] = $g['items'][0]['title'];
+			// Title is the person's own work, not the team-wide goal of the day: «first sub-task (+n)».
+			$first = $g['items'][0]['title'];
+			if ( mb_strlen( $first ) > 55 ) {
+				$cut   = mb_substr( $first, 0, 55 );
+				$space = mb_strrpos( $cut, ' ' );
+				$first = ( $space > 30 ? mb_substr( $cut, 0, $space ) : $cut ) . '…';
 			}
+			$more       = count( $g['items'] ) - 1;
+			// The project already shows next to the title in the panel, so it isn't repeated here.
+			$g['title'] = $first . ( $more ? ' (+' . MP_Jalali::digits( $more ) . ')' : '' );
 		}
 		unset( $g );
 		return $out;

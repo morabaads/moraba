@@ -1627,3 +1627,22 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .daily-prompt{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:16px;border:1px solid var(--brand);background:var(--brand-soft)}
 .daily-prompt>span{flex:1;display:grid}
 .daily-prompt small{color:var(--ink-2)}
+
+/* My tasks: time tabs */
+.mt-tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 10px 8px;border-bottom:1px solid var(--line);scrollbar-width:none;position:sticky;top:0;background:var(--surface);z-index:2}
+.mt-tabs::-webkit-scrollbar{display:none}
+.mt-tab{display:inline-flex;align-items:center;gap:6px;flex:none;padding:7px 14px;border:1px solid var(--line);border-radius:var(--r-pill);background:none;color:var(--ink-2);font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background var(--t-fast),color var(--t-fast)}
+.mt-tab b{min-width:20px;padding:0 6px;border-radius:var(--r-pill);background:var(--surface-3);font-size:11px;line-height:20px;text-align:center}
+.mt-tab[aria-selected=true]{background:var(--brand);border-color:var(--brand);color:#fff}
+.mt-tab[aria-selected=true] b{background:rgba(255,255,255,.25);color:#fff}
+.mt-tab.late:not([aria-selected=true]) b{background:#fdecec;color:#b33}
+.mt-day{padding:12px 6px 4px;font-size:12px;font-weight:700;color:var(--muted)}
+
+/* Chat list: search + tabs */
+.chat-search{margin:4px 4px 8px;width:auto}
+.chat-tabs{display:flex;gap:6px;overflow-x:auto;padding:0 4px 10px;margin-bottom:6px;border-bottom:1px solid var(--line);scrollbar-width:none}
+.chat-tabs::-webkit-scrollbar{display:none}
+.chat-tabs button{display:inline-flex;align-items:center;gap:5px;flex:none;padding:6px 12px;border:1px solid var(--line);border-radius:var(--r-pill);background:none;color:var(--ink-2);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.chat-tabs button[aria-selected=true]{background:var(--brand);border-color:var(--brand);color:#fff}
+.chat-tabs button i{font-style:normal;min-width:18px;padding:0 5px;border-radius:9px;background:var(--brand);color:#fff;font-size:10px;line-height:18px;text-align:center}
+.chat-tabs button[aria-selected=true] i{background:rgba(255,255,255,.3)}

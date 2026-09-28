@@ -517,6 +517,7 @@
       return MP.inRange(t.date, range);
     }).sort(function (a, b) { return (a.done - b.done) || (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')); });
     $('#mt-count').textContent = fa(items.length) + ' تسک';
+    if (status === 'open' && tab === 'done') tab = 'today';
     box.replaceChildren();
     if (!items.length) {
       box.append(q || status !== 'open' || source !== 'all' || range !== 'all'
@@ -524,22 +525,41 @@
         : MP.empty('checks', 'همه کارها انجام شده!', 'تسک باز ندارید. یک تسک جدید اضافه کنید.', { text: 'افزودن تسک', onclick: function () { MP.taskForm(); } }));
       return;
     }
-    var groups = [['overdue', 'عقب‌افتاده'], ['today', 'امروز'], ['upcoming', 'پیش رو'], ['done', 'انجام‌شده']];
-    groups.forEach(function (g) {
-      var list = items.filter(function (t) {
-        if (g[0] === 'done') return t.done;
-        if (t.done) return false;
-        if (g[0] === 'overdue') return t.date < S.today;
-        if (g[0] === 'today') return t.date === S.today;
-        return t.date > S.today;
-      });
-      if (!list.length) return;
-      box.append(el('div', { class: 'group-title', text: g[1] + ' · ' + fa(list.length) }));
-      var stack = el('div', { class: 'task-stack', style: { maxHeight: 'none', padding: '0 8px 8px' } });
-      list.forEach(function (t) { var r = MP.taskRow(t); if (t.id === MP.lastCreated) r.classList.add('rise'); stack.append(r); });
-      box.append(stack);
+    // Tabs instead of one long list: each bucket holds one slice of time, none overlap.
+    var t1 = J.addDays(S.today, 1), t2 = J.addDays(S.today, 2), weekEnd = J.addDays(J.weekStart(S.today), 6);
+    var jm = J.fromIso(S.today), monthEnd = J.toIso(jm.jy, jm.jm, J.monthLength(jm.jy, jm.jm));
+    var buckets = [
+      ['overdue', 'عقب‌افتاده', function (t) { return !t.done && t.date < S.today; }],
+      ['today', 'امروز', function (t) { return !t.done && t.date === S.today; }],
+      ['tomorrow', 'فردا', function (t) { return !t.done && t.date === t1; }],
+      ['after', 'پس‌فردا', function (t) { return !t.done && t.date === t2; }],
+      ['week', 'بقیه این هفته', function (t) { return !t.done && t.date > t2 && t.date <= weekEnd; }],
+      ['month', 'بقیه این ماه', function (t) { return !t.done && t.date > t2 && t.date > weekEnd && t.date <= monthEnd; }],
+      ['later', 'بعدتر', function (t) { return !t.done && t.date > t2 && t.date > monthEnd; }],
+      ['done', 'انجام‌شده', function (t) { return t.done; }]
+    ];
+    var counts = {};
+    buckets.forEach(function (b) { counts[b[0]] = items.filter(b[2]).length; });
+    if (!counts[tab] && tab !== 'today') { var firstFull = buckets.filter(function (b) { return counts[b[0]]; })[0]; tab = firstFull ? firstFull[0] : 'today'; }
+    var bar = el('div', { class: 'mt-tabs', role: 'tablist' }, buckets.filter(function (b) { return counts[b[0]] || b[0] === 'today'; }).map(function (b) {
+      return el('button', { type: 'button', role: 'tab', class: 'mt-tab' + (b[0] === 'overdue' ? ' late' : ''), 'aria-selected': String(b[0] === tab), onclick: function () { tab = b[0]; try { localStorage.setItem('mp_mt_tab', tab); } catch (e) { /* private mode */ } render(); } },
+        el('span', { text: b[1] }), el('b', { text: fa(counts[b[0]]) }));
+    }));
+    box.append(bar);
+    var cur = buckets.filter(function (b) { return b[0] === tab; })[0];
+    var list = items.filter(cur[2]);
+    if (!list.length) { box.append(MP.empty('checks', tab === 'today' ? 'برای امروز کاری نمانده' : 'موردی نیست', null, null, true)); return; }
+    var stack = el('div', { class: 'task-stack', style: { maxHeight: 'none', padding: '0 8px 8px' } });
+    var day = '';
+    list.forEach(function (t) {
+      // Multi-day tabs get a small date line between days.
+      if (['overdue', 'week', 'month', 'later', 'done'].indexOf(tab) >= 0 && t.date !== day) { day = t.date; stack.append(el('div', { class: 'mt-day', text: J.formatLong(day) })); }
+      var r = MP.taskRow(t); if (t.id === MP.lastCreated) r.classList.add('rise'); stack.append(r);
     });
+    box.append(stack);
   }
+  var tab = 'today';
+  try { tab = localStorage.getItem('mp_mt_tab') || 'today'; } catch (e) { /* private mode */ }
   ['#mt-q', '#mt-status', '#mt-source', '#mt-range'].forEach(function (s) { $(s).addEventListener('input', render); });
   $('#mytasks-add').onclick = function () { MP.taskForm(); };
   MP.view('mytasks', { open: render });

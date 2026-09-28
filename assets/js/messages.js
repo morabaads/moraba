@@ -16,26 +16,58 @@
     if (c.type === 'direct') return MP.avatar(MP.user(c.other));
     return el('span', { class: 'ci-ico' + (c.type === 'client' ? ' client' : c.type === 'group' ? ' group' : ''), html: icon(c.type === 'client' ? 'user' : c.type === 'group' ? 'chat' : 'folder') });
   }
+  /*
+   * Chat list: search + tabs. Tabs are «all», «private», «team groups», one per project folder
+   * (e.g. افزونه‌ها، قالب‌ها), «other projects» and «clients». Project groups nobody has written in yet
+   * stay hidden unless searched for or «show quiet groups» is on, so the list shows real conversations.
+   */
+  var listTab = 'all', listQ = '', showQuiet = false;
+  try { listTab = localStorage.getItem('mp_chat_tab') || 'all'; } catch (e) { /* private mode */ }
+  function folderOf(c) { var p = c.project_id ? MP.project(c.project_id) : null; return p && p.folder_id ? p.folder_id : 0; }
+  function tabsFor(chs) {
+    var t = [['all', 'همه']];
+    if (chs.some(function (c) { return c.type === 'direct'; })) t.push(['direct', 'خصوصی']);
+    if (chs.some(function (c) { return c.type === 'group'; })) t.push(['group', 'گروه‌های تیم']);
+    (S.folders || []).forEach(function (f) { if (chs.some(function (c) { return c.type === 'project' && folderOf(c) === f.id; })) t.push(['f' + f.id, f.name]); });
+    if (chs.some(function (c) { return c.type === 'project' && !folderOf(c); })) t.push(['project', (S.folders || []).length ? 'سایر پروژه‌ها' : 'پروژه‌ها']);
+    if (chs.some(function (c) { return c.type === 'client'; })) t.push(['client', 'مشتری‌ها']);
+    return t;
+  }
+  function inTab(c, tab) {
+    if (tab === 'all') return true;
+    if (tab.charAt(0) === 'f') return c.type === 'project' && folderOf(c) === +tab.slice(1);
+    if (tab === 'project') return c.type === 'project' && !folderOf(c);
+    return c.type === tab;
+  }
   function renderList() {
-    var list = $('#chat-list'); list.replaceChildren();
-    var groups = [['group', 'گروه‌های تیم'], ['project', 'گروه‌های پروژه'], ['direct', 'گفت‌وگوهای خصوصی'], ['client', 'گروه‌های مشتری']];
-    var any = false;
-    groups.forEach(function (g) {
-      var items = S.channels.filter(function (c) { return c.type === g[0]; })
-        .sort(function (a, b) { return (b.last ? b.last.id : 0) - (a.last ? a.last.id : 0); });
-      if (!items.length) return;
-      any = true;
-      list.append(el('div', { class: 'pop-group', text: g[1] }));
-      items.forEach(function (c) {
-        list.append(el('button', { type: 'button', class: 'chat-item' + (c.id === current ? ' active' : ''), onclick: function () { select(c.id); } },
-          channelIcon(c),
-          el('span', { class: 'ci-copy' }, el('strong', { text: c.title }),
-            preview(c)),
-          c.unread ? el('span', { class: 'badge', text: fa(c.unread) }) : null));
-      });
+    var list = $('#chat-list'), keepFocus = document.activeElement && document.activeElement.id === 'chat-search';
+    list.replaceChildren();
+    var search = el('label', { class: 'search chat-search' }, MP.iconEl('search'), el('input', { type: 'search', id: 'chat-search', placeholder: 'جستجوی گفت‌وگو…', value: listQ, 'aria-label': 'جستجوی گفت‌وگو' }));
+    $('input', search).oninput = function (e) { listQ = e.target.value; renderList(); };
+    var tabs = tabsFor(S.channels);
+    if (!tabs.some(function (t) { return t[0] === listTab; })) listTab = 'all';
+    var unreadIn = function (tab) { return S.channels.filter(function (c) { return inTab(c, tab) && c.unread; }).length; };
+    var bar = el('div', { class: 'chat-tabs', role: 'tablist' }, tabs.map(function (t) {
+      var n = unreadIn(t[0]);
+      return el('button', { type: 'button', role: 'tab', 'aria-selected': String(t[0] === listTab), onclick: function () { listTab = t[0]; try { localStorage.setItem('mp_chat_tab', listTab); } catch (e) { /* private mode */ } renderList(); } },
+        t[1], n && t[0] !== 'all' ? el('i', { text: fa(n) }) : null);
+    }));
+    list.append(search, bar);
+    var q = MP.norm(listQ);
+    var all = S.channels.filter(function (c) { return inTab(c, listTab) && (!q || MP.norm(c.title + ' ' + (c.client_name || '')).indexOf(q) >= 0); });
+    var quiet = all.filter(function (c) { return c.type === 'project' && !c.last && c.id !== current; });
+    var items = (q || showQuiet) ? all : all.filter(function (c) { return quiet.indexOf(c) < 0; });
+    items.sort(function (a, b) { return (b.unread ? 1 : 0) - (a.unread ? 1 : 0) || (b.last ? b.last.id : 0) - (a.last ? a.last.id : 0); });
+    items.forEach(function (c) {
+      list.append(el('button', { type: 'button', class: 'chat-item' + (c.id === current ? ' active' : ''), onclick: function () { select(c.id); } },
+        channelIcon(c),
+        el('span', { class: 'ci-copy' }, el('strong', { text: c.title }), preview(c)),
+        c.unread ? el('span', { class: 'badge', text: fa(c.unread) }) : null));
     });
-    if (!any) list.append(MP.empty('chat', 'گفت‌وگویی نیست', 'با «پیام جدید» گفت‌وگو را شروع کنید.', { text: 'پیام جدید', onclick: newDirect }, true));
+    if (!items.length) list.append(MP.empty(q ? 'search' : 'chat', q ? 'چیزی پیدا نشد' : 'گفت‌وگویی نیست', q ? null : 'با «پیام جدید» گفت‌وگو را شروع کنید.', q ? null : { text: 'پیام جدید', onclick: newDirect }, true));
+    if (quiet.length && !q) list.append(el('button', { type: 'button', class: 'chat-archive-link', html: icon(showQuiet ? 'eye' : 'folder') + (showQuiet ? 'پنهان کردن گروه‌های بی‌پیام' : fa(quiet.length) + ' گروه پروژه بدون پیام'), onclick: function () { showQuiet = !showQuiet; renderList(); } }));
     list.append(el('button', { type: 'button', class: 'chat-archive-link', html: icon('folder') + 'گروه‌های آرشیو‌شده', onclick: archivedGroups }));
+    if (keepFocus) { var i = $('#chat-search'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   }
   /** Chat list preview: last message text, or an icon + label for voice / file / deleted. */
   function preview(c) {
