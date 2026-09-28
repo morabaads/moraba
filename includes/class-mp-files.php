@@ -168,6 +168,12 @@ class MP_Files {
 	public static function can_read( $file, $client_token = '' ) {
 		global $wpdb;
 		$uid = get_current_user_id();
+		if ( 'client_item' === $file->context && $client_token ) {
+			$pid = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT project_id FROM ' . MP_Install::table( 'channels' ) . " WHERE type = 'client' AND token = %s AND archived_at IS NULL", $client_token ) );
+			if ( $pid && $pid === (int) $file->context_id ) {
+				return true;
+			}
+		}
 		if ( 'message' === $file->context && $client_token ) {
 			$ch = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . MP_Install::table( 'channels' ) . " WHERE type = 'client' AND token = %s", $client_token ) );
 			if ( $ch && (int) $ch->id === (int) $file->context_id ) {
@@ -186,6 +192,9 @@ class MP_Files {
 		}
 		if ( 'message' === $file->context ) {
 			return MP_Rest::can_read_channel( $file->context_id );
+		}
+		if ( 'client_item' === $file->context ) {
+			return MP_Util::can_see_project( $file->context_id );
 		}
 		return false;
 	}

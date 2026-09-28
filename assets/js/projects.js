@@ -48,6 +48,7 @@
       el('div', { class: 'card-head' }, el('h2', { text: 'بخش‌های پروژه' }),
         el('div', { class: 'card-tools' },
           el('span', { class: 'chip', text: J.format(p.start, false) + ' تا ' + J.format(p.end, false) }),
+          el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال مشتری', onclick: function () { MP.portal(p.id); } }),
           S.manager ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('edit') + 'ویرایش پروژه', onclick: function () { projectForm(p); } }) : null)),
       p.sections.length || S.manager ? cards : el('div', { class: 'card' }, MP.empty('list', 'بخشی تعریف نشده', 'ناظر پروژه بخش‌ها را اضافه می‌کند.', null, true))));
 

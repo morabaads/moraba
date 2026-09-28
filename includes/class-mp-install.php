@@ -248,6 +248,41 @@ class MP_Install {
 			KEY project_id (project_id)
 		) $c;";
 
+		$t[] = 'CREATE TABLE ' . self::table( 'client_items' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			project_id bigint(20) unsigned NOT NULL,
+			kind varchar(10) NOT NULL DEFAULT 'file',
+			title varchar(200) NOT NULL DEFAULT '',
+			note text NULL,
+			file_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			version int(11) unsigned NOT NULL DEFAULT 1,
+			parent_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			status varchar(12) NOT NULL DEFAULT 'pending',
+			decision_note text NULL,
+			decided_by varchar(80) NOT NULL DEFAULT '',
+			decided_at datetime DEFAULT NULL,
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			archived_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY project_id (project_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'design_pins' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			item_id bigint(20) unsigned NOT NULL,
+			parent_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			x decimal(6,3) NOT NULL DEFAULT 0,
+			y decimal(6,3) NOT NULL DEFAULT 0,
+			body text NOT NULL,
+			user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			author_name varchar(80) NOT NULL DEFAULT '',
+			resolved tinyint(1) NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY item_id (item_id)
+		) $c;";
+
 		$t[] = 'CREATE TABLE ' . self::table( 'daily_reports' ) . " (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			user_id bigint(20) unsigned NOT NULL,

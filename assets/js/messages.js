@@ -93,6 +93,7 @@
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
+      if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
     }
     if (c.type === 'group' && c.can_manage) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'اعضا', onclick: function () { groupForm(c); } }));
     if (c.can_delete) tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'آرشیو گروه', title: 'آرشیو گروه', html: icon('folder'), onclick: function () { deleteClient(c); } }));

@@ -734,7 +734,8 @@
       attendance: function () { MP.showView('attendance'); },
       reports: function () { MP.showView('reports'); },
       daily: function () { MP.dailyReport(); },
-      invoices: function () { MP.invoices(n.ref_id); }
+      invoices: function () { MP.invoices(n.ref_id); },
+      portal: function () { MP.portal(n.ref_id); }
     }[n.target];
     if (go) go();
   }

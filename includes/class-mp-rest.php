@@ -1456,9 +1456,21 @@ class MP_Rest {
 
 	/* ------------------------------------------------------------------ Client group (public, by token) */
 
+	/** At most 20 client posts (messages, design notes) per IP and group every 10 minutes. */
+	public static function client_rate_ok( $channel_id ) {
+		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$key = 'mp_client_rate_' . md5( $ip . $channel_id );
+		$n   = (int) get_transient( $key );
+		if ( $n >= 20 ) {
+			return false;
+		}
+		set_transient( $key, $n + 1, 10 * MINUTE_IN_SECONDS );
+		return true;
+	}
+
 	private static function client_channel( $token ) {
 		global $wpdb;
-		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND token = %s", $token ) );
+		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND token = %s AND archived_at IS NULL", $token ) );
 	}
 
 	public static function client_messages( WP_REST_Request $r ) {
@@ -1497,13 +1509,9 @@ class MP_Rest {
 		if ( ! $ch ) {
 			return self::err( 'این گروه وجود ندارد یا حذف شده است.', 404 );
 		}
-		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-		$key = 'mp_client_rate_' . md5( $ip . $ch->id );
-		$n   = (int) get_transient( $key );
-		if ( $n >= 20 ) {
+		if ( ! self::client_rate_ok( $ch->id ) ) {
 			return self::err( 'تعداد پیام‌ها زیاد است؛ چند دقیقه بعد دوباره تلاش کنید.', 429 );
 		}
-		set_transient( $key, $n + 1, 10 * MINUTE_IN_SECONDS );
 		$body = MP_Util::long_text( $r['body'], 2000 );
 		if ( '' === trim( $body ) ) {
 			return self::err( 'متن پیام را بنویسید.' );
