@@ -480,7 +480,7 @@ class MP_Task_IO {
 				$pk = self::norm( $x['project'] );
 				if ( ! isset( $found[ $pk ] ) ) {
 					// Saved choice from an earlier import, then a project with the same name, else «new project».
-					$guess        = isset( $pmap[ $pk ] ) && ( -1 === (int) $pmap[ $pk ] || in_array( (int) $pmap[ $pk ], $names, true ) ) ? (int) $pmap[ $pk ] : ( isset( $names[ $pk ] ) ? $names[ $pk ] : 0 );
+					$guess        = isset( $pmap[ $pk ] ) && ( in_array( (int) $pmap[ $pk ], array( -1, -2 ), true ) || in_array( (int) $pmap[ $pk ], $names, true ) ) ? (int) $pmap[ $pk ] : ( isset( $names[ $pk ] ) ? $names[ $pk ] : 0 );
 					$found[ $pk ] = array( 'name' => $x['project'], 'count' => 0, 'project_id' => $guess );
 				}
 				++$found[ $pk ]['count'];
@@ -549,14 +549,14 @@ class MP_Task_IO {
 		if ( ! $use ) {
 			return self::err( 'هیچ فردی به کاربران پنل وصل نشده است.' );
 		}
-		// Project in the file → panel project id, 0 = create a new one, -1 = no project.
+		// Project in the file → panel project id, 0 = create a new one, -1 = no project, -2 = skip its tasks.
 		$choice = array();
 		foreach ( is_array( $r['project_map'] ) ? $r['project_map'] : array() as $name => $pid ) {
 			$pid = (int) $pid;
 			if ( $pid > 0 && ! in_array( $pid, self::project_names(), true ) ) {
 				$pid = 0;
 			}
-			$choice[ self::norm( $name ) ] = max( -1, $pid );
+			$choice[ self::norm( $name ) ] = max( -2, $pid );
 		}
 		$pmap = get_option( self::PMAP, array() );
 		update_option( self::PMAP, array_merge( is_array( $pmap ) ? $pmap : array(), $choice ), false );
@@ -602,6 +602,11 @@ class MP_Task_IO {
 			$batch['skipped'] += count( array_filter( $data['people'][ $name ], function ( $x ) { return ! $x['date']; } ) );
 			foreach ( $data['groups'][ $name ] as $x ) {
 				$pid = 0;
+				// -2: the supervisor chose not to import this project's tasks at all.
+				if ( '' !== $x['project'] && isset( $choice[ self::norm( $x['project'] ) ] ) && -2 === $choice[ self::norm( $x['project'] ) ] ) {
+					$batch['skipped'] += count( $x['items'] );
+					continue;
+				}
 				if ( '' !== $x['project'] ) {
 					$pk = self::norm( $x['project'] );
 					if ( isset( $projects[ $pk ] ) ) {

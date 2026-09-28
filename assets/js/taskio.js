@@ -161,7 +161,7 @@
     });
     var projRows = el('div', { class: 'tio-people' });
     p.projects.forEach(function (x) {
-      var sel = MP.select('p', [[0, '+ ساخت پروژه جدید با همین نام'], [-1, '— بدون پروژه —']].concat(S.projects.map(function (q) { return [q.id, q.name]; })), x.project_id);
+      var sel = MP.select('p', [[0, '+ ساخت پروژه جدید با همین نام'], [-1, '— بدون پروژه (تسک‌ها وارد شوند) —'], [-2, '✕ این پروژه و تسک‌هایش وارد نشود']].concat(S.projects.map(function (q) { return [q.id, q.name]; })), x.project_id);
       sel.dataset.name = x.name; sel.dataset.kind = 'project';
       projRows.append(el('div', { class: 'tpl-card tio-person' },
         el('div', { class: 'tpl-copy' }, el('strong', { text: 'پروژه «' + x.name + '»' }), el('small', { text: fa(x.count) + ' مورد' })),
