@@ -1737,3 +1737,26 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .portal-file img,.pf-ico{width:46px;height:46px;border-radius:12px;object-fit:cover;flex:none}
 .pf-ico{display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-ink);font-size:10px;font-weight:800}
 .portal-file div{flex:1;min-width:0;display:grid}.portal-file small{color:var(--muted)}
+
+/* Voice assistant */
+.asst-btn{color:var(--brand)}
+.asst .smart-bar{margin:0}
+.asst-result{margin-top:12px}
+.asst-card{padding:14px 16px;border:1px solid var(--brand);border-radius:16px;background:var(--brand-soft)}
+.asst-card p{margin:6px 0 0;white-space:pre-wrap}
+
+/* Weekly report */
+.wk-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+.wk-kpi{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:16px}
+.wk-kpi>span{display:grid;place-items:center;width:36px;height:36px;border-radius:12px;background:var(--brand-soft);color:var(--brand-ink);flex:none}
+.wk-kpi>span .icon{width:18px;height:18px}
+.wk-kpi small{display:block;color:var(--muted);font-size:11px}.wk-kpi strong{font-size:14px}
+.wk-kpi.warn>span{background:var(--danger-soft);color:var(--danger)}
+.wk-people{display:grid;gap:8px}
+.wk-person{padding:12px 14px;border:1px solid var(--line);border-radius:16px;display:grid;gap:8px}
+.wk-who{display:flex;align-items:center;gap:8px}
+.wk-bar{height:6px;border-radius:9px;background:var(--surface-3);overflow:hidden}.wk-bar i{display:block;height:100%;background:var(--brand);border-radius:9px}
+.wk-nums{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--ink-2)}.wk-nums .late{color:var(--danger);font-weight:700}.wk-nums .low{color:#b45f0a}
+.wk-late{margin:0;padding-inline-start:18px;font-size:13px}
+.wk-proj{display:flex;flex-wrap:wrap;gap:6px}.wk-proj .chip{border:0;cursor:pointer;font:inherit;font-size:12px}
+.link-btn{border:0;background:none;padding:0;color:var(--ink);font:inherit;cursor:pointer;text-align:right}.link-btn:hover{color:var(--brand)}

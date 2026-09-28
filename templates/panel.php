@@ -318,7 +318,7 @@ $mp_nav = array(
 				<div><h1>گزارش‌ها</h1><p>عملکرد، پیشرفت پروژه‌ها و تاریخچه تغییرات</p></div>
 				<div class="page-actions">
 					<div class="seg manager-only" role="tablist" id="rep-tab" aria-label="نوع گزارش"><button type="button" role="tab" data-tab="perf" aria-selected="true">عملکرد</button><button type="button" role="tab" data-tab="costs" aria-selected="false">هزینه پروژه‌ها</button><button type="button" role="tab" data-tab="payroll" aria-selected="false">حقوق ماهانه</button><button type="button" role="tab" data-tab="audit" aria-selected="false">تاریخچه تغییرات</button></div>
-					<select class="select manager-only" id="rep-user" aria-label="گزارش چه کسی"></select>
+					<select class="select manager-only" id="rep-user" aria-label="گزارش چه کسی"></select><button type="button" class="btn btn-primary manager-only" data-action="weekly-report"><?php echo $mp_i( 'pie' ); // phpcs:ignore ?>گزارش هفتگی</button>
 				</div>
 			</div>
 			<div id="rep-body"></div>

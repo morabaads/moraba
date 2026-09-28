@@ -593,6 +593,8 @@
     if (a === 'task-io') MP.taskIO();
     if (a === 'daily-report') MP.dailyReport();
     if (a === 'invoices') MP.invoices();
+    if (a === 'weekly-report') MP.weeklyReport();
+    if (a === 'assistant') MP.assistant(true);
     if (a === 'payroll') MP.reportTab('payroll');
     else if (a === 'settings') openAppearance();
     else if (a === 'help') openHelp();
@@ -735,7 +737,8 @@
       reports: function () { MP.showView('reports'); },
       daily: function () { MP.dailyReport(); },
       invoices: function () { MP.invoices(n.ref_id); },
-      portal: function () { MP.portal(n.ref_id); }
+      portal: function () { MP.portal(n.ref_id); },
+      weekly: function () { MP.weeklyReport(); }
     }[n.target];
     if (go) go();
   }
