@@ -560,6 +560,18 @@ class MP_Task_IO {
 		}
 		$pmap = get_option( self::PMAP, array() );
 		update_option( self::PMAP, array_merge( is_array( $pmap ) ? $pmap : array(), $choice ), false );
+		// Per file project: folder for a new project (id, 0 = new folder by name, -1 = none) and
+		// section inside the target project (id, -1 = new section by name, 0 = none).
+		$opts = array();
+		foreach ( is_array( $r['project_opts'] ) ? $r['project_opts'] : array() as $name => $o ) {
+			$opts[ self::norm( $name ) ] = array(
+				'folder'       => isset( $o['folder'] ) ? (int) $o['folder'] : -1,
+				'folder_name'  => isset( $o['folder_name'] ) ? MP_Util::text( $o['folder_name'], 120 ) : '',
+				'section'      => isset( $o['section'] ) ? (int) $o['section'] : 0,
+				'section_name' => isset( $o['section_name'] ) ? MP_Util::text( $o['section_name'], 160 ) : '',
+			);
+		}
+		$sections = array();
 
 		// Safety net on top of the per-import undo: a full panel backup, as before any restore.
 		if ( class_exists( 'MP_Backup' ) ) {
@@ -592,6 +604,8 @@ class MP_Task_IO {
 			'updated'  => array(),
 			'projects' => array(),
 			'members'  => array(),
+			'folders'  => array(),
+			'sections' => array(),
 			'skipped'  => 0,
 			'undone'   => false,
 		);
@@ -615,6 +629,10 @@ class MP_Task_IO {
 						$pid = self::make_project( $x['project'], $data['people'], $me );
 						$projects[ $pk ]     = $pid;
 						$batch['projects'][] = $pid;
+						$fid                 = isset( $opts[ $pk ] ) ? self::folder_for( $opts[ $pk ], $batch ) : 0;
+						if ( $fid ) {
+							$wpdb->update( self::t( 'projects' ), array( 'folder_id' => $fid ), array( 'id' => $pid ) );
+						}
 					}
 					if ( $pid && ! in_array( $uid, MP_Util::project_members( $pid ), true ) ) {
 						$wpdb->insert( self::t( 'project_members' ), array( 'project_id' => $pid, 'user_id' => $uid ) );
@@ -653,14 +671,12 @@ class MP_Task_IO {
 					'task_date'   => $x['date'],
 					'task_time'   => $x['time'],
 					'project_id'  => $pid,
+					'section_id'  => $pid && '' !== $x['project'] ? self::section_for( $pid, $x['project'], isset( $opts[ self::norm( $x['project'] ) ] ) ? $opts[ self::norm( $x['project'] ) ] : null, $sections, $batch ) : 0,
 					'priority'    => self::priority( $x['priority'] ),
 					'status'      => $status,
 				);
 				$old = self::find_existing( $uid, $x['code'] );
 				if ( $old ) {
-					if ( (int) $old['project_id'] !== $pid ) {
-						$row['section_id'] = 0;
-					}
 					$row['done_at']    = 'done' === $status ? ( $old['done_at'] ? $old['done_at'] : MP_Util::now() ) : null;
 					$row['updated_at'] = MP_Util::now();
 					$wpdb->update( self::t( 'tasks' ), $row, array( 'id' => (int) $old['id'] ) );
@@ -701,6 +717,49 @@ class MP_Task_IO {
 			}
 		}
 		return array( 'batch' => self::summary( $batch ), 'history' => self::history() );
+	}
+
+	/** Folder a new project goes in: an existing one, one made (or found) by name, or none. */
+	private static function folder_for( array $o, array &$batch ) {
+		global $wpdb;
+		if ( $o['folder'] > 0 ) {
+			return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'folders' ) . ' WHERE id = %d', $o['folder'] ) );
+		}
+		if ( 0 !== $o['folder'] || '' === $o['folder_name'] ) {
+			return 0;
+		}
+		$id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'folders' ) . ' WHERE name = %s', $o['folder_name'] ) );
+		if ( ! $id ) {
+			$wpdb->insert( self::t( 'folders' ), array( 'name' => $o['folder_name'], 'created_by' => get_current_user_id() ) );
+			$id                 = (int) $wpdb->insert_id;
+			$batch['folders'][] = $id;
+		}
+		return $id;
+	}
+
+	/** Section of $pid the file project's tasks go in (0 = none); new sections are made once per import. */
+	private static function section_for( $pid, $project, $o, array &$cache, array &$batch ) {
+		global $wpdb;
+		if ( ! $o || 0 === $o['section'] ) {
+			return 0;
+		}
+		if ( $o['section'] > 0 ) {
+			return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'sections' ) . ' WHERE id = %d AND project_id = %d', $o['section'], $pid ) );
+		}
+		$title = '' !== $o['section_name'] ? $o['section_name'] : MP_Util::text( $project, 160 );
+		$key   = $pid . '|' . self::norm( $title );
+		if ( isset( $cache[ $key ] ) ) {
+			return $cache[ $key ];
+		}
+		$id = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'sections' ) . ' WHERE project_id = %d AND title = %s', $pid, $title ) );
+		if ( ! $id ) {
+			$sort = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'sections' ) . ' WHERE project_id = %d', $pid ) );
+			$wpdb->insert( self::t( 'sections' ), array( 'project_id' => $pid, 'title' => $title, 'priority' => 'medium', 'status' => 'doing', 'sort' => $sort ) );
+			$id                  = (int) $wpdb->insert_id;
+			$batch['sections'][] = $id;
+		}
+		$cache[ $key ] = $id;
+		return $id;
 	}
 
 	private static function make_project( $name, array $people, $me ) {
@@ -801,6 +860,10 @@ class MP_Task_IO {
 		foreach ( $b['members'] as $m ) {
 			$wpdb->delete( self::t( 'project_members' ), array( 'project_id' => (int) $m[0], 'user_id' => (int) $m[1] ) );
 		}
+		foreach ( isset( $b['sections'] ) ? $b['sections'] : array() as $sid ) {
+			$wpdb->update( self::t( 'tasks' ), array( 'section_id' => 0 ), array( 'section_id' => (int) $sid ) );
+			$wpdb->delete( self::t( 'sections' ), array( 'id' => (int) $sid ) );
+		}
 		$kept = 0;
 		foreach ( $b['projects'] as $pid ) {
 			// A project someone has since put their own tasks in stays.
@@ -811,6 +874,11 @@ class MP_Task_IO {
 			$req = new WP_REST_Request( 'DELETE' );
 			$req->set_param( 'id', $pid );
 			MP_Rest::delete_project( $req );
+		}
+		foreach ( isset( $b['folders'] ) ? $b['folders'] : array() as $fid ) {
+			if ( ! (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'projects' ) . ' WHERE folder_id = %d', $fid ) ) ) {
+				$wpdb->delete( self::t( 'folders' ), array( 'id' => (int) $fid ) );
+			}
 		}
 		$history[ $found ]['undone'] = true;
 		self::save_history( $history );

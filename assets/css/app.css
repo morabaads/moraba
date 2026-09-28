@@ -1578,3 +1578,7 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .tio-task li small { display: block; color: var(--ink-2); white-space: normal !important; }
 .tio-task li.done span { text-decoration: line-through; opacity: .7; }
 .tio-person .tpl-copy .tio-preview small { white-space: normal; }
+.tio-proj { align-items: flex-start; }
+.tio-proj-fields { display: grid; gap: 8px; min-width: 240px; }
+.tio-proj-fields input { margin-top: 6px; }
+@media (max-width: 760px) { .tio-proj-fields { width: 100%; min-width: 0; } }

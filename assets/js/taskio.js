@@ -159,19 +159,40 @@
           taskPreview(x.tasks)),
         el('label', { class: 'field tio-user' }, 'وصل به', sel)));
     });
-    var projRows = el('div', { class: 'tio-people' });
+    var projRows = el('div', { class: 'tio-people' }), popts = [];
     p.projects.forEach(function (x) {
       var sel = MP.select('p', [[0, '+ ساخت پروژه جدید با همین نام'], [-1, '— بدون پروژه (تسک‌ها وارد شوند) —'], [-2, '✕ این پروژه و تسک‌هایش وارد نشود']].concat(S.projects.map(function (q) { return [q.id, q.name]; })), x.project_id);
       sel.dataset.name = x.name; sel.dataset.kind = 'project';
-      projRows.append(el('div', { class: 'tpl-card tio-person' },
+      // Folder for a new project.
+      var folder = MP.select('f', [[-1, 'بدون فولدر'], [0, '+ فولدر جدید…']].concat((S.folders || []).map(function (f) { return [f.id, f.name]; })), -1);
+      folder.dataset.kind = 'opt';
+      var folderName = el('input', { maxlength: 120, placeholder: 'نام فولدر جدید', hidden: true });
+      folder.onchange = function () { folderName.hidden = folder.value !== '0'; if (!folderName.hidden) folderName.focus(); };
+      var folderBox = el('label', { class: 'field tio-user' }, 'فولدر پروژه جدید', folder, folderName);
+      // Section inside the chosen project: lets a file «project» become just a part of a bigger one.
+      var section = el('select', { name: 's' }); section.dataset.kind = 'opt';
+      var sectionName = el('input', { maxlength: 160, value: x.name, placeholder: 'نام بخش', hidden: true });
+      section.onchange = function () { sectionName.hidden = section.value !== '-1'; };
+      var sectionBox = el('label', { class: 'field tio-user' }, 'بخش داخل پروژه', section, sectionName);
+      function sync() {
+        var v = +sel.value, pr = v > 0 ? MP.project(v) : null;
+        folderBox.hidden = v !== 0;
+        sectionBox.hidden = v < 0;
+        section.replaceChildren(el('option', { value: 0, text: 'بدون بخش' }), el('option', { value: -1, text: '+ بخش جدید…' }));
+        if (pr) pr.sections.forEach(function (q) { section.append(el('option', { value: q.id, text: q.title })); });
+        section.value = pr ? '-1' : '0'; section.onchange();
+      }
+      sel.onchange = sync; sync();
+      popts.push({ name: x.name, get: function () { return { folder: +folder.value, folder_name: folderName.value.trim(), section: +section.value, section_name: sectionName.value.trim() }; } });
+      projRows.append(el('div', { class: 'tpl-card tio-person tio-proj' },
         el('div', { class: 'tpl-copy' }, el('strong', { text: 'پروژه «' + x.name + '»' }), el('small', { text: fa(x.count) + ' مورد' })),
-        el('label', { class: 'field tio-user' }, 'وصل به', sel)));
+        el('div', { class: 'tio-proj-fields' }, el('label', { class: 'field tio-user' }, 'وصل به', sel), folderBox, sectionBox)));
     });
     form.append(
       el('p', { class: 'muted', text: 'فایل «' + p.file + '» — هر شیت را به کارمند مربوط وصل کنید. تطبیق خودکار با نام انجام شده؛ اگر درست نیست تغییر دهید.' }),
       rows,
       p.projects.length ? el('h3', { class: 'tio-sub', text: 'اتصال پروژه‌ها' }) : null,
-      p.projects.length ? el('p', { class: 'muted', text: 'هر پروژه فایل را به پروژه مربوطش در پنل وصل کنید، یا پروژه جدید بسازید.' }) : null,
+      p.projects.length ? el('p', { class: 'muted', text: 'هر پروژه فایل را به یک پروژه پنل وصل کنید (و در صورت نیاز به یک بخش داخل آن)، یا پروژه جدید در فولدر دلخواه بسازید.' }) : null,
       projRows,
       MP.actions('تأیید و ورود تسک‌ها'));
     form.onsubmit = function (e) {
@@ -180,11 +201,12 @@
       var pmap = {};
       Array.prototype.forEach.call(form.querySelectorAll('select'), function (s) {
         if (s.dataset.kind === 'project') pmap[s.dataset.name] = +s.value;
+        else if (s.dataset.kind === 'opt') return;
         else if (s.value) { map[s.dataset.name] = +s.value; n++; }
       });
       if (!n) { MP.toast('حداقل یک شیت را به یک نفر وصل کنید.', { error: true }); return; }
       MP.busy(form, true);
-      MP.api('tasks/import', { method: 'POST', body: { token: p.token, map: map, project_map: pmap } }).then(function (r) {
+      MP.api('tasks/import', { method: 'POST', body: { token: p.token, map: map, project_map: pmap, project_opts: popts.reduce(function (o, x) { o[x.name] = x.get(); return o; }, {}) } }).then(function (r) {
         var b = r.batch;
         MP.dialog.close();
         afterChange();
