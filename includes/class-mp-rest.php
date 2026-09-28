@@ -138,6 +138,7 @@ class MP_Rest {
 				'telegram'      => (bool) get_option( 'mp_telegram_token', '' ),
 				'bale'          => (bool) get_option( 'mp_bale_token', '' ),
 				'speech'        => MP_Speech::enabled(),
+				'ai'            => MP_AI::enabled(),
 				'sms'           => MP_Auth::otp_enabled(),
 				'telegram_chat' => (string) get_user_meta( $uid, 'mp_telegram_chat', true ),
 				'bale_chat'     => (string) get_user_meta( $uid, 'mp_bale_chat', true ),

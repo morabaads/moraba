@@ -123,6 +123,17 @@ class MP_Admin {
 							<p class="description">فایل صوتی و متن پیام برای تبدیل به این سرویس فرستاده می‌شود. هر نفر حداکثر ۶۰ تبدیل در ساعت.</p>
 						</td>
 					</tr>
+					<tr><th colspan="2"><h2 style="margin:0">دستیار هوشمند (هوش مصنوعی)</h2></th></tr>
+					<tr>
+						<th>سرویس مدل زبانی</th>
+						<td>
+							<p class="description" style="margin-top:0">دستیار پنل (دکمه میکروفون بالای صفحه) با یک مدل زبانی سازگار با OpenAI و «function calling» کار می‌کند: OpenAI، یا هر سرویس/درگاه سازگار که از سرور سایت در دسترس است. خالی بماند، همان کلید و آدرس «تبدیل گفتار» استفاده می‌شود. بدون کلید، دستیار فقط دستورهای ساده را می‌فهمد.</p>
+							<p><label>کلید API<br><input name="mp_ai_key" class="regular-text" dir="ltr" autocomplete="off" value="<?php echo esc_attr( get_option( 'mp_ai_key', '' ) ); ?>"></label></p>
+							<p><label>آدرس سرویس (خالی = آدرس تبدیل گفتار یا OpenAI)<br><input name="mp_ai_url" class="regular-text" dir="ltr" placeholder="https://api.openai.com/v1" value="<?php echo esc_attr( get_option( 'mp_ai_url', '' ) ); ?>"></label></p>
+							<p><label>مدل <input name="mp_ai_model" dir="ltr" size="22" placeholder="gpt-4.1-mini" value="<?php echo esc_attr( get_option( 'mp_ai_model', '' ) ); ?>"></label></p>
+							<p class="description">درخواست کاربر، اطلاعات لازم پنل (نام اعضای تیم، پروژه‌ها و نتیجه ابزارها) برای پاسخ به این سرویس فرستاده می‌شود. هر کار فقط با دسترسی خود همان کاربر انجام می‌شود و تغییرات پیش از انجام تأیید می‌خواهند. هر نفر حداکثر ۹۰ درخواست در ساعت.</p>
+						</td>
+					</tr>
 				</table>
 				<?php submit_button( 'ذخیره تنظیمات' ); ?>
 			</form>
@@ -189,7 +200,7 @@ class MP_Admin {
 		$slug = isset( $_POST['mp_slug'] ) ? sanitize_title( wp_unslash( $_POST['mp_slug'] ) ) : 'panel';
 		update_option( 'mp_slug', $slug ? $slug : 'panel' );
 		update_option( 'mp_email_notifications', empty( $_POST['mp_email_notifications'] ) ? '' : '1' );
-		foreach ( array( 'mp_support', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_param', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice' ) as $key ) {
+		foreach ( array( 'mp_support', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_param', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_ai_key', 'mp_ai_url', 'mp_ai_model' ) as $key ) {
 			update_option( $key, isset( $_POST[ $key ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) : '' );
 		}
 		foreach ( array( 'mp_smsir_template', 'mp_smsir_line' ) as $key ) {

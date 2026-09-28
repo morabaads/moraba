@@ -90,7 +90,7 @@
     return Promise.resolve();
   }
 
-  MP.assistant = function (startListening) {
+  function simpleAssistant(startListening) {
     var result = el('div', { class: 'asst-result', 'aria-live': 'polite' });
     var bar = MP.smartBar({
       placeholder: 'بگویید یا بنویسید…',
@@ -113,6 +113,149 @@
     MP.dialog.open('دستیار صوتی', el('div', { class: 'form asst' }, bar, result), { focus: false });
     var input = $('.smart-input', bar);
     if (startListening && MP.speechSupported) $('.smart-mic', bar).click(); else if (input) input.focus();
+  }
+
+  /* ------------------------------------------------------------ AI assistant (server model + tools) */
+
+  var KEY = 'mp_ai_chat', AUTO = 'mp_ai_auto', SPEAK = 'mp_ai_speak';
+  function store(k, v) { try { if (v === undefined) return sessionStorage.getItem(k); if (v === null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) { return null; } return null; }
+  function pref(k, v) { try { if (v === undefined) return localStorage.getItem(k) === '1'; localStorage.setItem(k, v ? '1' : '0'); } catch (e) { return false; } return v; }
+  var convo = [];
+  try { convo = JSON.parse(store(KEY) || '[]') || []; } catch (e) { convo = []; }
+
+  function refresh(changed) {
+    var c = {}; (changed || []).forEach(function (n) { c[n] = 1; });
+    if (c.create_task || c.update_task || c.archive_task || c.add_checklist_item || c.comment_task) { MP.loadTasks(); MP.refreshCounts(); }
+    if (c.create_reminder && MP.loadReminders) MP.loadReminders();
+    if (c.send_message && MP.loadChannels) MP.loadChannels();
+    if (c.clock && MP.loadAttendance) MP.loadAttendance();
+    if (c.add_ledger || c.create_invoice) MP.emit('ledger');
+    if (c.create_project || c.add_project_members || c.create_task) MP.loadProjects();
+    if (c.create_meeting && MP.loadMeetings) MP.loadMeetings().then(function () { MP.emit('meetings'); });
+    if (Object.keys(c).length) MP.audit();
+  }
+  function clientActions(list) {
+    (list || []).forEach(function (a) {
+      var map = { daily_report: function () { MP.dailyReport(a.date); }, invoices: function () { MP.invoices(); }, weekly_report: function () { MP.weeklyReport(); }, portal: function () { if (a.project_id) MP.portal(a.project_id); } };
+      if (map[a.page]) { map[a.page](); return; }
+      MP.dialog.close();
+      if (a.page === 'projects' && a.project_id) S.projectId = a.project_id;
+      if (a.page === 'messages' && a.user_id && MP.startDirect) { MP.startDirect(a.user_id); return; }
+      setTimeout(function () { MP.showView(a.page, a.date ? { date: a.date } : {}); }, 150);
+    });
+  }
+  function say(text) {
+    if (!pref(SPEAK) || !window.speechSynthesis || !text) return;
+    var v = speechSynthesis.getVoices().filter(function (x) { return /^fa/i.test(x.lang); })[0];
+    if (!v) return;
+    var u = new SpeechSynthesisUtterance(text.replace(/[•*#]/g, '')); u.voice = v; u.lang = v.lang;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }
+
+  function aiAssistant(startListening) {
+    var log = el('div', { class: 'ai-log', 'aria-live': 'polite' });
+    var busy = false;
+    function bubble(role, text) {
+      var b = el('div', { class: 'ai-msg ' + role }, el('p', { text: text }));
+      log.append(b); log.scrollTop = log.scrollHeight; return b;
+    }
+    function thinking() { var t = el('div', { class: 'ai-msg assistant thinking' }, el('span'), el('span'), el('span')); log.append(t); log.scrollTop = log.scrollHeight; return t; }
+    function drawHistory() {
+      log.replaceChildren();
+      convo.forEach(function (m) {
+        if (m.role === 'user') bubble('user', m.content);
+        else if (m.role === 'assistant' && m.content) bubble('assistant', m.content);
+      });
+      if (!convo.length) log.append(el('div', { class: 'ai-empty' },
+        el('strong', { text: 'سلام ' + (S.me.name || '').split(' ')[0] + '! چه کاری برایتان انجام بدهم؟' }),
+        el('div', { class: 'ai-ideas' }, ['امروز چه کارهایی دارم؟', 'ورودم رو ثبت کن', 'به رضا بگو فایل نهایی رو فرستادم', 'فردا ساعت ۱۰ با تیم جلسه بذار'].concat(S.manager ? ['وضعیت تیم این هفته چطوره؟', 'برای مهدی تسک بررسی سئو پنجشنبه بذار'] : ['گزارش روزانه امروزم رو بنویس']).map(function (x) {
+          return el('button', { type: 'button', class: 'chip-btn', text: x, onclick: function () { send(x); } });
+        }))));
+    }
+    function pendingCard(p, res) {
+      var decided = {};
+      var card = el('div', { class: 'ai-pending' });
+      if (res.reply) card.append(el('p', { class: 'ai-pending-note', text: res.reply }));
+      var rows = el('div', { class: 'ai-actions' });
+      p.forEach(function (a) {
+        var yes = el('input', { type: 'checkbox', checked: true });
+        decided[a.id] = yes;
+        rows.append(el('label', { class: 'ai-action' }, yes, el('span', { text: a.summary })));
+      });
+      var go = el('button', { type: 'button', class: 'btn btn-primary', html: icon('check') + (p.length > 1 ? 'انجام موارد انتخاب‌شده' : 'انجام بده') });
+      var no = el('button', { type: 'button', class: 'btn btn-ghost', text: 'لغو' });
+      function finish(all) {
+        var approve = [], reject = [];
+        p.forEach(function (a) { (all !== false && decided[a.id].checked ? approve : reject).push(a.id); });
+        card.classList.add('decided'); go.disabled = no.disabled = true;
+        Array.prototype.forEach.call(card.querySelectorAll('input'), function (i) { i.disabled = true; });
+        turn({ approve: approve, reject: reject });
+      }
+      go.onclick = function () { finish(true); };
+      no.onclick = function () { finish(false); };
+      card.append(rows, el('div', { class: 'dialog-actions' }, go, no));
+      log.append(card); log.scrollTop = log.scrollHeight;
+      setTimeout(function () { go.focus(); }, 30);
+    }
+    function turn(extra) {
+      busy = true; var t = thinking();
+      return MP.api('assistant', { method: 'POST', body: Object.assign({ messages: convo, auto: pref(AUTO) }, extra || {}) }).then(function (res) {
+        t.remove(); busy = false;
+        convo = res.messages; store(KEY, JSON.stringify(convo));
+        if (res.done && res.done.length) log.append(el('div', { class: 'ai-done' }, res.done.map(function (d) { return el('span', { html: icon('checks') + '' }, d); })));
+        refresh(res.changed);
+        if (res.pending && res.pending.length) { pendingCard(res.pending, res); return; }
+        if (res.reply) { bubble('assistant', res.reply); say(res.reply); }
+        clientActions(res.client);
+      }).catch(function (err) { t.remove(); busy = false; bubble('assistant error', err.message || 'خطایی رخ داد.'); });
+    }
+    function send(text) {
+      text = String(text || '').trim();
+      if (!text || busy) return;
+      var e = $('.ai-empty', log); if (e) e.remove();
+      Array.prototype.forEach.call(log.querySelectorAll('.ai-pending:not(.decided)'), function (c) { c.remove(); });
+      // Changes left undecided count as cancelled, so the conversation stays valid for the model.
+      var answered = {}, lastCalls = null;
+      for (var i = convo.length - 1; i >= 0; i--) { if (convo[i].role === 'tool') { answered[convo[i].tool_call_id] = 1; continue; } if (convo[i].role === 'assistant' && convo[i].tool_calls) lastCalls = convo[i].tool_calls; break; }
+      (lastCalls || []).forEach(function (c) { if (!answered[c.id]) convo.push({ role: 'tool', tool_call_id: c.id, content: '{"error":"کاربر این کار را لغو کرد."}' }); });
+      convo.push({ role: 'user', content: text }); store(KEY, JSON.stringify(convo));
+      bubble('user', text);
+      turn();
+    }
+    var bar = MP.smartBar({
+      placeholder: 'بگویید یا بنویسید… (هر کاری در پنل)',
+      examples: ['«امروز چه کارهایی دارم؟»', '«به رضا بگو فایل نهایی رو فرستادم»', '«فردا ساعت ۱۰ با علی و مهدی جلسه بذار»', '«۲ میلیون از زیوا گرفتم برای پروژه زیوا»', '«تسک‌های عقب‌افتاده‌م رو بیار برای فردا»'],
+      parse: function (t) { return t; },
+      describe: function () { return []; },
+      apply: function (t) {
+        send(t);
+        var i = $('.smart-input', bar); i.value = ''; bar.classList.remove('done');
+        var h = $('.smart-hint', bar); if (h) h.hidden = false;
+      }
+    });
+    var auto = el('input', { type: 'checkbox', checked: pref(AUTO) }); auto.onchange = function () { pref(AUTO, auto.checked); };
+    var speak = el('input', { type: 'checkbox', checked: pref(SPEAK) }); speak.onchange = function () { pref(SPEAK, speak.checked); if (!speak.checked && window.speechSynthesis) speechSynthesis.cancel(); };
+    var foot = el('div', { class: 'ai-foot' },
+      el('label', { class: 'check' }, auto, el('span', { text: 'بدون تأیید انجام بده' })),
+      window.speechSynthesis ? el('label', { class: 'check' }, speak, el('span', { text: 'خواندن پاسخ' })) : null,
+      el('span', { class: 'spacer' }),
+      el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('plus') + 'گفت‌وگوی جدید', onclick: function () { convo = []; store(KEY, null); drawHistory(); } }));
+    var body = MP.dialog.open('دستیار مربع', el('div', { class: 'ai' }, log, bar, foot), { focus: false, wide: true, onClose: function () { if (window.speechSynthesis) speechSynthesis.cancel(); } });
+    drawHistory();
+    setTimeout(function () { log.scrollTop = log.scrollHeight; }, 50);
+    // A conversation left waiting for a decision gets its buttons back.
+    if (convo.length) {
+      var last = convo[convo.length - 1];
+      if (last.role === 'assistant' && last.tool_calls && last.tool_calls.length) log.append(el('p', { class: 'hint', text: 'کار قبلی تأیید نشد و لغو حساب می‌شود؛ اگر هنوز لازم است دوباره بگویید.' }));
+    }
+    var input = $('.smart-input', bar);
+    if (startListening && MP.speechSupported) $('.smart-mic', bar).click(); else if (input && !MP.isMobile()) input.focus();
+    return body;
+  }
+
+  MP.assistant = function (startListening) {
+    if (S.boot && S.boot.channels && S.boot.channels.ai) return aiAssistant(startListening);
+    return simpleAssistant(startListening);
   };
 
   // Topbar button and shortcut.
