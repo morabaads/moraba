@@ -1566,3 +1566,15 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .tio-sub { font-size: 14px; margin: 6px 0 4px; }
 .tio-danger h3 { color: var(--danger, #d64545); }
 .tio-danger .tio-history { margin-top: 12px; }
+.tio-preview { margin-top: 8px; }
+.tio-preview summary { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--brand); }
+.tio-preview[open] { max-height: 420px; overflow: auto; padding-inline-end: 4px; }
+.tio-day { margin: 12px 0 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.tio-task { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin-bottom: 6px; background: var(--surface-2, var(--surface)); }
+.tio-task-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tio-task-head strong { margin-inline-end: auto; font-size: 13px; }
+.tio-task ul { margin: 6px 0 0; padding-inline-start: 18px; font-size: 12.5px; }
+.tio-task li { margin: 2px 0; }
+.tio-task li small { display: block; color: var(--ink-2); white-space: normal !important; }
+.tio-task li.done span { text-decoration: line-through; opacity: .7; }
+.tio-person .tpl-copy .tio-preview small { white-space: normal; }

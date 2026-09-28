@@ -343,6 +343,65 @@ class MP_Task_IO {
 		return $people ? $people : $team;
 	}
 
+	/**
+	 * One task per person, day and project: the sheet's sub-tasks (ریزتسک) become that task's checklist.
+	 *
+	 * @return array<int,array> groups in sheet order
+	 */
+	public static function group( array $rows ) {
+		$out = array();
+		$idx = array();
+		$pri = array( 'low' => 0, 'medium' => 1, 'high' => 2 );
+		foreach ( $rows as $x ) {
+			if ( ! $x['date'] ) {
+				continue;
+			}
+			$k = $x['date'] . '|' . self::norm( $x['project'] );
+			if ( ! isset( $idx[ $k ] ) ) {
+				$idx[ $k ] = count( $out );
+				$out[]     = array(
+					'code'     => $x['code'],
+					'date'     => $x['date'],
+					'time'     => $x['time'],
+					'project'  => $x['project'],
+					'title'    => '' !== $x['project'] ? $x['project'] : $x['title'],
+					'week'     => $x['week'],
+					'goal'     => $x['goal'],
+					'priority' => $x['priority'],
+					'deadline' => $x['deadline'],
+					'today'    => '',
+					'minutes'  => 0,
+					'blocked'  => false,
+					'items'    => array(),
+				);
+			}
+			$g = &$out[ $idx[ $k ] ];
+			list( $st, $blocked ) = self::status( $x['status'] );
+			if ( $pri[ self::priority( $x['priority'] ) ] > $pri[ self::priority( $g['priority'] ) ] ) {
+				$g['priority'] = $x['priority'];
+			}
+			if ( '' !== $x['today'] ) {
+				$g['today'] = $x['today'];
+			}
+			if ( '' === $g['code'] ) {
+				$g['code'] = $x['code'];
+			}
+			$g['minutes'] += is_numeric( $x['minutes'] ) ? (int) $x['minutes'] : 0;
+			$g['blocked']  = $g['blocked'] || (bool) $blocked;
+			$g['items'][]  = array( 'title' => $x['title'], 'status' => $st, 'code' => $x['code'], 'minutes' => $x['minutes'], 'output' => $x['output'], 'notes' => $x['notes'], 'percent' => $x['percent'] );
+			unset( $g );
+		}
+		foreach ( $out as &$g ) {
+			$st          = wp_list_pluck( $g['items'], 'status' );
+			$g['status'] = count( array_filter( $st, function ( $v ) { return 'done' === $v; } ) ) === count( $st ) ? 'done' : ( array_intersect( array( 'doing', 'done' ), $st ) ? 'doing' : 'todo' );
+			if ( 1 === count( $g['items'] ) && '' === $g['project'] ) {
+				$g['title'] = $g['items'][0]['title'];
+			}
+		}
+		unset( $g );
+		return $out;
+	}
+
 	/** @return array<string,int> normalized project name => id */
 	private static function project_names() {
 		global $wpdb;
@@ -397,8 +456,12 @@ class MP_Task_IO {
 		if ( ! $people ) {
 			return self::err( 'در این فایل ستونی به نام «ریزتسک» (یا «عنوان») پیدا نشد؛ ساختار فایل با قالب برنامه تیم یکی نیست.' );
 		}
+		$groups = array();
+		foreach ( $people as $name => $rows ) {
+			$groups[ $name ] = self::group( $rows );
+		}
 		$token = strtolower( wp_generate_password( 20, false ) );
-		set_transient( 'mp_tio_' . get_current_user_id() . '_' . $token, array( 'file' => sanitize_file_name( $f['name'] ), 'people' => $people ), HOUR_IN_SECONDS );
+		set_transient( 'mp_tio_' . get_current_user_id() . '_' . $token, array( 'file' => sanitize_file_name( $f['name'] ), 'people' => $people, 'groups' => $groups ), HOUR_IN_SECONDS );
 
 		$saved = get_option( self::MAPPING, array() );
 		$saved = is_array( $saved ) ? $saved : array();
@@ -429,7 +492,12 @@ class MP_Task_IO {
 				'from'    => $dates ? min( $dates ) : '',
 				'to'      => $dates ? max( $dates ) : '',
 				'user_id' => self::guess_user( $name, $saved ),
-				'sample'  => array_slice( array_map( function ( $x ) { return $x['title']; }, $rows ), 0, 3 ),
+				'tasks'   => array_map(
+					function ( $g ) {
+						return array( 'date' => $g['date'], 'title' => $g['title'], 'project' => $g['project'], 'status' => $g['status'], 'minutes' => $g['minutes'], 'goal' => $g['goal'], 'items' => array_map( function ( $i ) { return array( 'title' => $i['title'], 'done' => 'done' === $i['status'], 'minutes' => $i['minutes'], 'output' => $i['output'] ); }, $g['items'] ) );
+					},
+					$groups[ $name ]
+				),
 			);
 		}
 		return array(
@@ -467,7 +535,7 @@ class MP_Task_IO {
 		$me   = get_current_user_id();
 		$key  = 'mp_tio_' . $me . '_' . preg_replace( '/[^a-z0-9]/', '', (string) $r['token'] );
 		$data = get_transient( $key );
-		if ( ! $data ) {
+		if ( ! $data || ! isset( $data['groups'] ) ) {
 			return self::err( 'پیش‌نمایش منقضی شده است؛ فایل را دوباره انتخاب کنید.' );
 		}
 		$map = is_array( $r['map'] ) ? $r['map'] : array();
@@ -531,11 +599,8 @@ class MP_Task_IO {
 
 		foreach ( $use as $name => $uid ) {
 			$batch['people'][] = array( 'name' => $name, 'user_id' => $uid );
-			foreach ( $data['people'][ $name ] as $x ) {
-				if ( ! $x['date'] ) {
-					++$batch['skipped'];
-					continue;
-				}
+			$batch['skipped'] += count( array_filter( $data['people'][ $name ], function ( $x ) { return ! $x['date']; } ) );
+			foreach ( $data['groups'][ $name ] as $x ) {
 				$pid = 0;
 				if ( '' !== $x['project'] ) {
 					$pk = self::norm( $x['project'] );
@@ -543,8 +608,8 @@ class MP_Task_IO {
 						$pid = max( 0, $projects[ $pk ] );
 					} else {
 						$pid = self::make_project( $x['project'], $data['people'], $me );
-						$projects[ $pk ]       = $pid;
-						$batch['projects'][]   = $pid;
+						$projects[ $pk ]     = $pid;
+						$batch['projects'][] = $pid;
 					}
 					if ( $pid && ! in_array( $uid, MP_Util::project_members( $pid ), true ) ) {
 						$wpdb->insert( self::t( 'project_members' ), array( 'project_id' => $pid, 'user_id' => $uid ) );
@@ -553,23 +618,26 @@ class MP_Task_IO {
 						}
 					}
 				}
-				list( $status, $blocked ) = self::status( $x['status'] );
-				$notes = $x['notes'];
+				$status = $x['status'];
+				$lines  = array();
+				foreach ( $x['items'] as $it ) {
+					$bits = array_filter( array( '' !== $it['output'] ? 'خروجی: ' . $it['output'] : '', '' !== (string) $it['minutes'] ? $it['minutes'] . ' دقیقه' : '', 'done' !== $it['status'] && '' !== $it['percent'] && '0' !== $it['percent'] ? $it['percent'] . '٪' : '', $it['notes'] ) );
+					$lines[] = '• ' . ( '' !== $it['code'] ? $it['code'] . ' ' : '' ) . $it['title'] . ( $bits ? ' — ' . implode( ' · ', $bits ) : '' );
+				}
+				$notes = implode( "\n", $lines );
 				if ( '' !== $x['project'] && ! $pid ) {
-					$notes = trim( 'پروژه: ' . $x['project'] . "\n" . $notes );
+					$notes = 'پروژه: ' . $x['project'] . "\n" . $notes;
 				}
 				$desc = self::build_description(
 					array(
-						'شناسه'               => $x['code'],
-						'هفته'                => $x['week'],
-						'هدف روز'             => $x['goal'],
-						'اولویت'              => $x['priority'],
-						'زمان (دقیقه)'        => $x['minutes'],
-						'خروجی / معیار انجام' => $x['output'],
-						'ددلاین پروژه'        => $x['deadline'],
-						'ددلاین امروز'        => $x['today'],
-						'درصد پیشرفت'         => ( 'done' !== $status && '' !== $x['percent'] && '0' !== $x['percent'] ) ? $x['percent'] : '',
-						'وضعیت'               => $blocked,
+						'شناسه'        => $x['code'],
+						'هفته'         => $x['week'],
+						'هدف روز'      => $x['goal'],
+						'اولویت'       => $x['priority'],
+						'زمان (دقیقه)' => $x['minutes'] ? (string) $x['minutes'] : '',
+						'ددلاین پروژه' => $x['deadline'],
+						'ددلاین امروز' => $x['today'],
+						'وضعیت'        => $x['blocked'] && 'done' !== $status ? 'مسدود' : '',
 					),
 					$notes
 				);
@@ -585,23 +653,16 @@ class MP_Task_IO {
 				);
 				$old = self::find_existing( $uid, $x['code'] );
 				if ( $old ) {
-					$changed = false;
-					foreach ( $row as $k => $v ) {
-						if ( (string) $old[ $k ] !== (string) $v ) {
-							$changed = true;
-							break;
-						}
-					}
-					if ( ! $changed ) {
-						continue;
-					}
 					if ( (int) $old['project_id'] !== $pid ) {
 						$row['section_id'] = 0;
 					}
 					$row['done_at']    = 'done' === $status ? ( $old['done_at'] ? $old['done_at'] : MP_Util::now() ) : null;
 					$row['updated_at'] = MP_Util::now();
 					$wpdb->update( self::t( 'tasks' ), $row, array( 'id' => (int) $old['id'] ) );
+					$old['_items']      = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'task_items' ) . ' WHERE task_id = %d', (int) $old['id'] ), ARRAY_A );
 					$batch['updated'][] = $old;
+					$tid                = (int) $old['id'];
+					$wpdb->delete( self::t( 'task_items' ), array( 'task_id' => $tid ) );
 				} else {
 					$row += array(
 						'source'      => 'manager',
@@ -612,8 +673,12 @@ class MP_Task_IO {
 						'updated_at'  => MP_Util::now(),
 					);
 					$wpdb->insert( self::t( 'tasks' ), $row );
-					$batch['created'][] = (int) $wpdb->insert_id;
+					$tid                = (int) $wpdb->insert_id;
+					$batch['created'][] = $tid;
 					$per_user[ $uid ]   = isset( $per_user[ $uid ] ) ? $per_user[ $uid ] + 1 : 1;
+				}
+				foreach ( $x['items'] as $i => $it ) {
+					$wpdb->insert( self::t( 'task_items' ), array( 'task_id' => $tid, 'text' => MP_Util::text( $it['title'], 200 ), 'done' => 'done' === $it['status'] ? 1 : 0, 'sort' => $i ) );
 				}
 			}
 		}
@@ -717,8 +782,15 @@ class MP_Task_IO {
 			$wpdb->delete( self::t( 'tasks' ), array( 'id' => $id ) );
 		}
 		foreach ( array_reverse( $b['updated'] ) as $old ) {
-			$id = (int) $old['id'];
-			unset( $old['id'] );
+			$id    = (int) $old['id'];
+			$items = isset( $old['_items'] ) ? $old['_items'] : null;
+			unset( $old['id'], $old['_items'] );
+			if ( null !== $items ) {
+				$wpdb->delete( self::t( 'task_items' ), array( 'task_id' => $id ) );
+				foreach ( $items as $it ) {
+					$wpdb->insert( self::t( 'task_items' ), $it );
+				}
+			}
 			$wpdb->update( self::t( 'tasks' ), $old, array( 'id' => $id ) );
 		}
 		foreach ( $b['members'] as $m ) {
@@ -906,6 +978,45 @@ class MP_Task_IO {
 			$pri    = isset( $meta['اولویت'] ) ? $meta['اولویت'] : array( 'high' => 'فوری', 'medium' => 'متوسط', 'low' => 'کم' )[ $t->priority ] ?? '';
 			$code   = isset( $meta['شناسه'] ) ? $meta['شناسه'] : '#' . $t->id;
 			$day    = self::DAYS[ (int) gmdate( 'w', strtotime( $t->task_date . ' UTC' ) ) ];
+			$items  = $wpdb->get_results( $wpdb->prepare( 'SELECT text, done FROM ' . self::t( 'task_items' ) . ' WHERE task_id = %d ORDER BY sort, id', $t->id ) );
+			if ( $items ) {
+				// A task with a checklist goes out as one row per checklist item, like the sheet it came from.
+				$info = array();
+				$rest = array();
+				foreach ( preg_split( '/\n/', $notes ) as $line ) {
+					if ( preg_match( '/^• (?:([A-Za-z]+-\d+) )?(.+?)(?: — (.*))?$/u', $line, $bm ) ) {
+						$info[ trim( $bm[2] ) ] = array( $bm[1], isset( $bm[3] ) ? $bm[3] : '' );
+					} else {
+						$rest[] = $line;
+					}
+				}
+				$rest = trim( implode( "\n", $rest ) );
+				foreach ( $items as $n => $it ) {
+					$bi   = isset( $info[ $it->text ] ) ? $info[ $it->text ] : array( '', '' );
+					$imin = preg_match( '/(\d+) دقیقه/u', $bi[1], $mm ) ? (int) $mm[1] : '';
+					$iout = preg_match( '/خروجی: ([^·]+)/u', $bi[1], $om ) ? trim( $om[1] ) : '';
+					$by[ (int) $t->user_id ][] = array(
+						'' !== $bi[0] ? $bi[0] : ( 0 === $n ? $code : '' ),
+						self::jalali( $t->task_date ),
+						$day,
+						$t->task_date,
+						isset( $meta['هفته'] ) ? $meta['هفته'] : '',
+						isset( $meta['هدف روز'] ) ? $meta['هدف روز'] : '',
+						$proj ? $proj : $t->title,
+						$pri,
+						$it->text,
+						$imin,
+						$iout,
+						isset( $meta['ددلاین پروژه'] ) ? $meta['ددلاین پروژه'] : '',
+						isset( $meta['ددلاین امروز'] ) ? $meta['ددلاین امروز'] : '',
+						$it->done ? 'انجام شد' : ( 'مسدود' === $status ? 'مسدود' : 'انجام نشده' ),
+						$it->done ? 100 : 0,
+						0 === $n ? $rest : '',
+						(string) $t->task_time,
+					);
+				}
+				continue;
+			}
 			$by[ (int) $t->user_id ][] = array(
 				$code,
 				self::jalali( $t->task_date ),

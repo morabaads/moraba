@@ -125,6 +125,27 @@
 
   /* ------------------------------------------------------------ Preview & mapping */
 
+  var ST = { todo: 'انجام نشده', doing: 'در حال انجام', done: 'انجام شده' };
+  /** Read-only preview of the tasks a sheet becomes: one task per day and project, sub-tasks as its checklist. */
+  function taskPreview(tasks) {
+    var box = el('details', { class: 'tio-preview' }, el('summary', { text: 'پیش‌نمایش تسک‌ها و چک‌لیست‌ها' }));
+    var day = '';
+    tasks.forEach(function (t) {
+      if (t.date !== day) { day = t.date; box.append(el('div', { class: 'tio-day', text: J.formatLong(day) + (t.goal ? ' — ' + t.goal : '') })); }
+      box.append(el('div', { class: 'tio-task' },
+        el('div', { class: 'tio-task-head' },
+          el('strong', { text: t.title }),
+          el('span', { class: 'chip', text: ST[t.status] }),
+          t.minutes ? el('span', { class: 'chip', text: fa(t.minutes) + ' دقیقه' }) : null,
+          el('span', { class: 'chip', text: fa(t.items.length) + ' مورد چک‌لیست' })),
+        el('ul', null, t.items.map(function (i) {
+          return el('li', { class: i.done ? 'done' : '' }, el('span', { text: i.title }),
+            (i.output || i.minutes) ? el('small', { text: [i.output, i.minutes ? fa(i.minutes) + ' دقیقه' : ''].filter(Boolean).join(' · ') }) : null);
+        }))));
+    });
+    return box;
+  }
+
   function preview(p) {
     var form = el('form', { class: 'form tio-map' });
     var rows = el('div', { class: 'tio-people' });
@@ -134,8 +155,8 @@
       rows.append(el('div', { class: 'tpl-card tio-person' },
         el('div', { class: 'tpl-copy' },
           el('strong', { text: 'شیت «' + x.name + '»' }),
-          el('small', { text: fa(x.count) + ' تسک' + (x.from ? ' · ' + J.format(x.from) + ' تا ' + J.format(x.to) : '') + (x.invalid ? ' · ' + fa(x.invalid) + ' ردیف بدون تاریخ معتبر (رد می‌شود)' : '') }),
-          el('small', { class: 'muted', text: x.sample.join(' · ') })),
+          el('small', { text: fa(x.tasks.length) + ' تسک با ' + fa(x.count) + ' مورد چک‌لیست' + (x.from ? ' · ' + J.format(x.from) + ' تا ' + J.format(x.to) : '') + (x.invalid ? ' · ' + fa(x.invalid) + ' ردیف بدون تاریخ معتبر (رد می‌شود)' : '') }),
+          taskPreview(x.tasks)),
         el('label', { class: 'field tio-user' }, 'وصل به', sel)));
     });
     var projRows = el('div', { class: 'tio-people' });
@@ -143,7 +164,7 @@
       var sel = MP.select('p', [[0, '+ ساخت پروژه جدید با همین نام'], [-1, '— بدون پروژه —']].concat(S.projects.map(function (q) { return [q.id, q.name]; })), x.project_id);
       sel.dataset.name = x.name; sel.dataset.kind = 'project';
       projRows.append(el('div', { class: 'tpl-card tio-person' },
-        el('div', { class: 'tpl-copy' }, el('strong', { text: 'پروژه «' + x.name + '»' }), el('small', { text: fa(x.count) + ' تسک' })),
+        el('div', { class: 'tpl-copy' }, el('strong', { text: 'پروژه «' + x.name + '»' }), el('small', { text: fa(x.count) + ' مورد' })),
         el('label', { class: 'field tio-user' }, 'وصل به', sel)));
     });
     form.append(
@@ -152,7 +173,7 @@
       p.projects.length ? el('h3', { class: 'tio-sub', text: 'اتصال پروژه‌ها' }) : null,
       p.projects.length ? el('p', { class: 'muted', text: 'هر پروژه فایل را به پروژه مربوطش در پنل وصل کنید، یا پروژه جدید بسازید.' }) : null,
       projRows,
-      MP.actions('ورود تسک‌ها'));
+      MP.actions('تأیید و ورود تسک‌ها'));
     form.onsubmit = function (e) {
       e.preventDefault();
       var map = {}, n = 0;
