@@ -20,6 +20,8 @@ class MP_Task_IO {
 
 	const HISTORY = 'mp_task_imports';
 	const MAPPING = 'mp_task_import_map';
+	const PMAP    = 'mp_task_import_pmap';
+	const RESETS  = 'mp_task_resets';
 	const KEEP    = 15;
 
 	/** Description lines written/read by import and export, in this order. */
@@ -36,6 +38,8 @@ class MP_Task_IO {
 			array( 'tasks/import', 'POST', 'import' ),
 			array( 'tasks/imports', 'GET', 'history' ),
 			array( 'tasks/imports/(?P<id>[a-z0-9]+)/undo', 'POST', 'undo' ),
+			array( 'tasks/reset', 'POST', 'reset' ),
+			array( 'tasks/resets/(?P<id>[a-z0-9]+)/restore', 'POST', 'restore' ),
 		);
 		foreach ( $routes as $r ) {
 			register_rest_route( MP_Rest::NS, '/' . $r[0], array( 'methods' => $r[1], 'callback' => array( __CLASS__, $r[2] ), 'permission_callback' => $m ) );
@@ -339,6 +343,16 @@ class MP_Task_IO {
 		return $people ? $people : $team;
 	}
 
+	/** @return array<string,int> normalized project name => id */
+	private static function project_names() {
+		global $wpdb;
+		$out = array();
+		foreach ( $wpdb->get_results( 'SELECT id, name FROM ' . self::t( 'projects' ) . ' ORDER BY id' ) as $p ) {
+			$out[ self::norm( $p->name ) ] = (int) $p->id;
+		}
+		return $out;
+	}
+
 	/* ------------------------------------------------------------------ Preview */
 
 	/** Best panel user for a name from the sheet: saved choice, exact, then a name that contains it. */
@@ -389,18 +403,24 @@ class MP_Task_IO {
 		$saved = get_option( self::MAPPING, array() );
 		$saved = is_array( $saved ) ? $saved : array();
 		$out   = array();
-		$names = array();
-		foreach ( MP_Rest::list_projects()['projects'] as $p ) {
-			$names[ self::norm( $p['name'] ) ] = 1;
-		}
-		$new_projects = array();
+		$names = self::project_names();
+		$pmap  = get_option( self::PMAP, array() );
+		$pmap  = is_array( $pmap ) ? $pmap : array();
+		$found = array();
 		foreach ( $people as $name => $rows ) {
 			$dates = array_filter( wp_list_pluck( $rows, 'date' ) );
 			$bad   = count( $rows ) - count( $dates );
 			foreach ( $rows as $x ) {
-				if ( '' !== $x['project'] && ! isset( $names[ self::norm( $x['project'] ) ] ) ) {
-					$new_projects[ self::norm( $x['project'] ) ] = $x['project'];
+				if ( '' === $x['project'] ) {
+					continue;
 				}
+				$pk = self::norm( $x['project'] );
+				if ( ! isset( $found[ $pk ] ) ) {
+					// Saved choice from an earlier import, then a project with the same name, else «new project».
+					$guess        = isset( $pmap[ $pk ] ) && ( -1 === (int) $pmap[ $pk ] || in_array( (int) $pmap[ $pk ], $names, true ) ) ? (int) $pmap[ $pk ] : ( isset( $names[ $pk ] ) ? $names[ $pk ] : 0 );
+					$found[ $pk ] = array( 'name' => $x['project'], 'count' => 0, 'project_id' => $guess );
+				}
+				++$found[ $pk ]['count'];
 			}
 			$out[] = array(
 				'name'    => (string) $name,
@@ -416,7 +436,7 @@ class MP_Task_IO {
 			'token'        => $token,
 			'file'         => sanitize_file_name( $f['name'] ),
 			'people'       => $out,
-			'new_projects' => array_values( $new_projects ),
+			'projects'     => array_values( $found ),
 		);
 	}
 
@@ -461,7 +481,17 @@ class MP_Task_IO {
 		if ( ! $use ) {
 			return self::err( 'هیچ فردی به کاربران پنل وصل نشده است.' );
 		}
-		$make_projects = false !== $r['create_projects'] && 'false' !== $r['create_projects'];
+		// Project in the file → panel project id, 0 = create a new one, -1 = no project.
+		$choice = array();
+		foreach ( is_array( $r['project_map'] ) ? $r['project_map'] : array() as $name => $pid ) {
+			$pid = (int) $pid;
+			if ( $pid > 0 && ! in_array( $pid, self::project_names(), true ) ) {
+				$pid = 0;
+			}
+			$choice[ self::norm( $name ) ] = max( -1, $pid );
+		}
+		$pmap = get_option( self::PMAP, array() );
+		update_option( self::PMAP, array_merge( is_array( $pmap ) ? $pmap : array(), $choice ), false );
 
 		// Safety net on top of the per-import undo: a full panel backup, as before any restore.
 		if ( class_exists( 'MP_Backup' ) ) {
@@ -478,9 +508,11 @@ class MP_Task_IO {
 		}
 		update_option( self::MAPPING, $saved, false );
 
-		$projects = array();
-		foreach ( $wpdb->get_results( 'SELECT id, name FROM ' . self::t( 'projects' ) ) as $p ) {
-			$projects[ self::norm( $p->name ) ] = (int) $p->id;
+		$projects = self::project_names();
+		foreach ( $choice as $pk => $pid ) {
+			if ( 0 !== $pid ) {
+				$projects[ $pk ] = $pid;
+			}
 		}
 		$batch = array(
 			'id'       => strtolower( wp_generate_password( 10, false ) ),
@@ -508,8 +540,8 @@ class MP_Task_IO {
 				if ( '' !== $x['project'] ) {
 					$pk = self::norm( $x['project'] );
 					if ( isset( $projects[ $pk ] ) ) {
-						$pid = $projects[ $pk ];
-					} elseif ( $make_projects ) {
+						$pid = max( 0, $projects[ $pk ] );
+					} else {
 						$pid = self::make_project( $x['project'], $data['people'], $me );
 						$projects[ $pk ]       = $pid;
 						$batch['projects'][]   = $pid;
@@ -649,7 +681,10 @@ class MP_Task_IO {
 		);
 	}
 
-	public static function history() {
+	public static function history( $r = null ) {
+		if ( $r instanceof WP_REST_Request && $r['with'] ) {
+			return array( 'imports' => self::history(), 'resets' => self::resets() );
+		}
 		return array_map( array( __CLASS__, 'summary' ), self::load_history() );
 	}
 
@@ -706,6 +741,108 @@ class MP_Task_IO {
 		return array( 'removed' => count( $b['created'] ), 'restored' => count( $b['updated'] ), 'projects_kept' => $kept, 'history' => self::history() );
 	}
 
+	/* ------------------------------------------------------------------ Tasks-only factory reset */
+
+	const RESET_TABLES = array( 'tasks', 'task_items', 'task_comments' );
+
+	private static function load_resets() {
+		$h = get_option( self::RESETS, array() );
+		return is_array( $h ) ? $h : array();
+	}
+
+	private static function reset_summary( array $x ) {
+		$u = get_userdata( $x['by'] );
+		return array( 'id' => $x['id'], 'time' => $x['time'], 'by' => $u ? $u->display_name : '', 'count' => (int) $x['count'], 'restored' => ! empty( $x['restored'] ) );
+	}
+
+	public static function resets() {
+		return array_map( array( __CLASS__, 'reset_summary' ), self::load_resets() );
+	}
+
+	private static function snapshot_path( $id ) {
+		return MP_Backup::dir() . '/tasks-snapshot-' . preg_replace( '/[^a-z0-9]/', '', $id ) . '.json';
+	}
+
+	/**
+	 * POST tasks/reset {confirm: "حذف همه تسک‌ها"} — removes every task (with checklists and comments) for
+	 * everyone. Projects, people, accounting and time logs stay. A snapshot is saved first so it can be restored.
+	 */
+	public static function reset( WP_REST_Request $r ) {
+		global $wpdb;
+		if ( 'حذف همه تسک‌ها' !== trim( (string) $r['confirm'] ) ) {
+			return self::err( 'برای تأیید، عبارت «حذف همه تسک‌ها» را دقیق بنویسید.' );
+		}
+		$snap = array( 'format' => 'moraba-tasks-snapshot', 'created' => gmdate( 'c' ), 'tables' => array() );
+		foreach ( self::RESET_TABLES as $t ) {
+			$snap['tables'][ $t ] = $wpdb->get_results( 'SELECT * FROM ' . self::t( $t ), ARRAY_A ); // phpcs:ignore
+		}
+		$id = strtolower( wp_generate_password( 10, false ) );
+		if ( false === file_put_contents( self::snapshot_path( $id ), wp_json_encode( $snap ) ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions
+			return self::err( 'ذخیره نسخه پشتیبان تسک‌ها ممکن نشد؛ چیزی پاک نشد.', 500 );
+		}
+		$count = count( $snap['tables']['tasks'] );
+		foreach ( self::RESET_TABLES as $t ) {
+			$wpdb->query( 'DELETE FROM ' . self::t( $t ) ); // phpcs:ignore
+		}
+		// Earlier imports point at tasks that are gone; their undo no longer applies.
+		$history = self::load_history();
+		foreach ( $history as &$b ) {
+			$b['undone'] = true;
+		}
+		unset( $b );
+		self::save_history( $history );
+
+		$list = self::load_resets();
+		array_unshift( $list, array( 'id' => $id, 'time' => MP_Util::now(), 'by' => get_current_user_id(), 'count' => $count, 'restored' => false ) );
+		foreach ( array_slice( $list, self::KEEP ) as $old ) {
+			wp_delete_file( self::snapshot_path( $old['id'] ) );
+		}
+		update_option( self::RESETS, array_slice( $list, 0, self::KEEP ), false );
+		MP_Audit::log( 'reset', 'task', 0, 'ریست تسک‌ها: ' . MP_Jalali::digits( $count ) . ' تسک برای همه حذف شد' );
+		return array( 'removed' => $count, 'resets' => self::resets(), 'history' => self::history() );
+	}
+
+	/** POST tasks/resets/{id}/restore — puts back every task from that reset (tasks added since then stay). */
+	public static function restore( WP_REST_Request $r ) {
+		global $wpdb;
+		$list = self::load_resets();
+		foreach ( $list as $i => $x ) {
+			if ( $x['id'] !== (string) $r['id'] ) {
+				continue;
+			}
+			$path = self::snapshot_path( $x['id'] );
+			$snap = is_file( $path ) ? json_decode( (string) file_get_contents( $path ), true ) : null; // phpcs:ignore WordPress.WP.AlternativeFunctions
+			if ( ! is_array( $snap ) || empty( $snap['tables'] ) ) {
+				return self::err( 'فایل پشتیبان این ریست پیدا نشد.', 404 );
+			}
+			$n = 0;
+			foreach ( self::RESET_TABLES as $t ) {
+				foreach ( isset( $snap['tables'][ $t ] ) ? $snap['tables'][ $t ] : array() as $row ) {
+					$wpdb->replace( self::t( $t ), $row );
+					$n += 'tasks' === $t ? 1 : 0;
+				}
+			}
+			$list[ $i ]['restored'] = true;
+			update_option( self::RESETS, $list, false );
+			MP_Audit::log( 'undo', 'task', 0, 'بازگردانی ریست تسک‌ها: ' . MP_Jalali::digits( $n ) . ' تسک برگشت' );
+			return array( 'restored' => $n, 'resets' => self::resets() );
+		}
+		return self::err( 'این ریست پیدا نشد.', 404 );
+	}
+
+	/** ?mp_export=tasks&snapshot=id — the JSON saved before a reset. */
+	private static function send_snapshot( $id ) {
+		$path = self::snapshot_path( $id );
+		if ( ! is_file( $path ) ) {
+			status_header( 404 );
+			exit( 'Not found' );
+		}
+		header( 'Content-Type: application/json; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="moraba-tasks-backup-' . basename( $path, '.json' ) . '.json"' );
+		readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		exit;
+	}
+
 	/* ------------------------------------------------------------------ Export */
 
 	/** ?mp_export=tasks&range=all|month|week&user= — one sheet per person, same layout as the import. */
@@ -714,6 +851,20 @@ class MP_Task_IO {
 		// phpcs:disable WordPress.Security.NonceVerification
 		$range = isset( $_GET['range'] ) ? sanitize_key( wp_unslash( $_GET['range'] ) ) : 'all';
 		$only  = isset( $_GET['user'] ) ? (int) $_GET['user'] : 0;
+		if ( isset( $_GET['format'] ) && 'json' === $_GET['format'] ) {
+			global $wpdb;
+			$snap = array( 'format' => 'moraba-tasks-snapshot', 'created' => gmdate( 'c' ), 'tables' => array() );
+			foreach ( self::RESET_TABLES as $t ) {
+				$snap['tables'][ $t ] = $wpdb->get_results( 'SELECT * FROM ' . self::t( $t ), ARRAY_A ); // phpcs:ignore
+			}
+			header( 'Content-Type: application/json; charset=utf-8' );
+			header( 'Content-Disposition: attachment; filename="moraba-tasks-backup-' . MP_Util::today() . '.json"' );
+			echo wp_json_encode( $snap ); // phpcs:ignore
+			exit;
+		}
+		if ( ! empty( $_GET['snapshot'] ) ) {
+			self::send_snapshot( sanitize_key( wp_unslash( $_GET['snapshot'] ) ) );
+		}
 		// phpcs:enable
 		$today = MP_Util::today();
 		$where = array( '1=1' );

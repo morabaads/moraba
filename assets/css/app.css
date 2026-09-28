@@ -1563,3 +1563,6 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .tio-person .tpl-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tio-user { min-width: 220px; margin: 0; }
 @media (max-width: 760px) { .tio-person { flex-wrap: wrap; } .tio-user { min-width: 0; width: 100%; } }
+.tio-sub { font-size: 14px; margin: 6px 0 4px; }
+.tio-danger h3 { color: var(--danger, #d64545); }
+.tio-danger .tio-history { margin-top: 12px; }
