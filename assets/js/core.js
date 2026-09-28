@@ -591,6 +591,7 @@
     if (a === 'voice-tasks') MP.voiceTasks();
     if (a === 'templates') MP.templates();
     if (a === 'task-io') MP.taskIO();
+    if (a === 'daily-report') MP.dailyReport();
     if (a === 'payroll') MP.reportTab('payroll');
     else if (a === 'settings') openAppearance();
     else if (a === 'help') openHelp();
@@ -730,7 +731,8 @@
       projects: function () { if (n.ref_id) S.projectId = n.ref_id; MP.showView('projects'); },
       reminders: function () { MP.showView('reminders'); },
       attendance: function () { MP.showView('attendance'); },
-      reports: function () { MP.showView('reports'); }
+      reports: function () { MP.showView('reports'); },
+      daily: function () { MP.dailyReport(); }
     }[n.target];
     if (go) go();
   }

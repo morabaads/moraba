@@ -26,6 +26,9 @@ class MP_Rest {
 			array( 'tasks/bulk', 'POST', 'create_tasks_bulk', $manager ),
 			array( "tasks/$id", 'POST', 'update_task', $auth ),
 			array( "tasks/$id", 'DELETE', 'delete_task', $auth ),
+			array( "tasks/$id/restore", 'POST', 'restore_task', $auth ),
+			array( "channels/$id/restore", 'POST', 'restore_channel', $auth ),
+			array( "channels/$id/members", 'POST', 'set_channel_members', $auth ),
 
 			array( 'goals', 'GET', 'get_goal', $auth ),
 			array( 'goals', 'POST', 'save_goal', $auth ),
@@ -151,7 +154,7 @@ class MP_Rest {
 
 	private static function counts( $uid ) {
 		global $wpdb;
-		$open = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'tasks' ) . " WHERE user_id = %d AND status <> 'done'", $uid ) );
+		$open = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'tasks' ) . " WHERE archived_at IS NULL AND user_id = %d AND status <> 'done'", $uid ) );
 		$rem  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'reminders' ) . ' WHERE user_id = %d AND (fired_at IS NULL OR repeat_every <> %s)', $uid, 'none' ) );
 		$note = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0', $uid ) );
 		$msgs = 0;
@@ -305,7 +308,8 @@ class MP_Rest {
 
 	public static function list_tasks( WP_REST_Request $r ) {
 		global $wpdb;
-		$where = array( '1=1' );
+		// Nothing is deleted: removed tasks are archived and listed only with ?archived=1.
+		$where = array( $r['archived'] ? 'archived_at IS NOT NULL' : 'archived_at IS NULL' );
 		$args  = array();
 
 		$project = (int) $r['project_id'];
@@ -596,13 +600,28 @@ class MP_Rest {
 			);
 		}
 		foreach ( $ids as $id ) {
-			self::purge_task( $id );
+			$wpdb->update( self::t( 'tasks' ), array( 'archived_at' => MP_Util::now(), 'timer_started' => null ), array( 'id' => $id ) );
 		}
-		MP_Audit::log( 'delete', 'task', $task->id, '«' . $task->title . '»' . ( count( $ids ) > 1 ? ' و ' . MP_Jalali::digits( count( $ids ) - 1 ) . ' تکرار بعدی' : '' ) . ' از تقویم ' . ( get_userdata( $task->user_id ) ? get_userdata( $task->user_id )->display_name : '' ) );
+		MP_Audit::log( 'archive', 'task', $task->id, '«' . $task->title . '»' . ( count( $ids ) > 1 ? ' و ' . MP_Jalali::digits( count( $ids ) - 1 ) . ' تکرار بعدی' : '' ) . ' از تقویم ' . ( get_userdata( $task->user_id ) ? get_userdata( $task->user_id )->display_name : '' ) );
 		if ( 'manager' === $task->source && (int) $task->user_id !== self::uid() ) {
-			MP_Notify::send( $task->user_id, 'task', 'تسک «' . $task->title . '» توسط ناظر حذف شد', MP_Jalali::format( $task->task_date ), 'calendar' );
+			MP_Notify::send( $task->user_id, 'task', 'تسک «' . $task->title . '» توسط ناظر آرشیو شد', MP_Jalali::format( $task->task_date ), 'calendar' );
 		}
-		return array( 'deleted' => count( $ids ), 'ids' => $ids );
+		return array( 'deleted' => count( $ids ), 'archived' => count( $ids ), 'ids' => $ids );
+	}
+
+	/** POST tasks/{id}/restore — brings an archived task back. */
+	public static function restore_task( WP_REST_Request $r ) {
+		global $wpdb;
+		$task = self::get_task( (int) $r['id'] );
+		if ( ! $task || ! self::can_view_task( $task ) ) {
+			return self::err( 'تسک پیدا نشد.', 404 );
+		}
+		if ( ! self::can_edit_task( $task ) ) {
+			return self::err( 'اجازه بازگرداندن این تسک را ندارید.', 403 );
+		}
+		$wpdb->update( self::t( 'tasks' ), array( 'archived_at' => null, 'updated_at' => MP_Util::now() ), array( 'id' => $task->id ) );
+		MP_Audit::log( 'restore', 'task', $task->id, '«' . $task->title . '» از آرشیو' );
+		return self::task_payload( self::get_task( $task->id ) );
 	}
 
 	private static function purge_task( $id ) {
@@ -671,7 +690,7 @@ class MP_Rest {
 		$members  = $wpdb->get_results( 'SELECT * FROM ' . self::t( 'project_members' ) . " WHERE project_id IN ($in)" );
 		$sections = $wpdb->get_results( 'SELECT * FROM ' . self::t( 'sections' ) . " WHERE project_id IN ($in) ORDER BY sort, id" );
 		$miles    = $wpdb->get_results( 'SELECT * FROM ' . self::t( 'milestones' ) . " WHERE project_id IN ($in) ORDER BY start_date, id" );
-		$counts   = $wpdb->get_results( 'SELECT project_id, section_id, status, COUNT(*) n FROM ' . self::t( 'tasks' ) . " WHERE project_id IN ($in) GROUP BY project_id, section_id, status" );
+		$counts   = $wpdb->get_results( 'SELECT project_id, section_id, status, COUNT(*) n FROM ' . self::t( 'tasks' ) . " WHERE archived_at IS NULL AND project_id IN ($in) GROUP BY project_id, section_id, status" );
 
 		foreach ( $projects as $p ) {
 			$pid  = (int) $p->id;
@@ -1039,7 +1058,9 @@ class MP_Rest {
 			$wpdb->prepare(
 				'SELECT * FROM ' . self::t( 'channels' ) . " WHERE (type IN ('project','client') AND project_id IN ($in))
 				OR (type = 'client' AND project_id = 0 AND created_by = %d)
-				OR (type = 'direct' AND (user_a = %d OR user_b = %d)) ORDER BY id",
+				OR (type = 'direct' AND (user_a = %d OR user_b = %d))
+				OR (type = 'group' AND id IN (SELECT channel_id FROM " . self::t( 'channel_members' ) . ' WHERE user_id = %d)) ORDER BY id',
+				$uid,
 				$uid,
 				$uid,
 				$uid
@@ -1063,6 +1084,10 @@ class MP_Rest {
 	private static function channel_members( $ch ) {
 		if ( 'direct' === $ch->type ) {
 			return array( (int) $ch->user_a, (int) $ch->user_b );
+		}
+		if ( 'group' === $ch->type ) {
+			global $wpdb;
+			return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'channel_members' ) . ' WHERE channel_id = %d', $ch->id ) ) );
 		}
 		if ( $ch->project_id ) {
 			return MP_Util::project_members( $ch->project_id );
@@ -1097,7 +1122,10 @@ class MP_Rest {
 			'unread'      => self::unread( $ch->id, $uid ),
 			'members'     => count( self::channel_members( $ch ) ),
 			'last'        => $last ? self::message_payload( $last, $uid ) : null,
-			'can_delete'  => 'client' === $ch->type && ( (int) $ch->created_by === $uid || MP_Util::is_manager() ),
+			'can_delete'  => in_array( $ch->type, array( 'client', 'group' ), true ) && ( (int) $ch->created_by === $uid || MP_Util::is_manager() ),
+			'can_manage'  => 'group' === $ch->type && ( (int) $ch->created_by === $uid || MP_Util::is_manager() ),
+			'member_ids'  => 'group' === $ch->type ? self::channel_members( $ch ) : array(),
+			'archived'    => ! empty( $ch->archived_at ),
 		);
 	}
 
@@ -1108,6 +1136,24 @@ class MP_Rest {
 			if ( (int) $reader !== (int) $m->user_id && $last >= (int) $m->id ) {
 				++$seen;
 			}
+		}
+		if ( ! empty( $m->deleted_at ) && MP_Util::is_manager( $uid ) && ( $m->body || $m->file_id ) ) {
+			// Messages are archived, never erased: supervisors still see what was archived.
+			$u = $m->user_id ? get_userdata( $m->user_id ) : null;
+			return array(
+				'id'         => (int) $m->id,
+				'user_id'    => (int) $m->user_id,
+				'deleted'    => false,
+				'archived'   => true,
+				'author'     => $u ? $u->display_name : ( $m->guest_name ? $m->guest_name . ' (مشتری)' : 'مشتری' ),
+				'avatar'     => $u ? MP_Util::avatar_url( $u->ID ) : '',
+				'body'       => $m->body,
+				'file'       => $m->file_id ? MP_Files::payload( MP_Files::get( $m->file_id ) ) : null,
+				'transcript' => isset( $m->transcript ) ? (string) $m->transcript : '',
+				'mine'       => (int) $m->user_id === $uid,
+				'seen_by'    => $seen,
+				'created_at' => $m->created_at,
+			);
 		}
 		if ( ! empty( $m->deleted_at ) ) {
 			// Everyone sees that something was removed, nobody sees what (the site admin can, in the dashboard).
@@ -1150,10 +1196,14 @@ class MP_Rest {
 		return $out;
 	}
 
-	public static function list_channels() {
-		$uid = self::uid();
-		$out = array();
+	public static function list_channels( $r = null ) {
+		$uid  = self::uid();
+		$out  = array();
+		$arch = $r instanceof WP_REST_Request && $r['archived'];
 		foreach ( self::channels_for( $uid ) as $ch ) {
+			if ( $arch !== ! empty( $ch->archived_at ) ) {
+				continue;
+			}
 			$out[] = self::channel_payload( $ch, $uid );
 		}
 		return $out;
@@ -1200,19 +1250,82 @@ class MP_Rest {
 			);
 			return self::channel_payload( self::channel_for( $wpdb->insert_id, $uid ), $uid );
 		}
+		if ( 'group' === $r['type'] ) {
+			if ( ! MP_Util::is_manager() ) {
+				return self::err( 'فقط ناظر می‌تواند گروه بسازد.', 403 );
+			}
+			$title = MP_Util::text( $r['title'], 160 );
+			if ( '' === $title ) {
+				return self::err( 'نام گروه را وارد کنید.' );
+			}
+			$wpdb->insert( self::t( 'channels' ), array( 'type' => 'group', 'title' => $title, 'created_by' => $uid, 'created_at' => MP_Util::now() ) );
+			$id = (int) $wpdb->insert_id;
+			self::write_members( $id, is_array( $r['members'] ) ? $r['members'] : array(), $title );
+			MP_Audit::log( 'create', 'channel', $id, 'گروه «' . $title . '»' );
+			return self::channel_payload( self::channel_for( $id, $uid ), $uid );
+		}
 		return self::err( 'نوع گفت‌وگو معتبر نیست.' );
+	}
+
+	/** Replaces a group's members (its creator always stays in); new members get a notification. */
+	private static function write_members( $id, array $ids, $title ) {
+		global $wpdb;
+		$ch   = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $id ) );
+		$old  = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'channel_members' ) . ' WHERE channel_id = %d', $id ) ) );
+		$want = array( (int) $ch->created_by, self::uid() );
+		foreach ( $ids as $u ) {
+			if ( MP_Util::is_panel_user( (int) $u ) ) {
+				$want[] = (int) $u;
+			}
+		}
+		$want = array_values( array_unique( $want ) );
+		foreach ( array_diff( $old, $want ) as $u ) {
+			$wpdb->delete( self::t( 'channel_members' ), array( 'channel_id' => $id, 'user_id' => $u ) );
+		}
+		foreach ( array_diff( $want, $old ) as $u ) {
+			$wpdb->insert( self::t( 'channel_members' ), array( 'channel_id' => $id, 'user_id' => $u ) );
+			if ( $u !== self::uid() ) {
+				MP_Notify::send( $u, 'message', 'شما به گروه «' . $title . '» اضافه شدید', '', 'messages', $id );
+			}
+		}
+	}
+
+	/** POST channels/{id}/members {members: [ids], title?} — managers edit a team group. */
+	public static function set_channel_members( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch = self::channel_for( (int) $r['id'], self::uid() );
+		if ( ! $ch || 'group' !== $ch->type || ( (int) $ch->created_by !== self::uid() && ! MP_Util::is_manager() ) ) {
+			return self::err( 'اجازه ویرایش این گروه را ندارید.', 403 );
+		}
+		$title = null !== $r['title'] ? MP_Util::text( $r['title'], 160 ) : $ch->title;
+		if ( '' !== $title && $title !== $ch->title ) {
+			$wpdb->update( self::t( 'channels' ), array( 'title' => $title ), array( 'id' => $ch->id ) );
+		}
+		self::write_members( (int) $ch->id, is_array( $r['members'] ) ? $r['members'] : array(), $title );
+		return self::channel_payload( self::channel_for( $ch->id, self::uid() ), self::uid() );
 	}
 
 	public static function delete_channel( WP_REST_Request $r ) {
 		global $wpdb;
 		$ch = self::channel_for( (int) $r['id'], self::uid() );
-		if ( ! $ch || 'client' !== $ch->type || ( (int) $ch->created_by !== self::uid() && ! MP_Util::is_manager() ) ) {
-			return self::err( 'اجازه حذف این گروه را ندارید.', 403 );
+		if ( ! $ch || ! in_array( $ch->type, array( 'client', 'group' ), true ) || ( (int) $ch->created_by !== self::uid() && ! MP_Util::is_manager() ) ) {
+			return self::err( 'اجازه آرشیو این گروه را ندارید.', 403 );
 		}
-		$wpdb->delete( self::t( 'messages' ), array( 'channel_id' => $ch->id ) );
-		$wpdb->delete( self::t( 'reads' ), array( 'channel_id' => $ch->id ) );
-		$wpdb->delete( self::t( 'channels' ), array( 'id' => $ch->id ) );
-		return array( 'deleted' => true );
+		// Archived, not deleted: messages stay and the group can be restored.
+		$wpdb->update( self::t( 'channels' ), array( 'archived_at' => MP_Util::now() ), array( 'id' => $ch->id ) );
+		MP_Audit::log( 'archive', 'channel', $ch->id, 'گروه «' . $ch->title . '»' );
+		return array( 'deleted' => true, 'archived' => true );
+	}
+
+	public static function restore_channel( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch = self::channel_for( (int) $r['id'], self::uid() );
+		if ( ! $ch || ( (int) $ch->created_by !== self::uid() && ! MP_Util::is_manager() ) ) {
+			return self::err( 'اجازه بازگرداندن این گروه را ندارید.', 403 );
+		}
+		$wpdb->update( self::t( 'channels' ), array( 'archived_at' => null ), array( 'id' => $ch->id ) );
+		MP_Audit::log( 'restore', 'channel', $ch->id, 'گروه «' . $ch->title . '»' );
+		return self::channel_payload( self::channel_for( $ch->id, self::uid() ), self::uid() );
 	}
 
 	/**
@@ -1301,7 +1414,7 @@ class MP_Rest {
 		}
 		if ( empty( $m->deleted_at ) ) {
 			$wpdb->update( self::t( 'messages' ), array( 'deleted_at' => MP_Util::now(), 'deleted_by' => $uid ), array( 'id' => $m->id ) );
-			MP_Audit::log( 'delete', 'message', $m->id, 'حذف پیام: ' . wp_trim_words( $m->body ? $m->body : '(فایل/ویس)', 10 ) );
+			MP_Audit::log( 'archive', 'message', $m->id, 'آرشیو پیام: ' . wp_trim_words( $m->body ? $m->body : '(فایل/ویس)', 10 ) );
 		}
 		$m->deleted_at = MP_Util::now();
 		return self::message_payload( $m, $uid );
@@ -1749,7 +1862,7 @@ class MP_Rest {
 		$last   = MP_Util::add_days( $week, -7 );
 		$month  = MP_Util::add_days( $today, -29 );
 		$doneIn = function ( $from, $to ) use ( $wpdb, $t, $uid ) {
-			return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status = 'done' AND task_date BETWEEN %s AND %s", $uid, $from, $to ) );
+			return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status = 'done' AND task_date BETWEEN %s AND %s", $uid, $from, $to ) );
 		};
 		$daily = array();
 		for ( $i = 13; $i >= 0; $i-- ) {
@@ -1757,7 +1870,7 @@ class MP_Rest {
 			$daily[] = array(
 				'date'  => $d,
 				'done'  => $doneIn( $d, $d ),
-				'total' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND task_date = %s", $uid, $d ) ),
+				'total' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND task_date = %s", $uid, $d ) ),
 			);
 		}
 		$out = array(
@@ -1765,13 +1878,13 @@ class MP_Rest {
 			'thisWeek'  => $doneIn( $week, MP_Util::add_days( $week, 6 ) ),
 			'lastWeek'  => $doneIn( $last, MP_Util::add_days( $last, 6 ) ),
 			'month'     => $doneIn( $month, $today ),
-			'overdue'   => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status <> 'done' AND task_date < %s", $uid, $today ) ),
-			'open'      => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status <> 'done'", $uid ) ),
-			'onTime'    => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status = 'done' AND DATE(done_at) <= task_date", $uid ) ),
-			'doneTotal' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status = 'done'", $uid ) ),
+			'overdue'   => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status <> 'done' AND task_date < %s", $uid, $today ) ),
+			'open'      => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status <> 'done'", $uid ) ),
+			'onTime'    => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status = 'done' AND DATE(done_at) <= task_date", $uid ) ),
+			'doneTotal' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status = 'done'", $uid ) ),
 			'managerTasks' => array(
-				'total' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND source = 'manager'", $uid ) ),
-				'done'  => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND source = 'manager' AND status = 'done'", $uid ) ),
+				'total' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND source = 'manager'", $uid ) ),
+				'done'  => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND source = 'manager' AND status = 'done'", $uid ) ),
 			),
 			'daily'     => $daily,
 			'team'      => array(),
@@ -1785,9 +1898,9 @@ class MP_Rest {
 				$out['team'][] = array(
 					'id'      => $member,
 					'name'    => $u->display_name,
-					'open'    => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status <> 'done'", $member ) ),
-					'done'    => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status = 'done' AND task_date BETWEEN %s AND %s", $member, $week, MP_Util::add_days( $week, 6 ) ) ),
-					'overdue' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id = %d AND status <> 'done' AND task_date < %s", $member, $today ) ),
+					'open'    => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status <> 'done'", $member ) ),
+					'done'    => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status = 'done' AND task_date BETWEEN %s AND %s", $member, $week, MP_Util::add_days( $week, 6 ) ) ),
+					'overdue' => (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE archived_at IS NULL AND user_id = %d AND status <> 'done' AND task_date < %s", $member, $today ) ),
 				);
 			}
 		}

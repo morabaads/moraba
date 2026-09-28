@@ -1582,3 +1582,48 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .tio-proj-fields { display: grid; gap: 8px; min-width: 240px; }
 .tio-proj-fields input { margin-top: 6px; }
 @media (max-width: 760px) { .tio-proj-fields { width: 100%; min-width: 0; } }
+
+/* Chat: instant send, drop zone, archive, team groups */
+.bubble-row.b-pending .bubble{opacity:.75}
+.bubble-row.b-failed .bubble{outline:1px solid var(--danger,#d64545)}
+.b-sending .icon{width:12px;height:12px;opacity:.7;vertical-align:-2px;animation:mp-spin 1.6s linear infinite}
+@keyframes mp-spin{to{transform:rotate(360deg)}}
+.b-progress{margin-top:6px;height:4px}
+.b-retry{display:inline-flex;align-items:center;gap:6px;margin-top:6px;border:0;background:none;color:var(--danger,#d64545);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.b-retry .icon{width:14px;height:14px}
+.b-arch{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.b-arch .icon{width:12px;height:12px}
+.bubble.b-archived{opacity:.7;border:1px dashed var(--line-strong)}
+.chat-drop{position:relative}
+.chat-drop::after{content:'فایل را اینجا رها کنید تا ارسال شود';position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed var(--brand);border-radius:16px;background:var(--brand-soft);color:var(--brand-ink);font-weight:700;z-index:5;pointer-events:none}
+.chat-archive-link{display:flex;align-items:center;gap:6px;width:100%;margin-top:10px;padding:10px 12px;border:0;background:none;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;border-top:1px solid var(--line)}
+.chat-archive-link .icon{width:14px;height:14px}
+.ci-ico.group{background:var(--brand-soft);color:var(--brand-ink)}
+.check-list{display:grid;gap:8px;max-height:45vh;overflow:auto;padding:4px 0}
+.check-list .check{gap:10px}
+.archived-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.archived-row:last-child{border-bottom:0}
+.ar-copy{flex:1;min-width:0;display:grid}
+.ar-copy small{color:var(--muted)}
+
+/* Daily report */
+.daily-tabs{margin-bottom:14px}
+.daily-pct{color:var(--brand)}
+.daily-form input[type=range]{width:100%;accent-color:var(--brand)}
+.daily-days{display:flex;flex-wrap:wrap;gap:8px 16px}
+.daily-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.daily-bar strong{margin-inline:4px}
+.chip.warn{background:#fdecec;color:#b33}
+.daily-missing{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;margin-bottom:12px}
+.daily-team{display:grid;gap:10px}
+.daily-card{padding:14px 16px}
+.daily-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.daily-head strong{margin-inline-end:auto}
+.daily-meter{width:90px;height:6px;border-radius:9px;background:var(--surface-3);overflow:hidden}
+.daily-meter i{display:block;height:100%;background:var(--brand)}
+.daily-block{margin-top:8px}
+.daily-block small{color:var(--muted);font-weight:700}
+.daily-block p{margin:2px 0 0;white-space:pre-line;line-height:1.9}
+.daily-prompt{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:16px;border:1px solid var(--brand);background:var(--brand-soft)}
+.daily-prompt>span{flex:1;display:grid}
+.daily-prompt small{color:var(--ink-2)}

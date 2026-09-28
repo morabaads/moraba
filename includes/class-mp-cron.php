@@ -48,6 +48,8 @@ class MP_Cron {
 			$wpdb->update( $table, array( 'remind_date' => $next ), array( 'id' => $r->id ) );
 		}
 
+		MP_Daily::tick();
+
 		// Meetings starting within the next 10 minutes.
 		$soon     = gmdate( 'H:i', strtotime( $now . ' UTC' ) + 10 * MINUTE_IN_SECONDS );
 		$meetings = $wpdb->get_results(

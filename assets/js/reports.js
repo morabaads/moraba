@@ -56,7 +56,7 @@
   }
 
   var AUDIT_ICON = { task: 'tasks', ledger: 'wallet', leave: 'leave', attendance: 'clock', project: 'folder', meeting: 'video', member: 'user' };
-  var AUDIT_ACTION = { create: 'ایجاد', update: 'ویرایش', delete: 'حذف', approved: 'تأیید', rejected: 'رد', 'in': 'ورود', out: 'خروج', add: 'افزودن', remove: 'حذف', file: 'پیوست', import: 'ورود اکسل', undo: 'بازگردانی', reset: 'ریست' };
+  var AUDIT_ACTION = { create: 'ایجاد', update: 'ویرایش', delete: 'حذف', approved: 'تأیید', rejected: 'رد', 'in': 'ورود', out: 'خروج', add: 'افزودن', remove: 'حذف', file: 'پیوست', import: 'ورود اکسل', undo: 'بازگردانی', reset: 'ریست', archive: 'آرشیو', restore: 'بازگردانی' };
   function audit(append) {
     var body = $('#rep-body');
     if (!append) {

@@ -165,6 +165,7 @@ class MP_Install {
 			seen_at datetime DEFAULT NULL,
 			time_spent int(11) unsigned NOT NULL DEFAULT 0,
 			timer_started datetime DEFAULT NULL,
+			archived_at datetime DEFAULT NULL,
 			created_at datetime NOT NULL,
 			updated_at datetime NOT NULL,
 			PRIMARY KEY  (id),
@@ -205,9 +206,33 @@ class MP_Install {
 			user_b bigint(20) unsigned NOT NULL DEFAULT 0,
 			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			created_at datetime NOT NULL,
+			archived_at datetime DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
 			KEY token (token)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'channel_members' ) . " (
+			channel_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			PRIMARY KEY  (channel_id,user_id),
+			KEY user_id (user_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'daily_reports' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			user_id bigint(20) unsigned NOT NULL,
+			report_date date NOT NULL,
+			done_text text NOT NULL,
+			progress tinyint(3) unsigned NOT NULL DEFAULT 0,
+			problems text NULL,
+			decisions text NULL,
+			tomorrow text NULL,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY user_date (user_id,report_date),
+			KEY report_date (report_date)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'messages' ) . " (

@@ -182,7 +182,7 @@ $mp_nav = array(
 					</div>
 					<select class="select manager-only" id="cal-user" aria-label="تقویم چه کسی"></select>
 					<button type="button" class="btn btn-secondary" id="cal-today">امروز</button>
-					<button type="button" class="btn btn-secondary manager-only" data-action="task-io"><?php echo $mp_i( 'file' ); // phpcs:ignore ?>اکسل تسک‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="templates"><?php echo $mp_i( 'list' ); // phpcs:ignore ?>قالب‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="voice-tasks"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?>تسک گروهی با صدا</button>
+					<button type="button" class="btn btn-secondary" data-action="daily-report"><?php echo $mp_i( 'list' ); // phpcs:ignore ?>گزارش روزانه</button><button type="button" class="btn btn-secondary manager-only" data-action="task-io"><?php echo $mp_i( 'file' ); // phpcs:ignore ?>اکسل تسک‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="templates"><?php echo $mp_i( 'list' ); // phpcs:ignore ?>قالب‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="voice-tasks"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?>تسک گروهی با صدا</button>
 					<button type="button" class="btn btn-primary" id="cal-add"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>افزودن تسک</button>
 				</div>
 			</div>
@@ -218,11 +218,11 @@ $mp_nav = array(
 		<section class="view" id="view-mytasks" data-view="mytasks" hidden aria-label="تسک‌های من">
 			<div class="page-head">
 				<div><h1>تسک‌های من</h1><p>همه کارهایی که به شما سپرده شده یا خودتان ثبت کرده‌اید</p></div>
-				<div class="page-actions"><button type="button" class="btn btn-secondary manager-only" data-action="task-io"><?php echo $mp_i( 'file' ); // phpcs:ignore ?>اکسل تسک‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="templates"><?php echo $mp_i( 'list' ); // phpcs:ignore ?>قالب‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="voice-tasks"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?>تسک گروهی با صدا</button><button type="button" class="btn btn-primary" id="mytasks-add"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>افزودن تسک</button></div>
+				<div class="page-actions"><button type="button" class="btn btn-secondary" data-action="daily-report"><?php echo $mp_i( 'list' ); // phpcs:ignore ?>گزارش روزانه</button><button type="button" class="btn btn-secondary manager-only" data-action="task-io"><?php echo $mp_i( 'file' ); // phpcs:ignore ?>اکسل تسک‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="templates"><?php echo $mp_i( 'list' ); // phpcs:ignore ?>قالب‌ها</button><button type="button" class="btn btn-secondary manager-only" data-action="voice-tasks"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?>تسک گروهی با صدا</button><button type="button" class="btn btn-primary" id="mytasks-add"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>افزودن تسک</button></div>
 			</div>
 			<div class="toolbar">
 				<label class="search grow"><?php echo $mp_i( 'search' ); // phpcs:ignore ?><input type="search" id="mt-q" placeholder="جستجوی تسک، پروژه یا بخش…" aria-label="جستجو"></label>
-				<select class="select" id="mt-status" aria-label="وضعیت"><option value="open">باز</option><option value="all">همه وضعیت‌ها</option><option value="done">انجام شده</option></select>
+				<select class="select" id="mt-status" aria-label="وضعیت"><option value="open">باز</option><option value="all">همه وضعیت‌ها</option><option value="done">انجام شده</option><option value="archived">آرشیو</option></select>
 				<select class="select" id="mt-source" aria-label="منبع"><option value="all">همه منابع</option><option value="manager">تعیین‌شده توسط ناظر</option><option value="self">شخصی</option></select>
 				<select class="select" id="mt-range" aria-label="موعد"><option value="all">همه موعدها</option><option value="overdue">عقب‌افتاده</option><option value="today">امروز</option><option value="week">این هفته</option><option value="month">این ماه</option></select>
 				<span class="toolbar-count" id="mt-count"></span>
@@ -249,7 +249,7 @@ $mp_nav = array(
 			<div class="page-head">
 				<div><h1>پیام‌ها</h1><p>گفت‌وگوی تیم، خصوصی و گروه‌های مشتری</p></div>
 				<div class="page-actions">
-					<button type="button" class="btn btn-secondary" id="new-client-group">گروه مشتری</button>
+					<button type="button" class="btn btn-secondary manager-only" id="new-team-group">گروه تیم</button><button type="button" class="btn btn-secondary" id="new-client-group">گروه مشتری</button>
 					<button type="button" class="btn btn-primary" id="new-dm"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>پیام جدید</button>
 				</div>
 			</div>

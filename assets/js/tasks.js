@@ -28,7 +28,7 @@
   MP.deleteTask = function (t, done) {
     function run(scope) {
       var removed = [];
-      MP.undoable(scope === 'series' ? 'تسک و تکرارهای بعدی حذف شد' : 'تسک حذف شد',
+      MP.undoable(scope === 'series' ? 'تسک و تکرارهای بعدی آرشیو شد' : 'تسک آرشیو شد',
         function () {
           S.tasks = S.tasks.filter(function (x) {
             var hit = x.id === t.id || (scope === 'series' && x.series && x.series === t.series && x.date >= t.date);
@@ -42,7 +42,7 @@
       if (done) done();
     }
     if (t.recurrence && t.recurrence !== 'none') {
-      MP.dialog.open('حذف تسک تکرارشونده', el('div', null,
+      MP.dialog.open('آرشیو تسک تکرارشونده', el('div', null,
         el('p', { text: '«' + t.title + '» بخشی از یک سری تکرارشونده است.', style: { marginBottom: '16px' } }),
         el('div', { class: 'dialog-actions' },
           el('button', { type: 'button', class: 'btn btn-danger', text: 'فقط همین', onclick: function () { MP.dialog.close(); run('one'); } }),
@@ -192,7 +192,7 @@
       MP.field('وضعیت', MP.select('status', [['todo', 'انجام نشده'], ['doing', 'در حال انجام'], ['done', 'انجام شده']], t ? t.status : 'todo'))));
     form.append(MP.field('توضیحات', el('textarea', { name: 'description', maxlength: 4000, placeholder: 'جزئیات، لینک‌ها یا معیار انجام…' }, t ? t.description : '')));
     if (!t) form.append(MP.field('چک‌لیست (هر خط یک مورد)', el('textarea', { name: 'checklist', rows: 3, placeholder: 'اختیاری' })));
-    form.append(MP.actions(t ? 'ذخیره تغییرات' : 'ثبت تسک', t ? el('button', { type: 'button', class: 'btn btn-danger', text: 'حذف', onclick: function () { MP.deleteTask(t); } }) : null));
+    form.append(MP.actions(t ? 'ذخیره تغییرات' : 'ثبت تسک', t ? el('button', { type: 'button', class: 'btn btn-danger', text: 'آرشیو', onclick: function () { MP.deleteTask(t); } }) : null));
     form.onsubmit = function (e) {
       e.preventDefault();
       var f = form.elements;
@@ -472,7 +472,7 @@
     var foot = el('div', { class: 'dialog-actions', style: { marginTop: '20px' } });
     if (!t.locked) {
       foot.append(el('button', { type: 'button', class: 'btn btn-secondary', html: icon('edit') + 'ویرایش', onclick: function () { MP.taskForm({ task: t }); } }));
-      foot.append(el('span', { class: 'spacer' }), el('button', { type: 'button', class: 'btn btn-danger', text: d.series_ahead > 1 ? 'حذف…' : 'حذف', onclick: function () { MP.deleteTask(t); } }));
+      foot.append(el('span', { class: 'spacer' }), el('button', { type: 'button', class: 'btn btn-danger', text: d.series_ahead > 1 ? 'آرشیو…' : 'آرشیو', onclick: function () { MP.deleteTask(t); } }));
     }
     if (foot.children.length) wrap.append(foot);
     body.replaceChildren(wrap);
@@ -481,7 +481,30 @@
 
   /* ------------------------------------------------------------ My tasks page */
 
+  /** Archived tasks (nothing is deleted); each can be brought back. */
+  function renderArchive(box) {
+    box.replaceChildren(MP.skeleton(3));
+    MP.api('tasks', { query: { archived: 1, user_id: S.manager ? 'all' : '' } }).then(function (list) {
+      if ($('#mt-status').value !== 'archived') return;
+      var q = MP.norm($('#mt-q').value);
+      list = list.filter(function (t) { return !q || MP.norm(t.title + ' ' + t.description).indexOf(q) >= 0; });
+      $('#mt-count').textContent = fa(list.length) + ' تسک آرشیو';
+      box.replaceChildren();
+      if (!list.length) { box.append(MP.empty('folder', 'آرشیو خالی است', 'تسک‌هایی که آرشیو کنید اینجا می‌مانند و قابل بازگرداندن هستند.')); return; }
+      var stack = el('div', { class: 'task-stack', style: { maxHeight: 'none', padding: '8px' } });
+      list.forEach(function (t) {
+        stack.append(el('div', { class: 'archived-row' },
+          el('span', { class: 'ar-copy' }, el('strong', { text: t.title }), el('small', { text: J.format(t.date) + (t.user_id !== S.me.id ? ' · ' + MP.user(t.user_id).name : '') + (MP.project(t.project_id) ? ' · ' + MP.project(t.project_id).name : '') })),
+          t.locked ? null : el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('repeat') + 'بازگرداندن', onclick: function () {
+            MP.api('tasks/' + t.id + '/restore', { method: 'POST' }).then(function () { MP.toast('تسک بازگردانده شد'); MP.loadTasks(); renderArchive(box); MP.refreshCounts(); }).catch(MP.soft);
+          } })));
+      });
+      box.append(stack);
+    }).catch(MP.soft);
+  }
+
   function render() {
+    if ($('#mt-status').value === 'archived') { renderArchive($('#mt-list')); return; }
     var q = MP.norm($('#mt-q').value), status = $('#mt-status').value, source = $('#mt-source').value, range = $('#mt-range').value;
     var box = $('#mt-list');
     var items = MP.myTasks().filter(function (t) {

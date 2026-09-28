@@ -14,11 +14,11 @@
 
   function channelIcon(c) {
     if (c.type === 'direct') return MP.avatar(MP.user(c.other));
-    return el('span', { class: 'ci-ico' + (c.type === 'client' ? ' client' : ''), html: icon(c.type === 'client' ? 'user' : 'folder') });
+    return el('span', { class: 'ci-ico' + (c.type === 'client' ? ' client' : c.type === 'group' ? ' group' : ''), html: icon(c.type === 'client' ? 'user' : c.type === 'group' ? 'chat' : 'folder') });
   }
   function renderList() {
     var list = $('#chat-list'); list.replaceChildren();
-    var groups = [['project', 'گروه‌های پروژه'], ['direct', 'گفت‌وگوهای خصوصی'], ['client', 'گروه‌های مشتری']];
+    var groups = [['group', 'گروه‌های تیم'], ['project', 'گروه‌های پروژه'], ['direct', 'گفت‌وگوهای خصوصی'], ['client', 'گروه‌های مشتری']];
     var any = false;
     groups.forEach(function (g) {
       var items = S.channels.filter(function (c) { return c.type === g[0]; })
@@ -35,13 +35,15 @@
       });
     });
     if (!any) list.append(MP.empty('chat', 'گفت‌وگویی نیست', 'با «پیام جدید» گفت‌وگو را شروع کنید.', { text: 'پیام جدید', onclick: newDirect }, true));
+    list.append(el('button', { type: 'button', class: 'chat-archive-link', html: icon('folder') + 'گروه‌های آرشیو‌شده', onclick: archivedGroups }));
   }
   /** Chat list preview: last message text, or an icon + label for voice / file / deleted. */
   function preview(c) {
     if (!c.last) return el('small', { text: c.type === 'client' ? 'مشتری: ' + c.client_name : 'هنوز پیامی نیست' });
+    if (c.last.archived && !c.last.body && !c.last.file) return el('small', { class: 'ci-kind' }, MP.iconEl('ban'), 'پیام آرشیو شد');
     var who = c.last.mine ? 'شما: ' : '', l = c.last;
     if (!l.deleted && l.body) return el('small', { text: who + l.body });
-    var kind = l.deleted ? ['ban', 'پیام حذف شد'] : l.file && /^audio\//.test(l.file.mime) ? ['mic', 'پیام صوتی'] : ['clip', 'فایل'];
+    var kind = l.deleted ? ['ban', 'پیام آرشیو شد'] : l.file && /^audio\//.test(l.file.mime) ? ['mic', 'پیام صوتی'] : ['clip', 'فایل'];
     return el('small', { class: 'ci-kind' }, who, MP.iconEl(kind[0]), kind[1]);
   }
   function select(id) {
@@ -55,12 +57,13 @@
     }
     box.replaceChildren(MP.skeleton(3));
     $('#chat-title').textContent = c.title;
-    $('#chat-sub').textContent = c.type === 'project' ? fa(c.members) + ' عضو' : c.type === 'direct' ? (MP.user(c.other).title || 'گفت‌وگوی خصوصی') : 'گروه مشتری · ' + c.client_name;
+    $('#chat-sub').textContent = c.type === 'project' || c.type === 'group' ? fa(c.members) + ' عضو' : c.type === 'direct' ? (MP.user(c.other).title || 'گفت‌وگوی خصوصی') : 'گروه مشتری · ' + c.client_name;
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
-      if (c.can_delete) tools.append(el('button', { type: 'button', class: 'icon-btn sm danger', 'aria-label': 'حذف گروه', html: icon('trash'), onclick: function () { deleteClient(c); } }));
     }
+    if (c.type === 'group' && c.can_manage) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'اعضا', onclick: function () { groupForm(c); } }));
+    if (c.can_delete) tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'آرشیو گروه', title: 'آرشیو گروه', html: icon('folder'), onclick: function () { deleteClient(c); } }));
     if (c.type === 'direct') tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'پروفایل', html: icon('user'), onclick: function () { MP.openProfile(c.other); } }));
     $('#composer').hidden = false;
     c.unread = 0; renderList();
@@ -71,10 +74,11 @@
     var day = m.created_at.slice(0, 10);
     var out = [];
     if (day !== lastDay) { lastDay = day; out.push(el('div', { class: 'day-sep', text: day === S.today ? 'امروز' : J.formatLong(day) })); }
-    var content = el('div', { class: 'bubble' + (m.deleted ? ' b-deleted' : '') });
+    var content = el('div', { class: 'bubble' + (m.deleted ? ' b-deleted' : '') + (m.archived ? ' b-archived' : '') });
+    if (m.archived) content.append(el('span', { class: 'b-arch', html: icon('folder') + 'آرشیو شده (فقط ناظر می‌بیند)' }));
     if (!m.mine) content.append(el('span', { class: 'b-author', text: m.author }));
     if (m.deleted) {
-      content.append(el('p', { class: 'b-del' }, MP.iconEl('ban'), m.mine ? 'این پیام را حذف کردید' : 'این پیام حذف شد'), el('span', { class: 'b-meta', text: MP.timeFa(m.created_at.slice(11, 16)) }));
+      content.append(el('p', { class: 'b-del' }, MP.iconEl('ban'), m.mine ? 'این پیام را آرشیو کردید' : 'این پیام آرشیو شد'), el('span', { class: 'b-meta', text: MP.timeFa(m.created_at.slice(11, 16)) }));
       var drow = el('div', { class: 'bubble-row ' + (m.mine ? 'me' : 'other') }, m.mine ? null : MP.avatar({ name: m.author, avatar: m.avatar }, 'sm'), content);
       drow.classList.add('gone'); rowsById[m.id] = drow; out.push(drow); return out;
     }
@@ -84,12 +88,14 @@
     if (m.body) content.append(el('p', { text: m.body }));
     var meta = el('span', { class: 'b-meta' }, MP.timeFa(m.created_at.slice(11, 16)));
     if (m.body && !voice) meta.prepend(el('button', { type: 'button', class: 'b-speak', 'aria-label': 'خواندن پیام با صدا', title: 'خواندن با صدا', html: SPEAKER, onclick: function (e) { speak(m, e.currentTarget); } }));
-    if (m.mine) { var seen = el('span', { class: 'seen', title: '' }); meta.append(seen); mineRows[m.id] = seen; setSeen(seen, m.seen_by); }
+    if (m.pending) meta.append(el('span', { class: 'b-sending', html: icon('clock') }));
+    else if (m.mine) { var seen = el('span', { class: 'seen', title: '' }); meta.append(seen); mineRows[m.id] = seen; setSeen(seen, m.seen_by); }
     content.append(meta);
     var row = el('div', { class: 'bubble-row ' + (m.mine ? 'me' : 'other') + (fresh ? ' b-new' : '') }, m.mine ? null : MP.avatar({ name: m.author, avatar: m.avatar }, 'sm'), content);
     if (fresh) setTimeout(function () { row.classList.remove('b-new'); }, 1600);
     rowsById[m.id] = row; row.dataset.time = MP.timeFa(m.created_at.slice(11, 16));
-    if (m.mine) { swipeToDelete(row, m); row.addEventListener('contextmenu', function (e) { e.preventDefault(); askDelete(m); }); }
+    if (m.pending) { row.classList.add('b-pending'); out.push(row); return out; }
+    if (m.mine && !m.archived) { swipeToDelete(row, m); row.addEventListener('contextmenu', function (e) { e.preventDefault(); askDelete(m); }); }
     out.push(row);
     return out;
   }
@@ -101,12 +107,12 @@
     var b = $('.bubble', row);
     row.classList.add('gone');
     b.className = 'bubble b-deleted';
-    b.replaceChildren(el('p', { class: 'b-del' }, MP.iconEl('ban'), mine ? 'این پیام را حذف کردید' : 'این پیام حذف شد'), el('span', { class: 'b-meta', text: row.dataset.time || '' }));
+    b.replaceChildren(el('p', { class: 'b-del' }, MP.iconEl('ban'), mine ? 'این پیام را آرشیو کردید' : 'این پیام آرشیو شد'), el('span', { class: 'b-meta', text: row.dataset.time || '' }));
   }
   function askDelete(m) {
-    MP.confirm('حذف پیام', 'این پیام برای همه اعضای گفت‌وگو حذف می‌شود.', 'حذف').then(function (ok) {
+    MP.confirm('آرشیو پیام', 'این پیام از گفت‌وگو برداشته و آرشیو می‌شود (پاک نمی‌شود و ناظر همچنان آن را می‌بیند).', 'آرشیو').then(function (ok) {
       if (!ok) return;
-      MP.api('messages/' + m.id, { method: 'DELETE' }).then(function () { markDeleted(m.id); MP.loadChannels(); MP.toast('پیام حذف شد'); }).catch(MP.soft);
+      MP.api('messages/' + m.id, { method: 'DELETE' }).then(function () { if (S.manager) { lastId = 0; lastDay = ''; fetchNew(false); } else markDeleted(m.id); MP.loadChannels(); MP.toast('پیام آرشیو شد'); }).catch(MP.soft);
     });
   }
   function swipeToDelete(row, m) {
@@ -177,7 +183,7 @@
       d.messages.forEach(function (m) { lastId = Math.max(lastId, m.id); bubble(m, fresh).forEach(function (n) { box.append(n); }); });
       if (fresh && d.messages.some(function (m) { return !m.mine; })) MP.haptic && MP.haptic(8);
       Object.keys(d.seen || {}).forEach(function (mid) { if (mineRows[mid]) setSeen(mineRows[mid], d.seen[mid]); });
-      (d.deleted || []).forEach(markDeleted);
+      if (!S.manager) (d.deleted || []).forEach(markDeleted);
       showActivity(d.activity);
       if (!box.children.length) box.append(MP.empty('chat', 'اولین پیام را بفرستید', 'پیام‌ها برای همه اعضای گفت‌وگو نمایش داده می‌شود.', null, true));
       else { var e = $('.empty', box); if (e) e.remove(); }
@@ -320,19 +326,9 @@
       var type = (r.mr.mimeType || 'audio/webm').split(';')[0], ext = /mp4|aac/.test(type) ? 'm4a' : /ogg/.test(type) ? 'ogg' : 'webm';
       var blob = new Blob(r.chunks, { type: type });
       if (blob.size < 1500) { MP.toast('پیام صوتی خیلی کوتاه بود.'); return; }
-      var file = new File([blob], 'voice-' + Date.now() + '.' + ext, { type: type }), channel = current;
-      var att = $('#composer-attach'), bar = el('div', { class: 'upload-progress', style: { flex: '1' } }, el('i'));
-      att.hidden = false; att.replaceChildren(el('span', { class: 'file-chip' }, MP.iconEl('mic'), el('span', { text: 'در حال ارسال پیام صوتی…' })), bar);
-      MP.upload('files', file, { context: 'message', context_id: channel }, function (p) { $('i', bar).style.width = p * 100 + '%'; })
-        .then(function (up) {
-          att.hidden = true;
-          // give live recognition a moment to deliver its last words
-          return new Promise(function (res) { setTimeout(res, 350); }).then(function () {
-            return MP.api('channels/' + channel + '/messages', { method: 'POST', body: { body: '', file_id: up.id, transcript: r.transcript || '' } });
-          });
-        })
-        .then(function () { return fetchNew(true); }).then(MP.loadChannels)
-        .catch(function (err) { att.hidden = true; MP.soft(err); });
+      var file = new File([blob], 'voice-' + Date.now() + '.' + ext, { type: type });
+      // Shown at once; uploading happens behind the bubble. Give live recognition a moment for its last words.
+      sendNow({ file: file, transcript: function () { return r.transcript || ''; } });
     };
     r.mr.stop();
     MP.haptic && MP.haptic(10);
@@ -345,26 +341,81 @@
   if (MP.isMobile()) text.placeholder = 'پیام…';
   text.addEventListener('input', function () { sendActivity(text.value.trim() ? 'typing' : 'idle'); text.style.height = 'auto'; text.style.height = Math.min(160, text.scrollHeight) + 'px'; });
   text.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#composer').requestSubmit(); } });
+  $('#composer-file').multiple = true;
   $('#composer-file').onchange = function (e) {
-    var f = e.target.files[0]; e.target.value = ''; if (!f || !current) return;
-    var att = $('#composer-attach'), bar = el('div', { class: 'upload-progress', style: { flex: '1' } }, el('i'));
-    att.hidden = false; att.replaceChildren(el('span', { class: 'file-chip' }, MP.iconEl('file'), el('span', { text: f.name })), bar);
-    MP.upload('files', f, { context: 'message', context_id: current }, function (p) { $('i', bar).style.width = p * 100 + '%'; })
-      .then(function (up) {
-        pending = up;
-        att.replaceChildren(MP.fileChip(up), el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'حذف پیوست', html: icon('close'), onclick: function () { pending = null; att.hidden = true; } }));
-        text.focus();
-      }).catch(function (err) { att.hidden = true; MP.soft(err); });
+    var files = Array.prototype.slice.call(e.target.files || []); e.target.value = '';
+    sendFiles(files);
   };
+  function sendFiles(files) {
+    if (!current || !files.length) return;
+    files.forEach(function (f) { sendNow({ file: f }); });
+    text.focus();
+  }
+  // Paste an image or file into the message box, as in Telegram.
+  text.addEventListener('paste', function (e) {
+    var files = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
+    if (!files.length) return;
+    e.preventDefault();
+    sendFiles(files.map(function (f, i) { return f.name && f.name !== 'image.png' ? f : new File([f], 'paste-' + Date.now() + (i ? '-' + i : '') + '.' + ((f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')), { type: f.type }); }));
+  });
+  // Drag files onto the chat.
+  (function () {
+    var pane = box.parentNode, depth = 0;
+    function hasFiles(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0; }
+    pane.addEventListener('dragenter', function (e) { if (!hasFiles(e) || !current) return; e.preventDefault(); depth++; pane.classList.add('chat-drop'); });
+    pane.addEventListener('dragover', function (e) { if (hasFiles(e) && current) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    pane.addEventListener('dragleave', function () { if (--depth <= 0) { depth = 0; pane.classList.remove('chat-drop'); } });
+    pane.addEventListener('drop', function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); depth = 0; pane.classList.remove('chat-drop');
+      sendFiles(Array.prototype.slice.call(e.dataTransfer.files));
+    });
+  })();
+
+  /**
+   * Optimistic send: the bubble appears immediately (local preview for images and voice) and is
+   * swapped for the real message once the upload and post finish; a failed one can be retried.
+   */
+  var seq = 0, queue = Promise.resolve();
+  function nowStamp() { var d = new Date(); return S.today + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':00'; }
+  function sendNow(o) {
+    var channel = current, f = o.file;
+    var m = { id: 'tmp' + (++seq), mine: true, pending: true, body: o.body || '', author: S.me.name, created_at: nowStamp(), seen_by: 0,
+      file: f ? { url: URL.createObjectURL(f), name: f.name, mime: f.type || 'application/octet-stream', size: f.size, image: /^image\//.test(f.type) } : null };
+    var e = $('.empty', box); if (e) e.remove();
+    var nodes = bubble(m, true); nodes.forEach(function (n) { box.append(n); });
+    var row = nodes[nodes.length - 1], bar = null;
+    if (f) { bar = el('div', { class: 'upload-progress b-progress' }, el('i')); $('.bubble', row).append(bar); }
+    box.scrollTop = box.scrollHeight;
+    function run() {
+      row.classList.remove('b-failed');
+      var up = f ? MP.upload('files', f, { context: 'message', context_id: channel }, function (p) { $('i', bar).style.width = p * 100 + '%'; }) : Promise.resolve(null);
+      // Posts go one after another so messages keep their order.
+      var done = up.then(function (file) {
+        queue = queue.then(function () {
+          return MP.api('channels/' + channel + '/messages', { method: 'POST', body: { body: m.body, file_id: file ? file.id : 0, transcript: typeof o.transcript === 'function' ? o.transcript() : '' } });
+        });
+        return queue;
+      });
+      queue = done.catch(function () {});
+      done.then(function () {
+        row.remove(); if (m.file) setTimeout(function () { URL.revokeObjectURL(m.file.url); }, 60000);
+        if (channel === current) return fetchNew(true);
+      }).then(MP.loadChannels).catch(function (err) {
+        row.classList.add('b-failed');
+        var b = $('.bubble', row), again = $('.b-retry', b);
+        if (!again) b.append(el('button', { type: 'button', class: 'b-retry', html: icon('repeat') + 'ارسال نشد — تلاش دوباره', onclick: function () { this.remove(); run(); } }));
+        MP.soft(err);
+      });
+    }
+    run();
+  }
   $('#composer').onsubmit = function (e) {
     e.preventDefault();
     var body = text.value.trim();
-    if ((!body && !pending) || !current) return;
-    var fileId = pending ? pending.id : 0;
-    text.value = ''; text.style.height = ''; pending = null; $('#composer-attach').hidden = true; sendActivity('idle');
-    MP.api('channels/' + current + '/messages', { method: 'POST', body: { body: body, file_id: fileId } })
-      .then(function () { return fetchNew(true); }).then(MP.loadChannels)
-      .catch(function (err) { text.value = body; MP.soft(err); });
+    if (!body || !current) return;
+    text.value = ''; text.style.height = ''; sendActivity('idle');
+    sendNow({ body: body });
   };
   $('#chat-back').onclick = closeChat;
 
@@ -400,11 +451,46 @@
         navigator.share ? el('button', { type: 'button', class: 'btn btn-secondary', text: 'اشتراک‌گذاری', onclick: function () { navigator.share({ title: c.title, url: link }).catch(function () {}); } }) : null)));
   }
   function deleteClient(c) {
-    MP.confirm('حذف گروه مشتری', 'گروه «' + c.title + '» و همه پیام‌هایش حذف شود؟ لینک مشتری دیگر کار نمی‌کند.', 'حذف').then(function (ok) {
+    MP.confirm('آرشیو گروه', 'گروه «' + c.title + '» آرشیو شود؟ پیام‌ها پاک نمی‌شوند و از «گروه‌های آرشیو‌شده» قابل بازگرداندن است.' + (c.type === 'client' ? ' لینک مشتری تا بازگرداندن کار نمی‌کند.' : ''), 'آرشیو').then(function (ok) {
       if (!ok) return;
-      MP.api('channels/' + c.id, { method: 'DELETE' }).then(function () { current = 0; layout.classList.remove('open'); MP.toast('گروه حذف شد'); return MP.loadChannels(); }).then(function () { open({}); }).catch(MP.soft);
+      MP.api('channels/' + c.id, { method: 'DELETE' }).then(function () { current = 0; layout.classList.remove('open'); MP.toast('گروه آرشیو شد'); return MP.loadChannels(); }).then(function () { open({}); }).catch(MP.soft);
     });
   }
+  function archivedGroups() {
+    var body = MP.dialog.open('گروه‌های آرشیو‌شده', MP.skeleton(2));
+    MP.api('channels', { query: { archived: 1 } }).then(function (list) {
+      var wrap = el('div', { class: 'tio-history' });
+      if (!list.length) wrap.append(el('p', { class: 'muted', text: 'گروه آرشیو‌شده‌ای نیست.' }));
+      list.forEach(function (c) {
+        wrap.append(el('article', { class: 'tpl-card' }, channelIcon(c), el('div', { class: 'tpl-copy' }, el('strong', { text: c.title }), el('small', { text: c.type === 'client' ? 'گروه مشتری' : 'گروه تیم' })),
+          c.can_delete ? el('div', { class: 'tpl-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('repeat') + 'بازگرداندن', onclick: function () {
+            MP.api('channels/' + c.id + '/restore', { method: 'POST' }).then(function () { MP.toast('گروه بازگردانده شد'); MP.dialog.close(); MP.loadChannels(); }).catch(MP.soft);
+          } })) : null));
+      });
+      body.replaceChildren(wrap);
+    }).catch(MP.soft);
+  }
+  /** Supervisor's team group: a name and any members (not tied to a project). */
+  function groupForm(c) {
+    var f = el('form', { class: 'form' });
+    var chosen = {}; (c ? c.member_ids : [S.me.id]).forEach(function (id) { chosen[id] = true; });
+    var people = el('div', { class: 'check-list' });
+    S.users.forEach(function (u) {
+      var cb = el('input', { type: 'checkbox', value: u.id, checked: !!chosen[u.id] || u.id === S.me.id, disabled: u.id === S.me.id });
+      people.append(el('label', { class: 'check' }, cb, MP.avatar(u, 'sm'), el('span', { text: u.name + (u.title ? ' — ' + u.title : '') })));
+    });
+    f.append(MP.field('نام گروه', el('input', { name: 'title', required: true, maxlength: 160, value: c ? c.title : '', placeholder: 'مثلاً تیم فنی' })), el('div', { class: 'field' }, el('span', { text: 'اعضا' }), people), MP.actions(c ? 'ذخیره' : 'ساخت گروه'));
+    f.onsubmit = function (e) {
+      e.preventDefault(); MP.busy(f, true);
+      var ids = Array.prototype.map.call(f.querySelectorAll('.check-list input:checked'), function (x) { return +x.value; });
+      (c ? MP.api('channels/' + c.id + '/members', { method: 'POST', body: { title: f.elements.title.value, members: ids } })
+         : MP.api('channels', { method: 'POST', body: { type: 'group', title: f.elements.title.value, members: ids } }))
+        .then(function (ch) { MP.dialog.close(); MP.toast(c ? 'گروه به‌روز شد' : 'گروه ساخته شد'); return MP.loadChannels().then(function () { select(ch.id); }); })
+        .catch(function (err) { MP.busy(f, false); MP.soft(err); });
+    };
+    MP.dialog.open(c ? 'اعضای گروه' : 'گروه تیم جدید', f);
+  }
+  var ng = $('#new-team-group'); if (ng) ng.onclick = function () { groupForm(null); };
   $('#new-dm').onclick = newDirect;
   $('#new-client-group').onclick = function () {
     var f = el('form', { class: 'form' },
