@@ -364,7 +364,7 @@ class MP_Task_IO {
 					'date'     => $x['date'],
 					'time'     => $x['time'],
 					'project'  => $x['project'],
-					'title'    => '' !== $x['project'] ? $x['project'] : $x['title'],
+					'title'    => '' !== $x['goal'] ? $x['goal'] : ( '' !== $x['project'] ? $x['project'] : $x['title'] ),
 					'week'     => $x['week'],
 					'goal'     => $x['goal'],
 					'priority' => $x['priority'],
@@ -394,7 +394,7 @@ class MP_Task_IO {
 		foreach ( $out as &$g ) {
 			$st          = wp_list_pluck( $g['items'], 'status' );
 			$g['status'] = count( array_filter( $st, function ( $v ) { return 'done' === $v; } ) ) === count( $st ) ? 'done' : ( array_intersect( array( 'doing', 'done' ), $st ) ? 'doing' : 'todo' );
-			if ( 1 === count( $g['items'] ) && '' === $g['project'] ) {
+			if ( 1 === count( $g['items'] ) && '' === $g['project'] && '' === $g['goal'] ) {
 				$g['title'] = $g['items'][0]['title'];
 			}
 		}
