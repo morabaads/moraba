@@ -360,6 +360,7 @@ html.dark .toast{background:#2a2c2e}
 .meetings-card{grid-area:meetings;padding:var(--pad);background:var(--dark);color:#fff;display:flex;flex-direction:column}
 .meetings-card .card-head h2{color:#fff}
 /* timeline */
+.timeline.tl-scroll{overflow-y:auto!important;overflow-x:hidden}
 .timeline{position:relative;height:220px;overflow:hidden;border-radius:var(--r);cursor:grab;touch-action:pan-y;direction:ltr}
 .timeline.dragging{cursor:grabbing}
 .tl-world{position:absolute;inset:0;transform:translateX(var(--pan,0))}

@@ -156,7 +156,11 @@
         });
         world.append(bar);
       });
-      box.style.height = Math.max(200, (used || 1) * 54 + 60) + 'px';
+      // Same card size as before (up to three rows); more rows scroll inside the timeline.
+      var full = Math.max(200, (used || 1) * 54 + 60);
+      box.style.height = Math.min(full, 3 * 54 + 60) + 'px';
+      world.style.bottom = 'auto'; world.style.height = full + 'px';
+      box.classList.toggle('tl-scroll', full > 3 * 54 + 60);
       $('#timeline-hint').textContent = items.length ? (S.manager ? 'فضای خالی را برای مرور بکشید · کارت را برای تغییر زمان‌بندی بکشید' : 'فضای خالی را برای مرور بکشید · روی کارت بزنید تا جزئیات را ببینید') : '';
       if (!items.length) world.append(el('div', { style: { position: 'absolute', inset: '0', display: 'grid', placeItems: 'center', direction: 'rtl' } }, MP.empty('folder', 'پروژه‌ای برای نمایش نیست', S.manager ? 'یک پروژه بسازید تا اینجا نمایش داده شود.' : 'وقتی عضو پروژه‌ای شوید اینجا می‌بینید.', null, true)));
     }
