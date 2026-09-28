@@ -1760,3 +1760,4 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .wk-late{margin:0;padding-inline-start:18px;font-size:13px}
 .wk-proj{display:flex;flex-wrap:wrap;gap:6px}.wk-proj .chip{border:0;cursor:pointer;font:inherit;font-size:12px}
 .link-btn{border:0;background:none;padding:0;color:var(--ink);font:inherit;cursor:pointer;text-align:right}.link-btn:hover{color:var(--brand)}
+.asst-card .dialog-actions{position:static;margin:12px 0 0;padding:0;border:0;background:none}

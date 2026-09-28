@@ -46,7 +46,7 @@
       var r = V.parseReminder(raw, { today: S.today, J: J, now: S.now });
       if (!r.time) r.time = '09:00';
       if (!r.date) r.date = r.time <= (S.now || '').slice(0, 5) ? J.addDays(S.today, 1) : S.today;
-      return { kind: 'reminder', data: r, label: 'یادآوری «' + r.title + '» · ' + J.format(r.date) + ' ساعت ' + J.faDigits(r.time) };
+      return { kind: 'reminder', data: r, label: 'یادآوری «' + r.title + '»، ' + J.format(r.date) + '، ساعت ' + J.faDigits(r.time) };
     }
     // Money
     if (/(تومن|تومان|ریال|هزار|میلیون)/.test(t) && /(خرج|هزینه|دخل|درآمد|واریز|گرفتم|دادم|پرداخت|خریدم)/.test(t)) {
@@ -61,7 +61,7 @@
       var d = V.findDate(t, { today: S.today, J: J, future: true }), tm = V.findTime(t), title = t.replace(/^(تسک|کار) (جدید |بذار |اضافه کن )?/, '');
       if (d) title = title.replace(d.phrase, ''); if (tm) title = title.replace(tm.phrase, '');
       title = title.replace(/\s+(اضافه کن|بذار|ثبت کن|بزار)$/, '').replace(/\s+/g, ' ').trim();
-      if (title) return { kind: 'task', data: { title: title, date: d ? d.iso : S.today, time: tm ? tm.time : '' }, label: 'تسک «' + title + '» · ' + J.format(d ? d.iso : S.today) + (tm ? ' ساعت ' + J.faDigits(tm.time) : '') };
+      if (title) return { kind: 'task', data: { title: title, date: d ? d.iso : S.today, time: tm ? tm.time : '' }, label: 'تسک «' + title + '»، ' + J.format(d ? d.iso : S.today) + (tm ? '، ساعت ' + J.faDigits(tm.time) : '') };
     }
     // Panels
     if (/گزارش روزانه|گزارش امروز/.test(t)) return { kind: 'open', run: function () { MP.dailyReport(); }, label: 'گزارش روزانه' };
