@@ -233,7 +233,7 @@ class MP_AI {
 		$w = $d ? self::jfmt( $d ) : '';
 		switch ( $name ) {
 			case 'create_task':
-				return 'ساخت تسک «' . $g( 'title' ) . '»' . ( $g( 'assignees' ) ? ' برای ' . implode( '، ', (array) $g( 'assignees' ) ) : '' ) . ( $w ? '، ' . $w : '' ) . ( $g( 'time' ) ? ' ساعت ' . MP_Jalali::digits( $g( 'time' ) ) : '' ) . ( $g( 'project' ) ? '، پروژه ' . $g( 'project' ) : '' ) . ( $g( 'checklist' ) ? '، با ' . MP_Jalali::digits( count( (array) $g( 'checklist' ) ) ) . ' مورد چک‌لیست' : '' );
+				return 'ساخت تسک «' . $g( 'title' ) . '»' . ( $g( 'assignees' ) ? ' برای ' . implode( '، ', (array) $g( 'assignees' ) ) : '' ) . ( $w ? '، ' . $w : '' ) . ( $g( 'time' ) ? ' ساعت ' . MP_Jalali::digits( self::time( $g( 'time' ) ) ) : '' ) . ( $g( 'project' ) ? '، پروژه ' . $g( 'project' ) : '' ) . ( $g( 'checklist' ) ? '، با ' . MP_Jalali::digits( count( (array) $g( 'checklist' ) ) ) . ' مورد چک‌لیست' : '' );
 			case 'update_task':
 				$ch = array();
 				foreach ( array( 'title' => 'عنوان', 'date' => 'تاریخ', 'time' => 'ساعت', 'priority' => 'اولویت', 'status' => 'وضعیت', 'description' => 'توضیحات', 'project' => 'پروژه', 'assignee' => 'مسئول' ) as $k => $l ) {
@@ -251,9 +251,9 @@ class MP_AI {
 			case 'send_message':
 				return 'پیام به ' . $g( 'to' ) . ': ' . $g( 'text' );
 			case 'create_reminder':
-				return 'یادآوری «' . $g( 'title' ) . '»، ' . $w . ' ساعت ' . MP_Jalali::digits( $g( 'time' ) );
+				return 'یادآوری «' . $g( 'title' ) . '»، ' . $w . ' ساعت ' . MP_Jalali::digits( self::time( $g( 'time' ) ) );
 			case 'create_meeting':
-				return 'جلسه «' . $g( 'title' ) . '»، ' . $w . ' ساعت ' . MP_Jalali::digits( $g( 'time' ) ) . ( $g( 'people' ) ? ' با ' . implode( '، ', (array) $g( 'people' ) ) : '' );
+				return 'جلسه «' . $g( 'title' ) . '»، ' . $w . ' ساعت ' . MP_Jalali::digits( self::time( $g( 'time' ) ) ) . ( $g( 'people' ) ? ' با ' . implode( '، ', (array) $g( 'people' ) ) : '' );
 			case 'clock':
 				return 'in' === $g( 'action' ) ? 'ثبت ورود' : 'ثبت خروج';
 			case 'request_leave':
