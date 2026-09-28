@@ -1646,3 +1646,5 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .chat-tabs button[aria-selected=true]{background:var(--brand);border-color:var(--brand);color:#fff}
 .chat-tabs button i{font-style:normal;min-width:18px;padding:0 5px;border-radius:9px;background:var(--brand);color:#fff;font-size:10px;line-height:18px;text-align:center}
 .chat-tabs button[aria-selected=true] i{background:rgba(255,255,255,.3)}
+.tl-grid.month{border-inline-start-color:var(--line-strong);border-inline-start-style:solid;opacity:1}
+.tl-label.month{font-weight:800;color:var(--ink);font-size:12px}

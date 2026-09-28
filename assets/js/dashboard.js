@@ -91,8 +91,16 @@
 
   MP.Timeline = (function () {
     var box = $('#timeline'), world = $('#tl-world'), picker = $('#timeline-picker');
-    var DAYS = 150, pan = 0, zoom = 1, drag = null, scope = 'all', items = [];
-    function first() { return J.addDays(S.today, -40); }
+    // The view is whole Jalali months from the current one: 1 month by default, zooming out adds the
+    // months ahead (2, 3, 6, 12). Dragging the empty area moves the window by days.
+    var LEVELS = [1, 2, 3, 6, 12], level = 0, shift = 0, DAYS = 30, drag = null, scope = 'all', items = [];
+    function monthStart(iso) { var j = J.fromIso(iso); return J.toIso(j.jy, j.jm, 1); }
+    function first() { return J.addDays(monthStart(S.today), shift); }
+    function span() {
+      var j = J.fromIso(monthStart(S.today)), n = 0, y = j.jy, m = j.jm;
+      for (var k = 0; k < LEVELS[level]; k++) { n += J.monthLength(y, m); if (++m > 12) { m = 1; y++; } }
+      return n;
+    }
     function x(iso) { return J.diffDays(first(), iso) / DAYS * 100; }
     function collect() {
       items = [];
@@ -113,24 +121,31 @@
       if (!box.isConnected || !box.clientWidth) return;
       collect();
       world.replaceChildren();
-      world.style.width = zoom * 100 + '%';
-      var max = box.clientWidth * (zoom - 1) + box.clientWidth * 0.4;
-      pan = Math.max(-max, Math.min(box.clientWidth * 0.4, pan));
-      world.style.setProperty('--pan', pan + 'px');
-      $('#timeline-zoom').textContent = fa(Math.round(zoom * 100)) + '٪';
-      // RTL time: dates run right → left.
-      for (var i = 0; i <= 6; i++) {
-        var d = J.addDays(first(), Math.round(DAYS / 6 * i)), pos = 100 - x(d);
-        world.append(el('i', { class: 'tl-grid', style: { left: pos + '%' } }), el('span', { class: 'tl-label', style: { left: pos + '%' }, text: J.format(d, false) }));
+      DAYS = span();
+      world.style.width = '100%';
+      world.style.setProperty('--pan', '0px');
+      $('#timeline-zoom').textContent = fa(LEVELS[level]) + ' ماه';
+      // RTL time: dates run right → left. Month starts get a strong line and the month's name;
+      // a one- or two-month view also gets a line every 5 days.
+      var end = J.addDays(first(), DAYS), step = LEVELS[level] <= 2 ? 5 : 0;
+      for (var d = first(); d <= end; d = J.addDays(d, 1)) {
+        var jd = J.fromIso(d), pos = 100 - x(d);
+        if (jd.jd === 1) world.append(el('i', { class: 'tl-grid month', style: { left: pos + '%' } }), el('span', { class: 'tl-label month', style: { left: pos + '%' }, text: J.format(d, false).replace(/^\S+\s/, '') + (jd.jm === 1 ? ' ' + fa(jd.jy) : '') }));
+        else if (step && jd.jd % step === 1 && jd.jd < 30) world.append(el('i', { class: 'tl-grid', style: { left: pos + '%' } }), el('span', { class: 'tl-label', style: { left: pos + '%' }, text: fa(jd.jd) }));
       }
       world.append(el('i', { class: 'tl-today', style: { left: (100 - x(S.today)) + '%' }, title: 'امروز' }));
-      items.forEach(function (it, n) {
+      // Each bar takes the first lane that is free at its start, so bars never overlap.
+      var lanes = [], used = 0;
+      items.sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : 0; });
+      items.forEach(function (it) {
         var s = Math.max(0, x(it.start)), e = Math.min(100, x(J.addDays(it.end, 1)));
         if (e <= 0 || s >= 100) return;
+        var n = 0; while (lanes[n] !== undefined && lanes[n] > s - 0.5) n++;
+        lanes[n] = e; used = Math.max(used, n + 1);
         var bar = el('div', {
           class: 'tl-bar' + (it.kind === 'milestone' ? ' milestone' : '') + (it.status === 'done' ? ' done' : ''), tabindex: 0, role: 'button',
           'aria-label': it.name + '، ' + J.format(it.start) + ' تا ' + J.format(it.end) + (S.manager ? '؛ برای جابه‌جایی بکشید یا کلیدهای چپ و راست' : ''),
-          style: { right: s + '%', width: 'calc(' + (e - s) + '% - 4px)', top: (10 + (n % 3) * 54) + 'px' }
+          style: { right: s + '%', width: 'calc(' + (e - s) + '% - 4px)', top: (10 + n * 54) + 'px' }
         }, el('div', { class: 'tl-copy' }, el('strong', { text: it.name }), el('small', { text: J.format(it.start, false) + ' تا ' + J.format(it.end, false) })),
           el('span', { class: 'chip ' + (it.status === 'done' ? 'ok' : it.status === 'waiting' ? '' : 'brand'), text: MP.STATUS[it.status] }));
         bar.style.left = 'auto';
@@ -141,7 +156,7 @@
         });
         world.append(bar);
       });
-      box.style.height = Math.max(200, Math.min(3, items.length || 1) * 54 + 60) + 'px';
+      box.style.height = Math.max(200, (used || 1) * 54 + 60) + 'px';
       $('#timeline-hint').textContent = items.length ? (S.manager ? 'فضای خالی را برای مرور بکشید · کارت را برای تغییر زمان‌بندی بکشید' : 'فضای خالی را برای مرور بکشید · روی کارت بزنید تا جزئیات را ببینید') : '';
       if (!items.length) world.append(el('div', { style: { position: 'absolute', inset: '0', display: 'grid', placeItems: 'center', direction: 'rtl' } }, MP.empty('folder', 'پروژه‌ای برای نمایش نیست', S.manager ? 'یک پروژه بسازید تا اینجا نمایش داده شود.' : 'وقتی عضو پروژه‌ای شوید اینجا می‌بینید.', null, true)));
     }
@@ -163,7 +178,7 @@
     box.addEventListener('pointerdown', function (e) {
       if (e.button !== 0 || drag) return;
       var bar = e.target.closest('.tl-bar');
-      drag = { id: e.pointerId, x: e.clientX, pan: pan, bar: bar, item: bar ? bar.item : null, dx: 0, moved: false };
+      drag = { id: e.pointerId, x: e.clientX, shift: shift, bar: bar, item: bar ? bar.item : null, dx: 0, moved: false };
       box.setPointerCapture(e.pointerId);
     });
     box.addEventListener('pointermove', function (e) {
@@ -172,7 +187,7 @@
       if (!drag.moved && Math.abs(dx) < 5) return;
       drag.moved = true; box.classList.add('dragging');
       if (drag.item && S.manager) { drag.dx = dx; drag.bar.classList.add('dragging'); drag.bar.style.transform = 'translateX(' + dx + 'px)'; }
-      else if (!drag.item) { pan = drag.pan + dx; render(); }
+      else if (!drag.item) { var ns = drag.shift + Math.round(dx / world.getBoundingClientRect().width * DAYS); if (ns !== shift) { shift = ns; render(); } }
     });
     function end(e) {
       if (!drag || e.pointerId !== drag.id) return;
@@ -187,16 +202,16 @@
     box.addEventListener('pointercancel', end);
     box.addEventListener('keydown', function (e) {
       if (e.target !== box) return;
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); pan += e.key === 'ArrowLeft' ? -60 : 60; render(); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); shift += e.key === 'ArrowLeft' ? 7 : -7; render(); }
     });
     $$('[data-tl]').forEach(function (b) {
       b.onclick = function () {
         var a = b.dataset.tl;
-        if (a === 'reset') { pan = 0; zoom = 1; } else if (a === 'in') zoom = Math.min(3, zoom + 0.5); else zoom = Math.max(1, zoom - 0.5);
+        if (a === 'reset') { shift = 0; level = 0; } else if (a === 'in') level = Math.max(0, level - 1); else level = Math.min(LEVELS.length - 1, level + 1);
         render();
       };
     });
-    picker.onchange = function () { scope = picker.value; pan = 0; render(); };
+    picker.onchange = function () { scope = picker.value; shift = 0; render(); };
     new ResizeObserver(function () { render(); }).observe(box);
     $('#timeline-add').onclick = function () {
       var p = MP.project(S.view === 'projects' ? S.projectId : +picker.value) || S.projects[0];
