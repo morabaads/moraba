@@ -219,6 +219,35 @@ class MP_Install {
 			KEY user_id (user_id)
 		) $c;";
 
+		$t[] = 'CREATE TABLE ' . self::table( 'invoices' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			kind varchar(10) NOT NULL DEFAULT 'invoice',
+			number varchar(30) NOT NULL DEFAULT '',
+			title varchar(200) NOT NULL DEFAULT '',
+			project_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			client_name varchar(160) NOT NULL DEFAULT '',
+			client_phone varchar(40) NOT NULL DEFAULT '',
+			client_info text NULL,
+			items longtext NOT NULL,
+			discount bigint(20) unsigned NOT NULL DEFAULT 0,
+			tax_percent tinyint(3) unsigned NOT NULL DEFAULT 0,
+			status varchar(12) NOT NULL DEFAULT 'draft',
+			issue_date date NOT NULL,
+			due_date date DEFAULT NULL,
+			note text NULL,
+			pay_url varchar(500) NOT NULL DEFAULT '',
+			token varchar(40) NOT NULL DEFAULT '',
+			ledger_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			paid_at datetime DEFAULT NULL,
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			archived_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY token (token),
+			KEY project_id (project_id)
+		) $c;";
+
 		$t[] = 'CREATE TABLE ' . self::table( 'daily_reports' ) . " (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			user_id bigint(20) unsigned NOT NULL,

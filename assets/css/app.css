@@ -1656,3 +1656,28 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .td-desc-list li small{color:var(--muted);font-size:12px}
 .td-desc p{margin:0;white-space:pre-wrap;line-height:1.9}
 .td-desc-more summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--brand);margin-bottom:6px}
+
+/* Invoices */
+.inv-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.inv-sum{display:grid}.inv-sum small{color:var(--muted);font-size:12px}.inv-sum strong{font-size:18px}
+.inv-tabs{position:static;padding:8px 0;margin-bottom:12px}
+.inv-list{display:grid;gap:10px}
+.inv-card{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.inv-card.paid{border-color:var(--ok-soft)}
+.inv-main{cursor:pointer;min-width:0;display:grid;gap:2px}
+.inv-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.inv-side{display:grid;justify-items:end;gap:4px}
+.inv-total{font-size:15px;white-space:nowrap}
+.inv-actions{display:flex;gap:6px;align-items:center}
+.inv-channels{display:flex;flex-wrap:wrap;gap:8px}
+.inv-row{display:grid;grid-template-columns:1fr 70px 150px 120px 32px;gap:8px;align-items:center;margin-bottom:6px}
+.inv-row-head small{color:var(--muted);font-size:11px;font-weight:700}
+.inv-row .r-total{font-size:13px;font-weight:700;text-align:left;direction:ltr;color:var(--ink-2)}
+.inv-totals{margin-inline-start:auto;width:min(320px,100%);display:grid;gap:4px;padding:10px 14px;border-radius:14px;background:var(--surface-3)}
+.inv-totals div{display:flex;justify-content:space-between;font-size:13px}
+.inv-totals .grand{border-top:1px solid var(--line-strong);padding-top:6px;margin-top:2px;font-size:15px}
+.inv-edit-extra{display:flex;gap:6px}
+@media (max-width:760px){
+  .inv-card{grid-template-columns:1fr auto}.inv-actions{grid-column:1/-1}
+  .inv-row{grid-template-columns:1fr 60px;}.inv-row input[name=price]{grid-column:1}.inv-row .r-total{grid-column:2}.inv-row-head{display:none}
+}

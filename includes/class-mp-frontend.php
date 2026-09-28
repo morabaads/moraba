@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -33,6 +33,7 @@ class MP_Frontend {
 		$vars[] = 'mp_manifest';
 		$vars[] = 'mp_sw';
 		$vars[] = 'mp_export';
+		$vars[] = 'mp_invoice';
 		$vars[] = 'mp_push_feed';
 		return $vars;
 	}
@@ -65,6 +66,10 @@ class MP_Frontend {
 		}
 		if ( get_query_var( 'mp_export' ) ) {
 			MP_Export::handle( (string) get_query_var( 'mp_export' ) );
+		}
+		$inv = get_query_var( 'mp_invoice' );
+		if ( is_string( $inv ) && preg_match( '/^[A-Za-z0-9]{32}$/', $inv ) ) {
+			MP_Invoices::render_public( $inv );
 		}
 		$token = get_query_var( 'mp_client' );
 		if ( is_string( $token ) && preg_match( '/^[A-Za-z0-9]{32}$/', $token ) ) {

@@ -305,7 +305,7 @@ $mp_nav = array(
 			<div class="page-head">
 				<div><h1>حسابداری</h1><p>ثبت دخل و خرج با تاریخ و ساعت و موجودی لحظه‌ای</p></div>
 				<div class="page-actions">
-					<button type="button" class="btn btn-secondary" id="acc-print"><?php echo $mp_i( 'print' ); // phpcs:ignore ?>PDF</button>
+					<button type="button" class="btn btn-primary manager-only" data-action="invoices"><?php echo $mp_i( 'file' ); // phpcs:ignore ?>فاکتورها</button><button type="button" class="btn btn-secondary" id="acc-print"><?php echo $mp_i( 'print' ); // phpcs:ignore ?>PDF</button>
 					<button type="button" class="btn btn-secondary" id="acc-xlsx"><?php echo $mp_i( 'download' ); // phpcs:ignore ?>اکسل</button>
 				</div>
 			</div>

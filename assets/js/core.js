@@ -592,6 +592,7 @@
     if (a === 'templates') MP.templates();
     if (a === 'task-io') MP.taskIO();
     if (a === 'daily-report') MP.dailyReport();
+    if (a === 'invoices') MP.invoices();
     if (a === 'payroll') MP.reportTab('payroll');
     else if (a === 'settings') openAppearance();
     else if (a === 'help') openHelp();
@@ -732,7 +733,8 @@
       reminders: function () { MP.showView('reminders'); },
       attendance: function () { MP.showView('attendance'); },
       reports: function () { MP.showView('reports'); },
-      daily: function () { MP.dailyReport(); }
+      daily: function () { MP.dailyReport(); },
+      invoices: function () { MP.invoices(n.ref_id); }
     }[n.target];
     if (go) go();
   }

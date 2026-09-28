@@ -238,4 +238,6 @@
       layout(); load(); loadSummary();
     }
   });
+  // A paid invoice adds (or removes) an income row.
+  MP.on('ledger', function () { if (view && MP.visible('accounting')) { load(); loadSummary(); } });
 })();
