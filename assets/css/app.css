@@ -1649,3 +1649,10 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .chat-tabs button[aria-selected=true] i{background:rgba(255,255,255,.3)}
 .tl-grid.month{border-left:1px solid var(--line-strong)}
 .tl-label.month{font-weight:800;color:var(--ink);font-size:12px}
+.td-desc{display:grid;gap:10px;margin-bottom:8px}
+.td-desc-chips{display:flex;flex-wrap:wrap;gap:6px}
+.td-desc-list{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.td-desc-list li{display:grid;padding:8px 12px;border-radius:12px;background:var(--surface-2,var(--surface-3));font-size:13px;line-height:1.8}
+.td-desc-list li small{color:var(--muted);font-size:12px}
+.td-desc p{margin:0;white-space:pre-wrap;line-height:1.9}
+.td-desc-more summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--brand);margin-bottom:6px}

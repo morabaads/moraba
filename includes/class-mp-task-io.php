@@ -316,7 +316,12 @@ class MP_Task_IO {
 				$time    = self::latin( $get( $row, 'ساعت' ) );
 				$pct     = self::latin( $get( $row, 'درصد پیشرفت' ) );
 				$minutes = self::latin( $get( $row, array( 'زمان (دقیقه)', 'زمان' ) ) );
+				// The panel has its own daily report, so the sheet's «ثبت گزارش روزانه» rows aren't tasks.
+				if ( false !== mb_strpos( $title, 'ثبت گزارش روزانه' ) ) {
+					continue;
+				}
 				$item    = array(
+					'task'     => $get( $row, 'عنوان تسک' ),
 					'code'     => $get( $row, array( 'شناسه', 'کد' ) ),
 					'title'    => $title,
 					'date'     => $date,
@@ -360,6 +365,7 @@ class MP_Task_IO {
 			if ( ! isset( $idx[ $k ] ) ) {
 				$idx[ $k ] = count( $out );
 				$out[]     = array(
+					'task'     => isset( $x['task'] ) ? $x['task'] : '',
 					'code'     => $x['code'],
 					'date'     => $x['date'],
 					'time'     => $x['time'],
@@ -395,15 +401,28 @@ class MP_Task_IO {
 			$st          = wp_list_pluck( $g['items'], 'status' );
 			$g['status'] = count( array_filter( $st, function ( $v ) { return 'done' === $v; } ) ) === count( $st ) ? 'done' : ( array_intersect( array( 'doing', 'done' ), $st ) ? 'doing' : 'todo' );
 			// Title is the person's own work, not the team-wide goal of the day: «first sub-task (+n)».
-			$first = $g['items'][0]['title'];
-			if ( mb_strlen( $first ) > 55 ) {
-				$cut   = mb_substr( $first, 0, 55 );
-				$space = mb_strrpos( $cut, ' ' );
-				$first = ( $space > 30 ? mb_substr( $cut, 0, $space ) : $cut ) . '…';
+			$more = count( $g['items'] ) - 1;
+			if ( '' !== $g['task'] ) {
+				// The sheet's own «عنوان تسک» wins.
+				$g['title'] = $g['task'];
+				continue;
 			}
-			$more       = count( $g['items'] ) - 1;
+			// Short and personal: the first sub-task up to its first «:» or «(», then «و n کار دیگر».
 			// The project already shows next to the title in the panel, so it isn't repeated here.
-			$g['title'] = $first . ( $more ? ' (+' . MP_Jalali::digits( $more ) . ')' : '' );
+			$first = trim( $g['items'][0]['title'] );
+			foreach ( array( ':', '(', ' - ' ) as $sep ) {
+				$at = mb_strpos( $first, $sep );
+				if ( false !== $at && $at > 6 ) {
+					$first = mb_substr( $first, 0, $at );
+				}
+			}
+			$first = preg_replace( '/^[\s،,+]+|[\s،,+]+$/u', '', $first );
+			if ( mb_strlen( $first ) > 42 ) {
+				$cut   = mb_substr( $first, 0, 42 );
+				$space = mb_strrpos( $cut, ' ' );
+				$first = preg_replace( '/[\s،,]+(و)?$/u', '', $space > 20 ? mb_substr( $cut, 0, $space ) : $cut ) . '…';
+			}
+			$g['title'] = $first . ( $more ? ' و ' . MP_Jalali::digits( $more ) . ' کار دیگر' : '' );
 		}
 		unset( $g );
 		return $out;
@@ -652,7 +671,7 @@ class MP_Task_IO {
 				$lines  = array();
 				foreach ( $x['items'] as $it ) {
 					$bits = array_filter( array( '' !== $it['output'] ? 'خروجی: ' . $it['output'] : '', '' !== (string) $it['minutes'] ? $it['minutes'] . ' دقیقه' : '', 'done' !== $it['status'] && '' !== $it['percent'] && '0' !== $it['percent'] ? $it['percent'] . '٪' : '', $it['notes'] ) );
-					$lines[] = '• ' . ( '' !== $it['code'] ? $it['code'] . ' ' : '' ) . $it['title'] . ( $bits ? ' — ' . implode( ' · ', $bits ) : '' );
+					$lines[] = '• ' . $it['title'] . ( $bits ? ' — ' . MP_Jalali::digits( implode( ' · ', $bits ) ) : '' );
 				}
 				$notes = implode( "\n", $lines );
 				if ( '' !== $x['project'] && ! $pid ) {
@@ -661,10 +680,7 @@ class MP_Task_IO {
 				$desc = self::build_description(
 					array(
 						'شناسه'        => $x['code'],
-						'هفته'         => $x['week'],
-						'هدف روز'      => $x['goal'],
-						'اولویت'       => $x['priority'],
-						'زمان (دقیقه)' => $x['minutes'] ? (string) $x['minutes'] : '',
+						'زمان (دقیقه)' => $x['minutes'] ? MP_Jalali::digits( $x['minutes'] ) : '',
 						'ددلاین پروژه' => $x['deadline'],
 						'ددلاین امروز' => $x['today'],
 						'وضعیت'        => $x['blocked'] && 'done' !== $status ? 'مسدود' : '',
@@ -1047,6 +1063,9 @@ class MP_Task_IO {
 		$team = array( array( 'نفر', 'شناسه', 'تاریخ', 'روز', 'پروژه', 'ریزتسک', 'زمان (دقیقه)', 'خروجی / معیار انجام', 'ددلاین امروز', 'وضعیت', 'درصد پیشرفت' ) );
 		foreach ( $rows as $t ) {
 			list( $meta, $notes ) = self::split_description( $t->description );
+			if ( isset( $meta['زمان (دقیقه)'] ) ) {
+				$meta['زمان (دقیقه)'] = self::latin( $meta['زمان (دقیقه)'] );
+			}
 			$proj = isset( $names[ (int) $t->project_id ] ) ? $names[ (int) $t->project_id ] : '';
 			if ( ! $proj && preg_match( '/^پروژه: (.+)$/m', $notes, $pm ) ) {
 				$proj  = $pm[1];
@@ -1073,6 +1092,7 @@ class MP_Task_IO {
 				$rest = trim( implode( "\n", $rest ) );
 				foreach ( $items as $n => $it ) {
 					$bi   = isset( $info[ $it->text ] ) ? $info[ $it->text ] : array( '', '' );
+					$bi[1] = self::latin( $bi[1] );
 					$imin = preg_match( '/(\d+) دقیقه/u', $bi[1], $mm ) ? (int) $mm[1] : '';
 					$iout = preg_match( '/خروجی: ([^·]+)/u', $bi[1], $om ) ? trim( $om[1] ) : '';
 					$by[ (int) $t->user_id ][] = array(

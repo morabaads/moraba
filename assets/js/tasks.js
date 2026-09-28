@@ -55,6 +55,29 @@
   };
   MP.audit = function () { MP.emit('audit'); };
 
+  /**
+   * Task description, tidy: «key: value» lines from an Excel import become small chips (the internal
+   * شناسه is hidden), «• …» lines become a list of sub-task details, the rest stays as text.
+   */
+  var META = { 'زمان (دقیقه)': ['clock', function (v) { return v + ' دقیقه'; }], 'ددلاین پروژه': ['target', function (v) { return 'ددلاین: ' + v; }], 'ددلاین امروز': ['alarm', function (v) { return /بله/.test(v) ? 'تحویل امروز' : v; }], 'وضعیت': ['ban', function (v) { return v; }], 'درصد پیشرفت': ['checks', function (v) { return fa(v) + '٪'; }], 'هدف روز': ['target', function (v) { return 'هدف تیم: ' + v; }], 'پروژه': ['folder', function (v) { return v; }] };
+  MP.describe = function (text) {
+    var box = el('div', { class: 'td-desc' }), chips = el('div', { class: 'td-desc-chips' }), list = el('ul', { class: 'td-desc-list' }), rest = [];
+    String(text).split('\n').forEach(function (line) {
+      var m = line.match(/^([^:]{2,24}): (.+)$/);
+      if (m && (m[1] === 'شناسه' || m[1] === 'هفته' || m[1] === 'اولویت')) return;
+      if (m && META[m[1]]) { chips.append(el('span', { class: 'chip', html: icon(META[m[1]][0]) }, META[m[1]][1](m[2]))); return; }
+      var b = line.match(/^• (.+?)(?: — (.+))?$/);
+      if (b) { list.append(el('li', null, el('span', { text: b[1] }), b[2] ? el('small', { text: b[2] }) : null)); return; }
+      rest.push(line);
+    });
+    var txt = rest.join('\n').trim();
+    if (chips.children.length) box.append(chips);
+    // The sub-tasks are already the checklist; their outputs and times stay folded away.
+    if (list.children.length) box.append(el('details', { class: 'td-desc-more' }, el('summary', { text: 'خروجی و زمان هر مورد (' + fa(list.children.length) + ')' }), list));
+    if (txt) box.append(el('p', { text: txt }));
+    return box;
+  };
+
   /* ------------------------------------------------------------ Shared task row */
 
   /** opts: {date:true show date, onOpen} */
@@ -357,7 +380,7 @@
       t.source === 'manager' ? el('span', { class: 'chip ' + (t.seen_at ? 'ok' : 'warn'), text: t.seen_at ? 'دیده شد ' + MP.relTime(t.seen_at) : 'هنوز دیده نشده' }) : null,
       t.done_at ? el('span', { class: 'chip ok', text: 'انجام: ' + MP.relTime(t.done_at) }) : null);
     wrap.append(chips);
-    if (t.description) wrap.append(el('p', { text: t.description, style: { whiteSpace: 'pre-wrap', lineHeight: '1.9', marginBottom: '6px' } }));
+    if (t.description) wrap.append(MP.describe(t.description));
 
     // Status
     if (t.can_status) {
