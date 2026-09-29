@@ -24,6 +24,9 @@ class MP_Frontend {
 
 	public static function add_rewrite() {
 		add_rewrite_rule( '^' . self::slug() . '/?$', 'index.php?mp_panel=1', 'top' );
+		// Short public links for clients: /c/{token} (portal) and /i/{token} (invoice).
+		add_rewrite_rule( '^c/([A-Za-z0-9]{32})/?$', 'index.php?mp_client=$matches[1]', 'top' );
+		add_rewrite_rule( '^i/([A-Za-z0-9]{32})/?$', 'index.php?mp_invoice=$matches[1]', 'top' );
 	}
 
 	public static function query_vars( $vars ) {
@@ -67,6 +70,16 @@ class MP_Frontend {
 		if ( get_query_var( 'mp_export' ) ) {
 			MP_Export::handle( (string) get_query_var( 'mp_export' ) );
 		}
+		// The address itself, too: works before rewrite rules are refreshed and when a cache or a
+		// messenger drops the query string.
+		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
+		if ( preg_match( '#/(c|i)/([A-Za-z0-9]{32})/?$#', $path, $pm ) ) {
+			status_header( 200 );
+			if ( 'c' === $pm[1] ) {
+				self::render_client( $pm[2] );
+			}
+			MP_Invoices::render_public( $pm[2] );
+		}
 		$inv = get_query_var( 'mp_invoice' );
 		if ( is_string( $inv ) && preg_match( '/^[A-Za-z0-9]{32}$/', $inv ) ) {
 			MP_Invoices::render_public( $inv );
@@ -102,6 +115,10 @@ class MP_Frontend {
 
 	private static function render_client( $token ) {
 		nocache_headers();
+		header( 'X-Robots-Tag: noindex' );
+		if ( ! MP_Client::channel( $token ) ) {
+			status_header( 404 );
+		}
 		self::template( 'client', array( 'token' => $token ) );
 		exit;
 	}

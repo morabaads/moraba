@@ -119,7 +119,7 @@ class MP_Portal {
 		$rows  = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'client_items' ) . ' WHERE project_id = %d AND archived_at IS NULL ORDER BY id DESC', $pid ) );
 		$links = array();
 		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT title, token FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND project_id = %d AND archived_at IS NULL", $pid ) ) as $c ) {
-			$links[] = array( 'title' => $c->title, 'url' => add_query_arg( 'mp_client', $c->token, home_url( '/' ) ) );
+			$links[] = array( 'title' => $c->title, 'url' => MP_Client::url( $c->token ) );
 		}
 		return array( 'items' => array_map( array( __CLASS__, 'payload' ), $rows ), 'links' => $links );
 	}
@@ -259,9 +259,10 @@ class MP_Portal {
 	/** GET client/{token}/portal — everything the client may see for the group's project. */
 	public static function public_portal( WP_REST_Request $r ) {
 		global $wpdb;
-		$ch = self::channel( $r['token'] );
-		if ( ! $ch ) {
-			return self::err( 'این لینک معتبر نیست.', 404 );
+		$ch   = self::channel( $r['token'] );
+		$gate = MP_Client::gate( $ch );
+		if ( $gate ) {
+			return $gate;
 		}
 		$pid = (int) $ch->project_id;
 		$out = array( 'project' => null, 'designs' => array(), 'files' => array(), 'invoices' => array() );
@@ -304,7 +305,7 @@ class MP_Portal {
 
 	private static function client_item( WP_REST_Request $r ) {
 		$ch = self::channel( $r['token'] );
-		$x  = $ch ? self::get( (int) $r['id'] ) : null;
+		$x  = $ch && ! MP_Client::gate( $ch ) ? self::get( (int) $r['id'] ) : null;
 		if ( ! $x || (int) $x->project_id !== (int) $ch->project_id || 'design' !== $x->kind ) {
 			return array( null, null );
 		}
@@ -320,8 +321,8 @@ class MP_Portal {
 		if ( ! MP_Rest::client_rate_ok( $ch->id ) ) {
 			return self::err( 'کمی صبر کنید و دوباره بفرستید.', 429 );
 		}
-		$name = MP_Util::text( $r['name'], 80 );
-		$e    = self::add_pin( $x, $r, 0, '' !== $name ? $name : $ch->client_name );
+		$name = MP_Client::author( $ch, $r['name'] );
+		$e    = self::add_pin( $x, $r, 0, $name );
 		if ( $e ) {
 			return $e;
 		}

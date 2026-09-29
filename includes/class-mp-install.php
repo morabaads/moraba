@@ -34,6 +34,8 @@ class MP_Install {
 			self::add_roles();
 			MP_Templates::seed();
 			MP_Costs::migrate();
+			MP_Frontend::add_rewrite();
+			flush_rewrite_rules( false );
 			update_option( 'mp_db_version', MP_DB_VERSION );
 		}
 	}
@@ -207,9 +209,22 @@ class MP_Install {
 			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
 			created_at datetime NOT NULL,
 			archived_at datetime DEFAULT NULL,
+			logo_file_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			auth_required tinyint(1) NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
 			KEY token (token)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'client_contacts' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			channel_id bigint(20) unsigned NOT NULL,
+			name varchar(80) NOT NULL DEFAULT '',
+			mobile varchar(20) NOT NULL DEFAULT '',
+			last_login datetime DEFAULT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY channel_mobile (channel_id,mobile)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'channel_members' ) . " (

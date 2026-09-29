@@ -93,6 +93,7 @@
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
+      tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'مشتریان و ظاهر', onclick: function () { clientSettings(c); } }));
       if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
     }
     if (c.type === 'group' && c.can_manage) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'اعضا', onclick: function () { groupForm(c); } }));
@@ -489,6 +490,61 @@
       MP.api('channels/' + c.id, { method: 'DELETE' }).then(function () { current = 0; layout.classList.remove('open'); MP.toast('گروه آرشیو شد'); return MP.loadChannels(); }).then(function () { open({}); }).catch(MP.soft);
     });
   }
+  /* Client group: its client people (mobile login), the SMS-code requirement and the logo. */
+  function clientSettings(c) {
+    var body = MP.dialog.open('مشتریان و ظاهر · ' + c.title, MP.skeleton(3), { wide: true, focus: false });
+    function draw(d) {
+      var logoBox = el('div', { class: 'cs-logo' }, d.logo ? el('img', { src: d.logo, alt: '' }) : el('span', { text: (d.client || '؟').slice(0, 2) }));
+      var file = el('input', { type: 'file', accept: 'image/*', hidden: true });
+      file.onchange = function () {
+        var f = file.files[0]; if (!f) return;
+        MP.upload('files', f, { context: 'client_logo', context_id: c.id }).then(function (up) { return MP.api('channels/' + c.id + '/client', { method: 'POST', body: { logo_file_id: up.id } }); })
+          .then(function (n) { MP.toast('لوگو ذخیره شد'); draw(n); }).catch(MP.soft);
+      };
+      var auth = el('input', { type: 'checkbox', checked: d.auth_required });
+      auth.onchange = function () {
+        MP.api('channels/' + c.id + '/client', { method: 'POST', body: { auth_required: auth.checked } }).then(function (n) { MP.toast(n.auth_required ? 'از این به بعد مشتری با کد پیامک وارد می‌شود' : 'ورود با کد خاموش شد'); draw(n); })
+          .catch(function (err) { auth.checked = !auth.checked; MP.soft(err); });
+      };
+      var name = el('input', { placeholder: 'نام (مثلاً آقای احمدی)', maxlength: 80 });
+      var mobile = el('input', { placeholder: '۰۹۱۲…', inputmode: 'tel', dir: 'ltr', maxlength: 20 });
+      var sms = el('input', { type: 'checkbox', checked: d.sms });
+      var add = el('form', { class: 'cs-add' }, name, mobile, el('button', { type: 'submit', class: 'btn btn-primary', html: icon('plus') + 'افزودن' }));
+      add.onsubmit = function (e) {
+        e.preventDefault();
+        MP.api('channels/' + c.id + '/contacts', { method: 'POST', body: { name: name.value, mobile: mobile.value, sms: sms.checked } })
+          .then(function (n) { MP.toast(name.value + ' اضافه شد' + (sms.checked ? ' و لینک برایش پیامک شد' : '')); draw(n); if (c.id === current) fetchNew(true); }).catch(MP.soft);
+      };
+      var list = el('div', { class: 'tio-history' });
+      if (!d.contacts.length) list.append(el('p', { class: 'muted', text: 'هنوز کسی از طرف مشتری ثبت نشده. هر تعداد نفر را که بخواهید اضافه کنید؛ حتی وسط گفت‌وگو.' }));
+      d.contacts.forEach(function (x) {
+        list.append(el('article', { class: 'tpl-card' },
+          el('span', { class: 'cs-av', text: (x.name || '؟').slice(0, 1) }),
+          el('div', { class: 'tpl-copy' }, el('strong', { text: x.name }), el('small', { text: J.faDigits(x.mobile) + (x.last_login ? ' · آخرین ورود ' + MP.relTime(x.last_login) : ' · هنوز وارد نشده') })),
+          el('div', { class: 'tpl-actions' },
+            d.sms ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('send') + 'پیامک لینک', onclick: function () { MP.api('client-contacts/' + x.id + '/sms', { method: 'POST' }).then(function () { MP.toast('لینک پیامک شد'); }).catch(MP.soft); } }) : null,
+            el('button', { type: 'button', class: 'icon-btn sm', title: 'حذف', 'aria-label': 'حذف', html: icon('close'), onclick: function () {
+              MP.confirm('حذف از گروه', x.name + ' دیگر نمی‌تواند وارد پرتال شود.', 'حذف').then(function (ok) { if (ok) MP.api('client-contacts/' + x.id, { method: 'DELETE' }).then(draw).catch(MP.soft); });
+            } }))));
+      });
+      body.replaceChildren(
+        el('section', { class: 'tio-block' }, el('h3', { text: 'لوگو و نام' }),
+          el('div', { class: 'cs-brand' }, logoBox,
+            el('div', { class: 'cs-brand-copy' }, el('strong', { text: d.client }), el('small', { class: 'muted', text: 'لوگوی مشتری کنار لوگوی مربع در پرتال و صفحه ورود نمایش داده می‌شود.' }),
+              el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('file') + (d.logo ? 'تغییر لوگو' : 'بارگذاری لوگو'), onclick: function () { file.click(); } }),
+                d.logo ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'حذف لوگو', onclick: function () { MP.api('channels/' + c.id + '/client', { method: 'POST', body: { logo_file_id: 0 } }).then(draw).catch(MP.soft); } }) : null, file)))),
+        el('section', { class: 'tio-block' }, el('h3', { text: 'افراد مشتری' }), list, add,
+          d.sms ? el('label', { class: 'check', style: { marginTop: '8px' } }, sms, el('span', { text: 'لینک پرتال برای نفر جدید پیامک شود' })) : el('p', { class: 'hint', text: 'برای ورود با کد و پیامک لینک، سرویس پیامک را در تنظیمات افزونه فعال کنید.' })),
+        el('section', { class: 'tio-block' }, el('h3', { text: 'امنیت' }),
+          el('label', { class: 'check' }, auth, el('span', { text: 'ورود با شماره موبایل و کد پیامک الزامی باشد' })),
+          el('p', { class: 'hint', text: 'روشن باشد، فقط شماره‌های بالا با کد ۵ رقمی وارد پرتال می‌شوند (۳۰ روز وارد می‌مانند) و نام هر پیام خودکار ثبت می‌شود. خاموش باشد، هر کس لینک را داشته باشد می‌بیند.' })),
+        el('section', { class: 'tio-block' }, el('h3', { text: 'لینک پرتال' }),
+          el('div', { class: 'cs-link' }, el('input', { class: 'input', value: d.url, readonly: true, dir: 'ltr', onfocus: function (e) { e.target.select(); } }),
+            el('button', { type: 'button', class: 'btn btn-primary', text: 'کپی', onclick: function () { (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject()).then(function () { MP.toast('لینک کپی شد'); }, function () { MP.toast('لینک را انتخاب و کپی کنید'); }); } }))));
+    }
+    MP.api('channels/' + c.id + '/client').then(draw).catch(MP.soft);
+  }
+
   function archivedGroups() {
     var body = MP.dialog.open('گروه‌های آرشیو‌شده', MP.skeleton(2));
     MP.api('channels', { query: { archived: 1 } }).then(function (list) {

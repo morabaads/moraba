@@ -1,190 +1,291 @@
-/* Public client group: a customer reads and writes messages with only the private link. */
+/* Client portal (public link): mobile login, then progress, designs (pins), files, invoices and the conversation. */
 (function () {
   'use strict';
-  var url = window.MP_CLIENT.url, lastId = 0, box = document.getElementById('chat-messages'), form = document.getElementById('client-form');
-  var nameKey = 'mp-client-name';
-  try { form.elements.name.value = localStorage.getItem(nameKey) || ''; } catch (e) { /* storage blocked */ }
-
-  function when(mysql) {
-    return String(mysql || '').slice(11, 16).replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; });
-  }
-  function load(scroll) {
-    return fetch(url + '?after=' + lastId, { credentials: 'omit' }).then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.message); return d; }); })
-      .then(function (data) {
-        document.getElementById('client-title').textContent = data.title;
-        document.getElementById('client-sub').textContent = 'گفت‌وگوی ' + data.client + ' با تیم مربع';
-        data.messages.forEach(function (m) {
-          lastId = Math.max(lastId, m.id);
-          var row = document.createElement('div'); row.className = 'bubble-row ' + (m.team ? 'other' : 'me');
-          var b = document.createElement('div'); b.className = 'bubble';
-          var who = document.createElement('span'); who.className = 'b-author'; who.textContent = m.author + (m.team ? ' (تیم مربع)' : '');
-          b.append(who);
-          if (m.file && /^audio\//.test(m.file.mime || '')) {
-            var au = document.createElement('audio'); au.controls = true; au.preload = 'metadata'; au.src = m.file.url; au.className = 'b-audio'; b.append(au);
-          } else if (m.file) {
-            var a = document.createElement('a'); a.href = m.file.url; a.target = '_blank'; a.rel = 'noopener';
-            if (m.file.image) { var img = document.createElement('img'); img.className = 'b-img'; img.src = m.file.url; img.alt = m.file.name; a.append(img); }
-            else { a.className = 'file-chip'; a.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m20 11-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/></svg>'; a.append(document.createTextNode(m.file.name)); }
-            b.append(a);
-          }
-          if (m.body) { var p = document.createElement('p'); p.textContent = m.body; b.append(p); }
-          var t = document.createElement('span'); t.className = 'b-meta'; t.textContent = when(m.created_at);
-          b.append(t); row.append(b); box.append(row);
-        });
-        if (data.messages.length || scroll) box.scrollTop = box.scrollHeight;
-      })
-      .catch(function (err) {
-        document.getElementById('client-title').textContent = err.message || 'این گروه در دسترس نیست.';
-        form.hidden = true;
-        clearInterval(timer);
-      });
-  }
-  form.onsubmit = function (e) {
-    e.preventDefault();
-    var body = form.elements.message.value.trim(), name = form.elements.name.value.trim();
-    if (!body) return;
-    try { localStorage.setItem(nameKey, name); } catch (err) { /* ignore */ }
-    form.elements.message.value = '';
-    fetch(url, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: body, name: name }) })
-      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.message); }); })
-      .then(function () { return load(true); })
-      .catch(function (err) { form.elements.message.value = body; alert(err.message || 'ارسال پیام انجام نشد.'); });
-  };
-  var timer = setInterval(function () { if (!document.hidden) load(false); }, 6000);
-  load(true);
-})();
-
-/* Client portal: progress, designs to review (pins), delivered files, invoices; the chat above is the «گفت‌وگو» tab. */
-(function () {
-  'use strict';
-  var base = window.MP_CLIENT.url, data = null, tab = 'progress';
+  var base = window.MP_CLIENT.url;
+  var me = null, data = null, tab = 'progress', lastId = 0, chatTimer = null;
   var ST = { pending: 'منتظر نظر شما', approved: 'تأیید شد', changes: 'نیاز به تغییر', delivered: 'تحویل شد' };
-  var PST = { waiting: 'در انتظار', doing: 'در حال انجام', done: 'تمام‌شده' };
+  var PST = { waiting: 'در انتظار شروع', doing: 'در حال انجام', done: 'تمام‌شده' };
   var IST = { sent: 'منتظر پرداخت', accepted: 'تأیید شد', paid: 'پرداخت شد', cancelled: 'لغو شد' };
   var MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+  var TABS = [['progress', 'پیشرفت پروژه', 'pie'], ['designs', 'طرح‌ها', 'eye'], ['files', 'فایل‌های تحویلی', 'download'], ['invoices', 'فاکتورها', 'file'], ['chat', 'گفت‌وگو', 'chat']];
+
+  /* ------------------------------------------------------------ helpers */
+  function $(id) { return document.getElementById(id); }
   function h(tag, attrs, kids) {
     var n = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (k) {
-      if (k === 'text') n.textContent = attrs[k]; else if (k === 'class') n.className = attrs[k];
-      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] != null && attrs[k] !== false) n.setAttribute(k, attrs[k]);
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) return;
+      if (k === 'text') n.textContent = v; else if (k === 'html') n.innerHTML = v; else if (k === 'class') n.className = v;
+      else if (k.slice(0, 2) === 'on') n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
     });
     (kids || []).forEach(function (c) { if (c) n.append(c); });
     return n;
   }
+  function icon(n) { return '<svg class="icon" aria-hidden="true"><use href="#' + n + '"></use></svg>'; }
   function fa(n) { return String(n).replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }); }
+  function latin(s) { return String(s).replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }); }
   function money(n) { return fa(Number(n || 0).toLocaleString('en-US')) + ' تومان'; }
-  // Gregorian → Jalali (same algorithm as the panel).
-  function jal(iso) {
-    if (!iso) return '';
+  function j(iso) { // Gregorian → [jy, jm, jd]
     var p = iso.slice(0, 10).split('-').map(Number), gy = p[0], gm = p[1], gd = p[2];
     var g = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334], gy2 = gm > 2 ? gy + 1 : gy;
     var days = 355666 + 365 * gy + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400) + gd + g[gm - 1];
     var jy = -1595 + 33 * Math.floor(days / 12053); days %= 12053; jy += 4 * Math.floor(days / 1461); days %= 1461;
     if (days > 365) { jy += Math.floor((days - 1) / 365); days = (days - 1) % 365; }
-    var jm = days < 186 ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30), jd = 1 + (days < 186 ? days % 31 : (days - 186) % 30);
-    return fa(jd) + ' ' + MONTHS[jm - 1] + ' ' + fa(jy);
+    return [jy, days < 186 ? 1 + Math.floor(days / 31) : 7 + Math.floor((days - 186) / 30), 1 + (days < 186 ? days % 31 : (days - 186) % 30)];
   }
-  function name() { var i = document.querySelector('#client-form [name=name]'); return i ? i.value.trim() : ''; }
+  function jal(iso, year) { if (!iso) return ''; var x = j(iso); return fa(x[2]) + ' ' + MONTHS[x[1] - 1] + (year === false ? '' : ' ' + fa(x[0])); }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function daysBetween(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 864e5); }
+  function toast(t) { var n = $('cp-toast'); n.textContent = t; n.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(function () { n.classList.remove('on'); }, 3200); }
   function api(path, body) {
-    return fetch(base + path, { method: body ? 'POST' : 'GET', credentials: 'omit', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
-      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.message || 'خطا'); return d; }); });
+    return fetch(base + path, { method: body ? 'POST' : 'GET', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) { var e = new Error(d.message || 'خطا'); e.code = d.code; throw e; } return d; }); });
   }
-  function empty(t) { return h('div', { class: 'card portal-empty', text: t }); }
+  function initials(name) { return String(name || '؟').trim().split(/\s+/).slice(0, 2).map(function (w) { return w[0]; }).join(''); }
+  function logoInto(el, url, name) { el.replaceChildren(url ? h('img', { src: url, alt: name }) : h('span', { text: initials(name) })); }
 
+  /* ------------------------------------------------------------ login */
+  var loginMobile = '', resendTimer = null;
+  function showLogin() {
+    $('cp-app').hidden = true; $('cp-login').hidden = false;
+    $('cp-login-title').textContent = me.title;
+    if (me.logo) { $('cp-login-client').src = me.logo; $('cp-login-client').hidden = false; $('cp-login-x').hidden = false; }
+    if (!me.sms) { $('cp-login-sub').textContent = 'ورود با کد پیامک در حال حاضر فعال نیست؛ لطفاً با تیم مربع تماس بگیرید.'; $('cp-step-mobile').hidden = true; }
+    setTimeout(function () { $('cp-step-mobile').elements.mobile.focus(); }, 60);
+  }
+  function loginError(t) { $('cp-login-error').textContent = t || ''; }
+  function busy(form, on, label) { var b = form.querySelector('[type=submit]'); b.disabled = on; if (label) { b.dataset.l = b.dataset.l || b.textContent; b.textContent = on ? label : b.dataset.l; } }
+  function countdown(sec) {
+    var b = $('cp-resend'); clearInterval(resendTimer); b.disabled = true;
+    resendTimer = setInterval(function () { sec--; b.textContent = sec > 0 ? 'ارسال دوباره (' + fa(sec) + ')' : 'ارسال دوباره'; if (sec <= 0) { clearInterval(resendTimer); b.disabled = false; } }, 1000);
+  }
+  function requestCode(mobile) {
+    loginError('');
+    var f = $('cp-step-mobile'); busy(f, true, 'در حال ارسال…');
+    return api('/login/request', { mobile: latin(mobile) }).then(function (r) {
+      busy(f, false, 'x'); loginMobile = r.mobile;
+      $('cp-step-mobile').hidden = true; $('cp-step-code').hidden = false;
+      $('cp-code-label').textContent = 'کد ۵ رقمی ارسال‌شده به ' + fa(r.mobile);
+      $('cp-step-code').elements.code.value = ''; $('cp-step-code').elements.code.focus();
+      countdown(r.wait || 60);
+    }).catch(function (e) { busy(f, false, 'x'); loginError(e.message); });
+  }
+  $('cp-step-mobile').onsubmit = function (e) { e.preventDefault(); requestCode(this.elements.mobile.value); };
+  $('cp-step-code').onsubmit = function (e) {
+    e.preventDefault(); loginError('');
+    var f = this; busy(f, true, 'در حال بررسی…');
+    api('/login/verify', { mobile: loginMobile, code: latin(f.elements.code.value) }).then(function () { return start(); })
+      .catch(function (err) { busy(f, false, 'x'); loginError(err.message); f.elements.code.select(); });
+  };
+  $('cp-step-code').elements.code.addEventListener('input', function () { var v = latin(this.value).replace(/\D/g, ''); this.value = fa(v); if (v.length === 5) $('cp-step-code').requestSubmit(); });
+  $('cp-change').onclick = function () { $('cp-step-code').hidden = true; $('cp-step-mobile').hidden = false; loginError(''); };
+  $('cp-resend').onclick = function () { requestCode(loginMobile); };
+  $('cp-logout').onclick = function () { api('/logout', {}).then(function () { location.reload(); }); };
+
+  /* ------------------------------------------------------------ shell */
+  function badge(k) {
+    if (!data) return 0;
+    if (k === 'designs') return data.designs.filter(function (d) { return d.status === 'pending'; }).length;
+    if (k === 'invoices') return data.invoices.filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; }).length;
+    return 0;
+  }
   function tabs() {
-    var nav = document.getElementById('portal-tabs'), list = [['progress', 'پیشرفت'], ['designs', 'طرح‌ها'], ['files', 'فایل‌های تحویلی'], ['invoices', 'فاکتورها'], ['chat', 'گفت‌وگو']];
-    var pending = data.designs.filter(function (d) { return d.status === 'pending'; }).length;
-    nav.hidden = false; nav.replaceChildren();
-    list.forEach(function (t) {
-      nav.append(h('button', { type: 'button', role: 'tab', 'aria-selected': String(t[0] === tab), onclick: function () { tab = t[0]; show(); } }, [document.createTextNode(t[1]), t[0] === 'designs' && pending ? h('i', { text: fa(pending) }) : null]));
+    var list = data && data.project ? TABS : TABS.filter(function (t) { return t[0] === 'chat'; });
+    [$('cp-nav'), $('cp-tabbar')].forEach(function (nav, i) {
+      nav.replaceChildren();
+      list.forEach(function (t) {
+        var n = badge(t[0]);
+        nav.append(h('button', { type: 'button', class: 'cp-tab' + (t[0] === tab ? ' on' : ''), 'aria-current': t[0] === tab ? 'page' : null, onclick: function () { go(t[0]); } }, [
+          h('span', { class: 'cp-tab-ico', html: icon(t[2]) }), h('span', { class: 'cp-tab-label', text: i && t[0] === 'files' ? 'فایل‌ها' : i && t[0] === 'progress' ? 'پیشرفت' : t[1] }), n ? h('i', { text: fa(n) }) : null]));
+      });
     });
   }
-  function show() {
-    tabs();
-    ['progress', 'designs', 'files', 'invoices', 'chat'].forEach(function (k) { document.getElementById('pane-' + k).hidden = k !== tab; });
-    if (tab === 'chat') { var b = document.getElementById('chat-messages'); b.scrollTop = b.scrollHeight; }
+  var SUB = {
+    progress: function () { return data.project ? data.project.name : ''; },
+    designs: function () { return 'روی هر قسمت طرح کلیک کنید و نظرتان را همان‌جا بنویسید؛ بعد تأیید کنید یا تغییر بخواهید.'; },
+    files: function () { return 'فایل‌های نهایی که تیم تحویل داده است.'; },
+    invoices: function () { return 'پیش‌فاکتورها و فاکتورهای این پروژه.'; },
+    chat: function () { return 'گفت‌وگو با تیم مربع؛ پاسخ‌ها همین‌جا می‌آید.'; }
+  };
+  function go(k) {
+    tab = k; tabs();
+    TABS.forEach(function (t) { $('pane-' + t[0]).hidden = t[0] !== k; });
+    $('cp-page-title').textContent = TABS.filter(function (t) { return t[0] === k; })[0][1];
+    $('cp-page-sub').textContent = SUB[k]();
+    try { history.replaceState(null, '', '#' + k); } catch (e) { /* file: */ }
+    window.scrollTo(0, 0);
+    if (k === 'chat') { var b = $('chat-messages'); setTimeout(function () { b.scrollTop = b.scrollHeight; }, 30); loadChat(true); }
   }
 
+  /* ------------------------------------------------------------ progress */
+  function ring(pct) {
+    var r = 52, c = 2 * Math.PI * r;
+    return '<svg viewBox="0 0 120 120" class="cp-ring"><circle cx="60" cy="60" r="' + r + '" class="bg"/><circle cx="60" cy="60" r="' + r + '" class="fg" stroke-dasharray="' + c + '" stroke-dashoffset="' + (c * (1 - pct / 100)) + '"/></svg>';
+  }
   function progress() {
-    var p = data.project, pane = document.getElementById('pane-progress');
-    pane.replaceChildren(h('article', { class: 'card portal-card' }, [
-      h('div', { class: 'portal-prog-head' }, [h('div', null, [h('small', { text: 'پیشرفت پروژه' }), h('strong', { text: p.name })]), h('span', { class: 'chip brand', text: PST[p.status] || '' })]),
-      h('div', { class: 'portal-bar' }, [h('i', { style: 'width:' + p.progress + '%' })]),
-      h('div', { class: 'portal-prog-foot' }, [h('b', { text: fa(p.progress) + '٪ انجام شده' }), h('small', { text: jal(p.start) + ' تا ' + jal(p.end) })])
-    ]));
-    if (p.milestones.length) pane.append(h('article', { class: 'card portal-card' }, [h('h3', { text: 'مراحل' }), h('ol', { class: 'portal-steps' }, p.milestones.map(function (m) {
-      return h('li', { class: m.status }, [h('span', { class: 'dot' }), h('div', null, [h('strong', { text: m.title }), h('small', { text: jal(m.start) + ' تا ' + jal(m.end) + ' · ' + (PST[m.status] || '') })])]);
-    }))]));
+    var p = data.project, pane = $('pane-progress'), t = today();
+    var left = p.end ? daysBetween(t, p.end) : null;
+    var pend = data.designs.filter(function (d) { return d.status === 'pending'; }).length;
+    var unpaid = data.invoices.filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; });
+    pane.replaceChildren(
+      h('div', { class: 'cp-hero' }, [
+        h('div', { class: 'cp-ring-wrap', html: ring(p.progress) + '<div class="cp-ring-num"><b>' + fa(p.progress) + '٪</b><small>انجام شده</small></div>' }),
+        h('div', { class: 'cp-hero-copy' }, [
+          h('span', { class: 'chip ' + (p.status === 'done' ? 'ok' : 'brand'), text: PST[p.status] || '' }),
+          h('h2', { text: p.name }),
+          h('p', { text: jal(p.start) + ' تا ' + jal(p.end) }),
+          left !== null ? h('div', { class: 'cp-left' + (left < 0 && p.status !== 'done' ? ' late' : '') }, [h('b', { text: p.status === 'done' ? 'تحویل شد 🎉' : left >= 0 ? fa(left) : fa(-left) }), h('span', { text: p.status === 'done' ? '' : left >= 0 ? 'روز تا تحویل' : 'روز از موعد گذشته' })]) : null
+        ])
+      ]),
+      h('div', { class: 'cp-stats' }, [
+        stat('eye', 'طرح منتظر نظر شما', fa(pend), pend ? function () { go('designs'); } : null, pend ? 'warn' : ''),
+        stat('download', 'فایل تحویلی', fa(data.files.length), data.files.length ? function () { go('files'); } : null),
+        stat('file', 'فاکتور منتظر پرداخت', unpaid.length ? money(unpaid.reduce(function (s, x) { return s + x.total; }, 0)) : '—', unpaid.length ? function () { go('invoices'); } : null, unpaid.length ? 'warn' : ''),
+        stat('pie', 'مرحله‌های انجام‌شده', fa(p.milestones.filter(function (m) { return m.status === 'done'; }).length) + ' از ' + fa(p.milestones.length))
+      ])
+    );
+    if (p.milestones.length) {
+      pane.append(h('article', { class: 'cp-card' }, [h('h3', { text: 'مراحل پروژه' }), h('ol', { class: 'cp-steps' }, p.milestones.map(function (m) {
+        var now = m.status !== 'done' && m.start <= t && m.end >= t;
+        return h('li', { class: m.status + (now ? ' now' : '') }, [h('span', { class: 'dot', html: m.status === 'done' ? icon('check') : '' }), h('div', null, [h('strong', { text: m.title }), h('small', { text: jal(m.start, false) + ' تا ' + jal(m.end, false) + ' · ' + (m.status === 'done' ? 'انجام شد' : now ? 'در حال انجام' : PST[m.status] || '') })])]);
+      }))]));
+    }
     var secs = p.sections.filter(function (s) { return s.total; });
-    if (secs.length) pane.append(h('article', { class: 'card portal-card' }, [h('h3', { text: 'بخش‌ها' })].concat(secs.map(function (s) {
+    if (secs.length) pane.append(h('article', { class: 'cp-card' }, [h('h3', { text: 'پیشرفت بخش‌ها' })].concat(secs.map(function (s) {
       var pc = Math.round(s.done / s.total * 100);
-      return h('div', { class: 'portal-sec' }, [h('span', { text: s.title }), h('div', { class: 'portal-bar sm' }, [h('i', { style: 'width:' + pc + '%' })]), h('b', { text: fa(pc) + '٪' })]);
+      return h('div', { class: 'cp-sec' }, [h('span', { text: s.title }), h('div', { class: 'cp-bar' }, [h('i', { style: 'width:' + pc + '%' })]), h('b', { text: fa(pc) + '٪' })]);
     }))));
   }
-
-  function designs() {
-    var pane = document.getElementById('pane-designs');
-    pane.replaceChildren();
-    if (!data.designs.length) { pane.append(empty('هنوز طرحی برای بررسی ارسال نشده است.')); return; }
-    var grid = h('div', { class: 'portal-grid' });
-    data.designs.forEach(function (d) {
-      var open = d.pins.filter(function (p) { return !p.parent_id && !p.resolved; }).length;
-      grid.append(h('button', { type: 'button', class: 'card portal-design', onclick: function () { review(d); } }, [
-        h('img', { src: d.file.url, alt: d.title, loading: 'lazy' }),
-        h('div', { class: 'pd-copy' }, [h('strong', { text: d.title + (d.version > 1 ? ' · نسخه ' + fa(d.version) : '') }), h('span', { class: 'chip ' + (d.status === 'approved' ? 'ok' : d.status === 'changes' ? 'danger' : 'brand'), text: ST[d.status] }), open ? h('small', { text: fa(open) + ' نظر باز' }) : null])
-      ]));
-    });
-    pane.append(grid);
+  function stat(ic, label, value, onclick, tone) {
+    return h(onclick ? 'button' : 'div', { type: onclick ? 'button' : null, class: 'cp-stat ' + (tone || '') + (onclick ? ' link' : ''), onclick: onclick }, [h('span', { class: 'cp-stat-ico', html: icon(ic) }), h('div', null, [h('small', { text: label }), h('strong', { text: value })])]);
   }
 
+  /* ------------------------------------------------------------ designs */
+  function tone(s) { return s === 'approved' ? 'ok' : s === 'changes' ? 'danger' : 'brand'; }
+  function designs() {
+    var pane = $('pane-designs');
+    if (!data.designs.length) { pane.replaceChildren(empty('eye', 'هنوز طرحی برای بررسی ارسال نشده', 'وقتی تیم طرحی بفرستد، اینجا می‌بینید و نظر می‌دهید.')); return; }
+    pane.replaceChildren(h('div', { class: 'cp-grid' }, data.designs.map(function (d) {
+      var open = d.pins.filter(function (p) { return !p.parent_id && !p.resolved; }).length;
+      return h('button', { type: 'button', class: 'cp-design', onclick: function () { review(d); } }, [
+        h('span', { class: 'cp-thumb' }, [h('img', { src: d.file.url, alt: d.title, loading: 'lazy' }), d.status === 'pending' ? h('em', { text: 'منتظر نظر شما' }) : null]),
+        h('div', { class: 'cp-design-copy' }, [h('strong', { text: d.title }), h('div', null, [h('span', { class: 'chip ' + tone(d.status), text: ST[d.status] }), d.version > 1 ? h('span', { class: 'chip', text: 'نسخه ' + fa(d.version) }) : null, open ? h('span', { class: 'chip', text: fa(open) + ' نظر باز' }) : null])])
+      ]);
+    })));
+  }
   function review(d) {
-    var pane = document.getElementById('pane-designs');
-    var viewer = h('div');
-    var note = h('textarea', { rows: 2, maxlength: 1000, placeholder: 'توضیح کلی (اختیاری برای تأیید)' });
+    var pane = $('pane-designs'), viewer = h('div');
+    var note = h('textarea', { rows: 2, maxlength: 1000, placeholder: 'توضیح کلی (برای درخواست تغییر لازم است)' });
+    function replace(it) { data.designs = data.designs.map(function (x) { return x.id === it.id ? it : x; }); tabs(); }
     function decide(kind) {
-      api('/items/' + d.id + '/decision', { decision: kind, note: note.value.trim(), name: name() }).then(function (it) {
-        d = it; replace(it); alert(kind === 'approved' ? 'طرح تأیید شد. سپاس!' : 'درخواست تغییر برای تیم ارسال شد.'); designs();
-      }).catch(function (e) { alert(e.message); });
+      api('/items/' + d.id + '/decision', { decision: kind, note: note.value.trim(), name: myName() }).then(function (it) {
+        replace(it); toast(kind === 'approved' ? 'طرح تأیید شد. سپاس!' : 'درخواست تغییر برای تیم ارسال شد.'); designs();
+      }).catch(function (e) { toast(e.message); });
     }
-    function replace(it) { data.designs = data.designs.map(function (x) { return x.id === it.id ? it : x; }); }
-    pane.replaceChildren(h('div', { class: 'card portal-card' }, [
-      h('div', { class: 'portal-review-head' }, [
-        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: '→ همه طرح‌ها', onclick: designs }),
+    pane.replaceChildren(h('article', { class: 'cp-card' }, [
+      h('div', { class: 'cp-review-head' }, [
+        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('right') + ' همه طرح‌ها', onclick: designs }),
         h('strong', { text: d.title + (d.version > 1 ? ' · نسخه ' + fa(d.version) : '') }),
-        h('span', { class: 'chip ' + (d.status === 'approved' ? 'ok' : d.status === 'changes' ? 'danger' : 'brand'), text: ST[d.status] })]),
-      d.note ? h('p', { class: 'portal-note', text: d.note }) : null,
+        h('span', { class: 'chip ' + tone(d.status), text: ST[d.status] })]),
+      d.note ? h('p', { class: 'cp-note', text: d.note }) : null,
       viewer,
-      d.status === 'approved' ? h('p', { class: 'portal-note ok', text: 'این طرح را ' + (d.decided_by || 'شما') + ' تأیید کرده است.' }) : h('div', { class: 'portal-decide' }, [note, h('div', null, [
-        h('button', { type: 'button', class: 'btn btn-primary', text: 'تأیید طرح', onclick: function () { if (confirm('این طرح تأیید شود؟')) decide('approved'); } }),
+      d.status === 'approved' ? h('p', { class: 'cp-note ok', text: '✓ این طرح را ' + (d.decided_by || 'شما') + ' تأیید کرده است.' }) : h('div', { class: 'cp-decide' }, [note, h('div', null, [
+        h('button', { type: 'button', class: 'btn btn-primary', html: icon('check') + ' تأیید طرح', onclick: function () { if (confirm('این طرح تأیید شود؟')) decide('approved'); } }),
         h('button', { type: 'button', class: 'btn btn-secondary', text: 'درخواست تغییر', onclick: function () { decide('changes'); } })])])
     ]));
-    window.MPPins.mount(viewer, d, { team: false, name: name, post: function (b) { return api('/items/' + d.id + '/pins', b).then(function (it) { replace(it); d = it; return it; }); } });
+    window.MPPins.mount(viewer, d, { team: false, name: myName, post: function (b) { return api('/items/' + d.id + '/pins', b).then(function (it) { replace(it); d = it; return it; }); } });
   }
 
+  /* ------------------------------------------------------------ files & invoices */
+  function empty(ic, t, s) { return h('div', { class: 'cp-empty' }, [h('span', { html: icon(ic) }), h('strong', { text: t }), s ? h('p', { text: s }) : null]); }
+  function ext(n) { return (String(n).split('.').pop() || '').toUpperCase().slice(0, 4); }
   function files() {
-    var pane = document.getElementById('pane-files');
-    pane.replaceChildren(data.files.length ? h('div', { class: 'card portal-card portal-files' }, data.files.map(function (f) {
-      return h('a', { class: 'portal-file', href: f.file.url, target: '_blank', rel: 'noopener', download: f.file.name }, [
-        f.file.image ? h('img', { src: f.file.url, alt: '' }) : h('span', { class: 'pf-ico', text: (f.file.name.split('.').pop() || '').toUpperCase().slice(0, 4) }),
-        h('div', null, [h('strong', { text: f.title }), h('small', { text: jal(f.created_at) + (f.note ? ' · ' + f.note : '') })]),
-        h('span', { class: 'btn btn-secondary btn-sm', text: 'دانلود' })]);
-    })) : empty('هنوز فایلی تحویل داده نشده است.'));
+    var pane = $('pane-files');
+    pane.replaceChildren(data.files.length ? h('div', { class: 'cp-card cp-list' }, data.files.map(function (f) {
+      return h('a', { class: 'cp-row', href: f.file.url, target: '_blank', rel: 'noopener', download: f.file.name }, [
+        f.file.image ? h('img', { class: 'cp-row-ico', src: f.file.url, alt: '' }) : h('span', { class: 'cp-row-ico', text: ext(f.file.name) }),
+        h('div', { class: 'cp-row-copy' }, [h('strong', { text: f.title }), h('small', { text: jal(f.created_at) + (f.note ? ' · ' + f.note : '') })]),
+        h('span', { class: 'btn btn-secondary btn-sm', html: icon('download') + ' دانلود' })]);
+    })) : empty('download', 'هنوز فایلی تحویل نشده', null));
   }
-
   function invoices() {
-    var pane = document.getElementById('pane-invoices');
-    pane.replaceChildren(data.invoices.length ? h('div', { class: 'card portal-card portal-files' }, data.invoices.map(function (x) {
-      return h('a', { class: 'portal-file', href: x.url, target: '_blank', rel: 'noopener' }, [
-        h('span', { class: 'pf-ico', text: x.kind === 'proforma' ? 'پیش' : 'فاکتور' }),
-        h('div', null, [h('strong', { text: (x.kind === 'proforma' ? 'پیش‌فاکتور ' : 'فاکتور ') + x.number + (x.title ? ' — ' + x.title : '') }), h('small', { text: jal(x.date) + ' · ' + money(x.total) })]),
-        h('span', { class: 'chip ' + (x.status === 'paid' ? 'ok' : 'brand'), text: IST[x.status] || '' })]);
-    })) : empty('فاکتوری برای این پروژه صادر نشده است.'));
+    var pane = $('pane-invoices');
+    pane.replaceChildren(data.invoices.length ? h('div', { class: 'cp-card cp-list' }, data.invoices.map(function (x) {
+      return h('a', { class: 'cp-row', href: x.url, target: '_blank', rel: 'noopener' }, [
+        h('span', { class: 'cp-row-ico', html: icon('file') }),
+        h('div', { class: 'cp-row-copy' }, [h('strong', { text: (x.kind === 'proforma' ? 'پیش‌فاکتور ' : 'فاکتور ') + fa(x.number) + (x.title ? ' — ' + x.title : '') }), h('small', { text: jal(x.date) })]),
+        h('div', { class: 'cp-row-end' }, [h('b', { text: money(x.total) }), h('span', { class: 'chip ' + (x.status === 'paid' ? 'ok' : x.status === 'cancelled' ? 'danger' : 'brand'), text: x.kind === 'proforma' && x.status === 'sent' ? 'منتظر تأیید' : IST[x.status] || '' })])]);
+    })) : empty('file', 'فاکتوری صادر نشده', null));
   }
 
-  api('/portal').then(function (d) {
-    data = d;
-    if (!d.project) return; // no project: the page stays a plain chat
-    tab = d.designs.some(function (x) { return x.status === 'pending'; }) ? 'designs' : 'progress';
-    progress(); designs(); files(); invoices(); show();
-  }).catch(function () { /* chat keeps working */ });
+  /* ------------------------------------------------------------ chat */
+  var box = $('chat-messages'), form = $('client-form'), lastDay = '';
+  function myName() { return me && me.name ? me.name : (form.elements.name.value.trim() || ''); }
+  function hm(s) { return fa(String(s || '').slice(11, 16)); }
+  function loadChat(scroll) {
+    return api('?after=' + lastId).then(function (d) {
+      var near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+      if (!lastId && !d.messages.length) box.replaceChildren(empty('chat', 'اولین پیام را بفرستید', 'تیم مربع همین‌جا پاسخ می‌دهد.'));
+      d.messages.forEach(function (m) {
+        if (!lastId) box.replaceChildren();
+        lastId = Math.max(lastId, m.id);
+        var e = box.querySelector('.cp-empty'); if (e) e.remove();
+        var day = m.created_at.slice(0, 10);
+        if (day !== lastDay) { lastDay = day; box.append(h('div', { class: 'day-sep', text: day === today() ? 'امروز' : jal(day) })); }
+        var mine = !m.team;
+        var b = h('div', { class: 'bubble' }, [h('span', { class: 'b-author', text: m.author + (m.team ? ' · تیم مربع' : '') })]);
+        if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
+        else if (m.file && m.file.image) b.append(h('a', { href: m.file.url, target: '_blank', rel: 'noopener' }, [h('img', { class: 'b-img', src: m.file.url, alt: m.file.name })]));
+        else if (m.file) b.append(h('a', { class: 'file-chip', href: m.file.url, target: '_blank', rel: 'noopener', html: icon('clip') + '<span></span>' }));
+        if (m.file && !m.file.image && !/^audio\//.test(m.file.mime || '')) b.querySelector('.file-chip span').textContent = m.file.name;
+        if (m.body) b.append(h('p', { text: m.body }));
+        b.append(h('span', { class: 'b-meta', text: hm(m.created_at) }));
+        box.append(h('div', { class: 'bubble-row ' + (mine ? 'me' : 'other') + (lastId && !scroll ? ' b-new' : '') }, [b]));
+      });
+      if (scroll || (d.messages.length && near)) box.scrollTop = box.scrollHeight;
+    }).catch(function (e) { if (e.code === 'mp_login_required') location.reload(); });
+  }
+  form.onsubmit = function (e) {
+    e.preventDefault();
+    var ta = form.elements.message, body = ta.value.trim();
+    if (!body) return;
+    if (!me.logged_in) { var n = form.elements.name.value.trim(); try { localStorage.setItem('mp-client-name', n); } catch (err) { /* private */ } }
+    ta.value = ''; ta.style.height = '';
+    api('', { body: body, name: myName() }).then(function () { return loadChat(true); }).catch(function (err) { ta.value = body; toast(err.message || 'ارسال نشد'); });
+  };
+  form.elements.message.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
+  form.elements.message.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(140, this.scrollHeight) + 'px'; });
+
+  /* ------------------------------------------------------------ start */
+  function start() {
+    return api('/me').then(function (m) {
+      me = m;
+      if (m.auth_required && !m.logged_in) { showLogin(); return null; }
+      $('cp-login').hidden = true; $('cp-app').hidden = false;
+      document.title = m.title + ' | مربع استودیو';
+      $('cp-client-name').textContent = m.client || m.title;
+      $('cp-project-name').textContent = m.title;
+      logoInto($('cp-client-logo'), m.logo, m.client || m.title);
+      logoInto($('cp-client-logo-m'), m.logo, m.client || m.title);
+      if (m.logged_in) { $('cp-me').hidden = false; $('cp-me-name').textContent = m.name; $('cp-me-avatar').textContent = initials(m.name); }
+      else { form.elements.name.hidden = false; try { form.elements.name.value = localStorage.getItem('mp-client-name') || ''; } catch (e) { /* private */ } }
+      return api('/portal').then(function (d) {
+        data = d;
+        var want = (location.hash || '').slice(1);
+        if (!d.project) tab = 'chat';
+        else {
+          progress(); designs(); files(); invoices();
+          tab = TABS.some(function (t) { return t[0] === want; }) ? want : d.designs.some(function (x) { return x.status === 'pending'; }) ? 'designs' : 'progress';
+        }
+        go(tab);
+        clearInterval(chatTimer);
+        chatTimer = setInterval(function () { if (!document.hidden && tab === 'chat') loadChat(false); }, 5000);
+        loadChat(true);
+      });
+    }).catch(function (e) {
+      document.body.replaceChildren(h('main', { class: 'cp-login' }, [h('div', { class: 'cp-login-card' }, [h('img', { src: document.querySelector('.cp-studio-logo') ? document.querySelector('.cp-studio-logo').src : '', class: 'cp-studio-logo', alt: '' }), h('h1', { text: 'این لینک در دسترس نیست' }), h('p', { text: e.message || 'لینک را دوباره از تیم مربع بگیرید.' })])]));
+    });
+  }
+  start();
 })();

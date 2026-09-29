@@ -53,7 +53,7 @@ class MP_Invoices {
 	}
 
 	public static function url( $token ) {
-		return add_query_arg( 'mp_invoice', $token, home_url( '/' ) );
+		return get_option( 'permalink_structure' ) ? home_url( '/i/' . $token . '/' ) : add_query_arg( 'mp_invoice', $token, home_url( '/' ) );
 	}
 
 	/** Items, subtotal, discount, VAT and total from raw input. */

@@ -148,7 +148,7 @@ class MP_Rest {
 			'users'     => $users,
 			'manager'   => MP_Util::is_manager(),
 			'logoutUrl' => wp_logout_url( home_url( '/' ) ),
-			'clientUrl' => add_query_arg( 'mp_client', '', home_url( '/' ) ),
+			'clientUrl' => get_option( 'permalink_structure' ) ? home_url( '/c/' ) : add_query_arg( 'mp_client', '', home_url( '/' ) ),
 			'counts'    => self::counts( $uid ),
 		);
 	}
@@ -1480,6 +1480,10 @@ class MP_Rest {
 		if ( ! $ch ) {
 			return self::err( 'این گروه وجود ندارد یا حذف شده است.', 404 );
 		}
+		$gate = MP_Client::gate( $ch );
+		if ( $gate ) {
+			return $gate;
+		}
 		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id > %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 200) x ORDER BY id', $ch->id, (int) $r['after'] ) );
 		$out  = array();
 		foreach ( $rows as $m ) {
@@ -1510,6 +1514,10 @@ class MP_Rest {
 		if ( ! $ch ) {
 			return self::err( 'این گروه وجود ندارد یا حذف شده است.', 404 );
 		}
+		$gate = MP_Client::gate( $ch );
+		if ( $gate ) {
+			return $gate;
+		}
 		if ( ! self::client_rate_ok( $ch->id ) ) {
 			return self::err( 'تعداد پیام‌ها زیاد است؛ چند دقیقه بعد دوباره تلاش کنید.', 429 );
 		}
@@ -1517,10 +1525,10 @@ class MP_Rest {
 		if ( '' === trim( $body ) ) {
 			return self::err( 'متن پیام را بنویسید.' );
 		}
-		$name = MP_Util::text( $r['name'], 80 );
+		$name = MP_Client::author( $ch, $r['name'] );
 		$wpdb->insert(
 			self::t( 'messages' ),
-			array( 'channel_id' => $ch->id, 'user_id' => 0, 'guest_name' => '' !== $name ? $name : $ch->client_name, 'body' => $body, 'created_at' => MP_Util::now() )
+			array( 'channel_id' => $ch->id, 'user_id' => 0, 'guest_name' => $name, 'body' => $body, 'created_at' => MP_Util::now() )
 		);
 		foreach ( self::channel_members( $ch ) as $member ) {
 			MP_Notify::send( $member, 'message', 'پیام جدید مشتری در «' . $ch->title . '»', wp_trim_words( $body, 12 ), 'messages', $ch->id );

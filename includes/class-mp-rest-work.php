@@ -78,7 +78,7 @@ class MP_Rest_Work {
 	/* ------------------------------------------------------------------ Files */
 
 	public static function upload( WP_REST_Request $r ) {
-		$context = MP_Util::pick( $r['context'], array( 'task', 'comment', 'message', 'ledger', 'client_item' ), '' );
+		$context = MP_Util::pick( $r['context'], array( 'task', 'comment', 'message', 'ledger', 'client_item', 'client_logo' ), '' );
 		$cid     = (int) $r['context_id'];
 		if ( ! $context ) {
 			return self::err( 'محل فایل معتبر نیست.' );
@@ -89,11 +89,14 @@ class MP_Rest_Work {
 		if ( 'message' === $context && ! MP_Rest::can_read_channel( $cid ) ) {
 			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
 		}
+		if ( 'client_logo' === $context && ! MP_Rest::can_read_channel( $cid ) ) {
+			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
+		}
 		if ( 'client_item' === $context && ! MP_Util::can_see_project( $cid ) ) {
 			return self::err( 'پروژه پیدا نشد.', 404 );
 		}
 		// Comment and ledger files are attached (claimed) when the comment or entry is saved.
-		$file = MP_Files::store( $context, in_array( $context, array( 'task', 'message', 'client_item' ), true ) ? $cid : 0 );
+		$file = MP_Files::store( $context, in_array( $context, array( 'task', 'message', 'client_item', 'client_logo' ), true ) ? $cid : 0 );
 		if ( is_wp_error( $file ) ) {
 			return $file;
 		}

@@ -168,6 +168,15 @@ class MP_Files {
 	public static function can_read( $file, $client_token = '' ) {
 		global $wpdb;
 		$uid = get_current_user_id();
+		if ( 'client_logo' === $file->context ) {
+			return true; // a client group's logo is public, like the page it sits on
+		}
+		if ( $client_token ) {
+			$tch = MP_Client::channel( $client_token );
+			if ( ! $tch || MP_Client::gate( $tch ) ) {
+				$client_token = ''; // logged-out client of a protected group: no files
+			}
+		}
 		if ( 'client_item' === $file->context && $client_token ) {
 			$pid = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT project_id FROM ' . MP_Install::table( 'channels' ) . " WHERE type = 'client' AND token = %s AND archived_at IS NULL", $client_token ) );
 			if ( $pid && $pid === (int) $file->context_id ) {
