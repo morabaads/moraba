@@ -83,9 +83,14 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 .cta p{font-size:26px;color:var(--mu);margin-top:12px;line-height:1.9}
 .cta .btn{display:inline-block;margin-top:30px;padding:18px 60px;font-size:28px;border-radius:18px}
 .note{font-size:18px;color:#6c6c74;margin-top:30px}
+.i{width:1.15em;height:1.15em;vertical-align:-.22em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ico .i{width:46px;height:46px;color:var(--o2);stroke-width:1.8}.ico.o .i{color:#fff}
+.im .i{width:40px;height:40px;color:var(--mu);stroke-width:1.6}
+.fld .l .i,.fld span.l .i{color:var(--o2)}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol><symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></symbol><symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></symbol><symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol><symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol><symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.1 10.4A6 6 0 1 1 10.4 18.1M7 6h1v4"/></symbol><symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-15.5-6.3L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.3L21 16"/><path d="M16 16h5v5"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol><symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol><symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol><symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></symbol><symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></symbol><symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol><symbol id="i-hook" viewBox="0 0 24 24"><circle cx="12" cy="5" r="3"/><path d="M12 8v5a4 4 0 0 0 8 0M20 13h-3"/><circle cx="5" cy="17" r="3"/><path d="M5 14c0-3 3-6 7-6"/></symbol><symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.7 1.8L21.5 17.5l-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/></symbol><symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol><symbol id="i-lang" viewBox="0 0 24 24"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></symbol></svg>
 <div class="poster">
 
 <header class="hero">
@@ -99,7 +104,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 1 wizard -->
 <section class="row">
   <div class="txt">
-    <div class="ico o">🔗</div>
+    <div class="ico o"><svg class="i"><use href="#i-link"/></svg></div>
     <h2>فقط آدرس را بچسبانید</h2>
     <p>آدرس محصول یا دسته را وارد کنید؛ کوچ پلتفرم و ارز را خودکار تشخیص می‌دهد و ویزارد سه‌مرحله‌ای شما را تا انتقال همراهی می‌کند.</p>
   </div>
@@ -111,7 +116,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
         <div class="steps"><div class="on">۱ · آدرس</div><div>۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
         <div class="input">https://shop.example.com/product/sneaker-x</div>
         <div class="btn">تشخیص و ادامه</div>
-        <div class="chips"><span class="chip ok">✓ ووکامرس تشخیص داده شد</span><span class="chip o">ارز: تومان</span><span class="chip">Store API</span></div>
+        <div class="chips"><span class="chip ok"><svg class="i"><use href="#i-check"/></svg> ووکامرس تشخیص داده شد</span><span class="chip o">ارز: تومان</span><span class="chip">Store API</span></div>
         <div class="fld"><span class="l">robots.txt</span><span class="v">گزارش شد و رعایت می‌شود</span><span class="conf h">امن</span></div>
       </div>
     </div>
@@ -122,7 +127,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 2 preview -->
 <section class="row alt">
   <div class="txt">
-    <div class="ico">👁️</div>
+    <div class="ico"><svg class="i"><use href="#i-eye"/></svg></div>
     <h2>اول پیش‌نمایش، بعد انتقال</h2>
     <p>محصول دقیقاً همان‌طور که ذخیره می‌شود نمایش داده می‌شود، با درجه‌ی اطمینان برای هر فیلد. «تست‌ران» بدون نوشتن چیزی تغییرات را نشان می‌دهد.</p>
   </div>
@@ -131,8 +136,8 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
     <div class="win">
       <div class="bar"><i></i><i></i><i></i><b>پیش‌نمایش نهایی</b></div>
       <div class="body">
-        <div class="steps"><div class="done">✓ آدرس</div><div class="on">۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
-        <div class="prod"><div class="im">👟</div><div style="flex:1"><b style="font-size:18px">کفش ورزشی مدل X</b><div style="color:var(--mu);font-size:14px;margin-top:6px">۴ متغیر · ۱۲ تصویر</div></div></div>
+        <div class="steps"><div class="done"><svg class="i"><use href="#i-check"/></svg> آدرس</div><div class="on">۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
+        <div class="prod"><div class="im"><svg class="i"><use href="#i-box"/></svg></div><div style="flex:1"><b style="font-size:18px">کفش ورزشی مدل X</b><div style="color:var(--mu);font-size:14px;margin-top:6px">۴ متغیر · ۱۲ تصویر</div></div></div>
         <div class="fld"><span class="l">عنوان</span><span class="v">کفش ورزشی مدل X</span><span class="conf h">۹۸٪</span></div>
         <div class="fld"><span class="l">قیمت</span><span class="v">۱٬۲۵۰٬۰۰۰ تومان</span><span class="conf h">۹۵٪</span></div>
         <div class="fld"><span class="l">دسته</span><span class="v">کفش › مردانه</span><span class="conf m">۷۲٪</span></div>
@@ -146,7 +151,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 3 sources -->
 <section class="row">
   <div class="txt">
-    <div class="ico o">🌐</div>
+    <div class="ico o"><svg class="i"><use href="#i-globe"/></svg></div>
     <h2>از هر منبع مجاز</h2>
     <p>ووکامرس، شاپیفای، دیجی‌کالا و هر سایتی با داده‌ی ساختاریافته. برای بقیه، انتخابگر بصری فیلد و سرویس رندر برای صفحه‌های جاوااسکریپتی.</p>
   </div>
@@ -161,8 +166,8 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
           <div class="tile"><b>دیجی‌کالا</b><span>محصول و دسته</span></div>
           <div class="tile"><b>JSON-LD</b><span>داده‌ی ساختاریافته</span></div>
         </div>
-        <div class="fld" style="margin-top:6px"><span class="l" style="width:auto">🎯</span><span class="v">انتخابگر بصری فیلد برای سایت‌های دیگر</span></div>
-        <div class="fld"><span class="l" style="width:auto">⚙️</span><span class="v">سرویس رندر اختیاری برای صفحه‌های JS</span></div>
+        <div class="fld" style="margin-top:6px"><span class="l" style="width:auto"><svg class="i"><use href="#i-target"/></svg></span><span class="v">انتخابگر بصری فیلد برای سایت‌های دیگر</span></div>
+        <div class="fld"><span class="l" style="width:auto"><svg class="i"><use href="#i-cog"/></svg></span><span class="v">سرویس رندر اختیاری برای صفحه‌های JS</span></div>
       </div>
     </div>
   </div>
@@ -172,7 +177,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 4 pricing -->
 <section class="row alt">
   <div class="txt">
-    <div class="ico">💰</div>
+    <div class="ico"><svg class="i"><use href="#i-coins"/></svg></div>
     <h2>قیمت‌گذاری هوشمند</h2>
     <p>درصدی، مبلغ ثابت، پله‌ای یا بر اساس دسته؛ پایان جذاب (…۹۰۰)، نرخ ارز زنده و «نگهبان قیمت» که جهش‌های عجیب را برای تأیید شما نگه می‌دارد.</p>
   </div>
@@ -181,13 +186,13 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
     <div class="win">
       <div class="bar"><i></i><i></i><i></i><b>قیمت و زمان‌بندی</b></div>
       <div class="body">
-        <div class="steps"><div class="done">✓ آدرس</div><div class="done">✓ پیش‌نمایش</div><div class="on">۳ · قیمت و زمان</div></div>
+        <div class="steps"><div class="done"><svg class="i"><use href="#i-check"/></svg> آدرس</div><div class="done"><svg class="i"><use href="#i-check"/></svg> پیش‌نمایش</div><div class="on">۳ · قیمت و زمان</div></div>
         <div class="line"><span>قیمت منبع</span><b>۱٬۰۰۰٬۰۰۰</b></div>
         <div class="line"><span>حاشیه‌ی سود</span><b style="color:var(--o2)">+۲۵٪</b></div>
         <div class="line"><span>پایان جذاب</span><span class="tgl"></span></div>
         <div class="line"><span>نرخ ارز زنده</span><span class="tgl"></span></div>
         <div class="line" style="border:0"><span>قیمت فروش</span><b style="font-size:24px;color:var(--ok)">۱٬۲۴۹٬۹۰۰ تومان</b></div>
-        <div class="chip o" style="align-self:flex-start">🛡️ نگهبان قیمت فعال</div>
+        <div class="chip o" style="align-self:flex-start"><svg class="i"><use href="#i-shield"/></svg> نگهبان قیمت فعال</div>
       </div>
     </div>
   </div>
@@ -197,7 +202,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 5 sync -->
 <section class="row">
   <div class="txt">
-    <div class="ico o">🔄</div>
+    <div class="ico o"><svg class="i"><use href="#i-refresh"/></svg></div>
     <h2>همیشه به‌روز، بدون دردسر</h2>
     <p>به‌روزرسانی کامل زمان‌بندی‌شده، تازه‌سازی سریع قیمت و موجودی، ساعات سکوت و مدیریت امن محصولاتی که از منبع حذف شده‌اند. قفل فیلدها ویرایش‌های خودتان را نگه می‌دارد.</p>
   </div>
@@ -210,7 +215,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
         <div class="line"><span>به‌روزرسانی کامل</span><span class="chip">هر شب ۰۳:۰۰</span></div>
         <div class="line"><span>قیمت و موجودی سریع</span><span class="chip">هر ۳۰ دقیقه</span></div>
         <div class="line"><span>ساعات سکوت</span><span class="chip">۰۰:۰۰ – ۰۶:۰۰</span></div>
-        <div class="line" style="border:0"><span>🔒 قفل فیلدها (عنوان، توضیحات)</span><span class="tgl"></span></div>
+        <div class="line" style="border:0"><span><svg class="i"><use href="#i-lock"/></svg> قفل فیلدها (عنوان، توضیحات)</span><span class="tgl"></span></div>
       </div>
     </div>
   </div>
@@ -220,7 +225,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 6 rollback -->
 <section class="row alt">
   <div class="txt">
-    <div class="ico">↩️</div>
+    <div class="ico"><svg class="i"><use href="#i-undo"/></svg></div>
     <h2>هر انتقال، یک‌بار برگشت‌پذیر</h2>
     <p>اگر نتیجه را نپسندیدید، با یک کلیک به حالت قبل برگردید. لاگ ممیزی هم همه‌چیز را ثبت می‌کند.</p>
   </div>
@@ -229,10 +234,10 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
     <div class="win">
       <div class="bar"><i></i><i></i><i></i><b>لاگ ممیزی</b></div>
       <div class="body">
-        <div class="line"><span>✓ انتقال ۴۲ محصول</span><span class="chip ok">موفق</span></div>
-        <div class="line"><span>⚠ ۳ محصول در انتظار تأیید قیمت</span><span class="chip o">نگهبان</span></div>
-        <div class="line"><span>🔄 تازه‌سازی قیمت</span><span class="chip ok">موفق</span></div>
-        <div class="btn g" style="margin-top:10px">↩ بازگردانی این انتقال</div>
+        <div class="line"><span><svg class="i"><use href="#i-check"/></svg> انتقال ۴۲ محصول</span><span class="chip ok">موفق</span></div>
+        <div class="line"><span><svg class="i"><use href="#i-alert"/></svg> ۳ محصول در انتظار تأیید قیمت</span><span class="chip o">نگهبان</span></div>
+        <div class="line"><span><svg class="i"><use href="#i-refresh"/></svg> تازه‌سازی قیمت</span><span class="chip ok">موفق</span></div>
+        <div class="btn g" style="margin-top:10px"><svg class="i"><use href="#i-undo"/></svg> بازگردانی این انتقال</div>
         <div class="input" style="margin-top:6px">$ wp kooch run --id=12</div>
       </div>
     </div>
@@ -243,7 +248,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 7 notify + ai -->
 <section class="row">
   <div class="txt">
-    <div class="ico o">🔔</div>
+    <div class="ico o"><svg class="i"><use href="#i-bell"/></svg></div>
     <h2>اعلان و هوش مصنوعی اختیاری</h2>
     <p>خبر بگیرید با ایمیل، تلگرام، بله و وب‌هوک امضاشده. با کلید Anthropic خودتان، بازنویسی، ترجمه، یکدست‌سازی ویژگی‌ها و پیشنهاد دسته انجام می‌شود.</p>
   </div>
@@ -252,11 +257,11 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
     <div class="win">
       <div class="bar"><i></i><i></i><i></i><b>تنظیمات کوچ</b></div>
       <div class="body">
-        <div class="line"><span>✉️ ایمیل</span><span class="tgl"></span></div>
-        <div class="line"><span>✈️ تلگرام</span><span class="tgl"></span></div>
-        <div class="line"><span>💬 بله</span><span class="tgl"></span></div>
-        <div class="line"><span>🪝 وب‌هوک امضاشده</span><span class="tgl off"></span></div>
-        <div class="chips" style="margin-top:8px"><span class="chip o">✨ بازنویسی</span><span class="chip o">ترجمه</span><span class="chip o">یکدست‌سازی ویژگی‌ها</span><span class="chip o">پیشنهاد دسته</span></div>
+        <div class="line"><span><svg class="i"><use href="#i-mail"/></svg> ایمیل</span><span class="tgl"></span></div>
+        <div class="line"><span><svg class="i"><use href="#i-send"/></svg> تلگرام</span><span class="tgl"></span></div>
+        <div class="line"><span><svg class="i"><use href="#i-chat"/></svg> بله</span><span class="tgl"></span></div>
+        <div class="line"><span><svg class="i"><use href="#i-hook"/></svg> وب‌هوک امضاشده</span><span class="tgl off"></span></div>
+        <div class="chips" style="margin-top:8px"><span class="chip o"><svg class="i"><use href="#i-spark"/></svg> بازنویسی</span><span class="chip o">ترجمه</span><span class="chip o">یکدست‌سازی ویژگی‌ها</span><span class="chip o">پیشنهاد دسته</span></div>
       </div>
     </div>
   </div>
@@ -266,7 +271,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 <!-- 8 persian -->
 <section class="row alt">
   <div class="txt">
-    <div class="ico">🇮🇷</div>
+    <div class="ico"><svg class="i"><use href="#i-lang"/></svg></div>
     <h2>فارسی‌محور از پایه</h2>
     <p>ترجمه‌ی کامل فارسی، راست‌چین، تاریخ جلالی و محافظت در برابر اشتباه ریال و تومان.</p>
   </div>
@@ -279,7 +284,7 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
         <div class="line"><span>تاریخ آخرین همگام‌سازی</span><b>۱۴۰۵/۰۷/۰۷</b></div>
         <div class="line"><span>قیمت منبع</span><b>۱۲٬۵۰۰٬۰۰۰ ریال</b></div>
         <div class="line"><span>تبدیل خودکار</span><b style="color:var(--ok)">۱٬۲۵۰٬۰۰۰ تومان</b></div>
-        <div class="chip ok" style="align-self:flex-start;margin-top:8px">✓ محافظ ریال/تومان فعال</div>
+        <div class="chip ok" style="align-self:flex-start;margin-top:8px"><svg class="i"><use href="#i-check"/></svg> محافظ ریال/تومان فعال</div>
       </div>
     </div>
   </div>
