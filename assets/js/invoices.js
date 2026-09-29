@@ -53,7 +53,7 @@
         el('small', { class: 'muted', text: [x.title, x.project, J.format(x.issue_date)].filter(Boolean).join(' · ') })),
       el('div', { class: 'inv-side' },
         el('strong', { class: 'inv-total', text: money(x.total) }),
-        el('span', { class: 'chip ' + TONE[x.status], text: STATUS[x.status] })),
+        el('span', { class: 'chip ' + TONE[x.status], text: STATUS[x.status] + (x.status === 'paid' && x.pay_gateway ? ' · آنلاین' : '') })),
       el('div', { class: 'inv-actions' },
         el('button', { type: 'button', class: 'icon-btn sm', title: 'دیدن لینک مشتری', 'aria-label': 'دیدن', html: icon('eye'), onclick: function () { window.open(x.url, '_blank', 'noopener'); } }),
         x.archived ? null : el('button', { type: 'button', class: 'icon-btn sm', title: 'ارسال برای مشتری', 'aria-label': 'ارسال', html: icon('send'), onclick: function () { sendDialog(x); } }),
@@ -134,11 +134,40 @@
         el('div', { class: 'grand' }, el('span', { text: 'قابل پرداخت' }), el('b', { text: money(sub - disc + vat) })));
     }
     f.addEventListener('recalc', calc);
-    var proj = MP.projectSelect('project_id', x.project_id || S.projectId || 0);
+    var proj = MP.projectSelect('project_id', x.project_id || (isNew ? 0 : S.projectId) || 0);
+    // Customer: pick one already known, or type a new one right here (saved as a customer on save).
+    var custSel = el('select', { name: 'client_id', class: 'select' }, el('option', { value: '', text: 'در حال بارگذاری مشتری‌ها…' }));
+    var newName = el('input', { name: 'client_name', maxlength: 160, value: x.client_id ? '' : x.client_name || '', placeholder: 'نام مشتری جدید (شخص یا شرکت)' });
+    var newWrap = MP.field('نام مشتری جدید', newName, 'با ذخیره فاکتور، این مشتری ساخته و به پروژه وصل می‌شود.');
+    var customers = [];
+    function custChanged() {
+      var v = custSel.value, c = customers.filter(function (q) { return String(q.id) === v; })[0];
+      newWrap.hidden = v !== 'new'; newName.required = v === 'new';
+      if (v === 'new') { setTimeout(function () { newName.focus(); }, 30); return; }
+      if (!c) return;
+      if (!f.elements.client_phone.value) f.elements.client_phone.value = c.phone || '';
+      if (!f.elements.client_info.value) f.elements.client_info.value = c.info || '';
+      // Its projects come first in the project list; with just one, it is picked.
+      var mine = c.projects.filter(function (id) { return MP.project(id); });
+      Array.prototype.forEach.call(proj.options, function (o) { o.textContent = o.textContent.replace(/^★ /, ''); if (mine.indexOf(+o.value) >= 0) o.textContent = '★ ' + o.textContent; });
+      if (!+proj.value && mine.length === 1) proj.value = mine[0];
+    }
+    custSel.onchange = custChanged;
+    MP.api('customers').then(function (list) {
+      customers = list;
+      custSel.replaceChildren(el('option', { value: '', text: '— انتخاب مشتری —' }),
+        list.map(function (c) { return el('option', { value: c.id, text: c.name + (c.phone ? ' · ' + J.faDigits(c.phone) : '') }); }),
+        el('option', { value: 'new', text: '＋ مشتری جدید…' }));
+      custSel.value = x.client_id ? String(x.client_id) : x.client_name ? 'new' : '';
+      if (!custSel.value) custSel.value = '';
+      custChanged();
+    }).catch(function () { custSel.replaceChildren(el('option', { value: 'new', text: '＋ مشتری جدید…' })); custChanged(); });
+    newWrap.hidden = true;
     f.append(
       el('div', { class: 'row' },
-        MP.field('نام مشتری', el('input', { name: 'client_name', required: true, maxlength: 160, value: x.client_name || '' })),
+        MP.field('مشتری', custSel),
         MP.field('پروژه', proj)),
+      newWrap,
       el('div', { class: 'row' },
         MP.field('تلفن مشتری', el('input', { name: 'client_phone', maxlength: 40, dir: 'ltr', value: x.client_phone || '' })),
         MP.field('عنوان', el('input', { name: 'title', maxlength: 200, value: x.title || '', placeholder: 'مثلاً طراحی و توسعه سایت' }))),
@@ -163,8 +192,9 @@
     (x.items && x.items.length ? x.items : [null]).forEach(addRow);
     f.onsubmit = function (e) {
       e.preventDefault();
+      if (!custSel.value) { MP.toast('مشتری را انتخاب کنید یا «مشتری جدید» را بزنید.', { error: true }); custSel.focus(); return; }
       var v = f.elements, body = {
-        kind: x.kind, client_name: v.client_name.value, project_id: +v.project_id.value, client_phone: v.client_phone.value, title: v.title.value,
+        kind: x.kind, client_id: /^\d+$/.test(custSel.value) ? +custSel.value : 0, client_name: custSel.value === 'new' ? newName.value : '', project_id: +v.project_id.value, client_phone: v.client_phone.value, title: v.title.value,
         client_info: v.client_info.value, items: items(), discount: num(v.discount.value), tax: num(v.tax.value), issue_date: v.issue_date.value,
         due_date: v.due_date ? v.due_date.value : '', pay_url: v.pay_url ? v.pay_url.value.trim() : '', note: v.note.value
       };
@@ -177,6 +207,12 @@
     MP.dialog.open(isNew ? kindName(x) + ' جدید' : kindName(x) + ' ' + x.number, f, { wide: true });
   }
 
+  /** New invoice or pro-forma from anywhere (portal dialog, clients page): {kind, project_id, client_id}. */
+  MP.newInvoice = function (o) {
+    var go = function () { editor({ kind: o.kind || 'invoice', project_id: o.project_id || 0, client_id: o.client_id || 0, client_name: o.client_name || '' }); };
+    if (settings) go(); else MP.api('invoices', { query: { client_id: -1 } }).then(function (d) { settings = d.settings; go(); }).catch(go);
+  };
+
   /* ------------------------------------------------------------ Settings */
 
   function settingsForm() {
@@ -185,6 +221,12 @@
       MP.field('نام فروشنده', el('input', { name: 'seller', maxlength: 160, value: s.seller || '' })),
       MP.field('اطلاعات فروشنده', el('textarea', { name: 'seller_info', rows: 2, maxlength: 1000, placeholder: 'نشانی، تلفن، شناسه ملی، …' }, s.seller_info || '')),
       MP.field('لینک پرداخت پیش‌فرض', el('input', { name: 'pay_url', dir: 'ltr', value: s.pay_url || '', placeholder: 'https://zarinp.al/moraba' }), 'مثلاً لینک پرداخت زرین‌پال/آیدی‌پی؛ روی دکمه «پرداخت» فاکتورها قرار می‌گیرد.'),
+      el('fieldset', { class: 'inv-gw' }, el('legend', { text: 'پرداخت آنلاین' }),
+        el('div', { class: 'row' },
+          MP.field('درگاه', MP.select('gateway', [['', 'خاموش (فقط لینک/کارت)'], ['zibal', 'زیبال'], ['zarinpal', 'زرین‌پال']], s.gateway || '')),
+          MP.field('کد مرچنت', el('input', { name: 'merchant', dir: 'ltr', value: s.merchant || '', placeholder: 'xxxxxxxx-xxxx-…' }))),
+        el('label', { class: 'check' }, el('input', { type: 'checkbox', name: 'sandbox', checked: !!s.sandbox }), el('span', { text: 'حالت آزمایشی (بدون پول واقعی، برای تست درگاه)' })),
+        el('p', { class: 'hint', text: 'روشن باشد، روی هر فاکتور دکمه «پرداخت آنلاین» می‌آید؛ بعد از پرداخت موفق، فاکتور خودکار «پرداخت‌شده» می‌شود، در حسابداری ثبت می‌شود و در گفت‌وگوی مشتری پیام می‌رود. مبلغ‌ها به تومان‌اند و به ریال به درگاه فرستاده می‌شوند.' })),
       el('div', { class: 'row' },
         MP.field('شماره کارت (کارت به کارت)', el('input', { name: 'card', dir: 'ltr', value: s.card || '', placeholder: '6037-…' })),
         MP.field('به نام', el('input', { name: 'card_owner', value: s.card_owner || '' }))),
@@ -195,7 +237,7 @@
     f.onsubmit = function (e) {
       e.preventDefault(); MP.busy(f, true);
       var v = f.elements;
-      MP.api('invoices/settings', { method: 'POST', body: { seller: v.seller.value, seller_info: v.seller_info.value, pay_url: v.pay_url.value.trim(), card: v.card.value, card_owner: v.card_owner.value, tax: num(v.tax.value), footer: v.footer.value } })
+      MP.api('invoices/settings', { method: 'POST', body: { seller: v.seller.value, seller_info: v.seller_info.value, pay_url: v.pay_url.value.trim(), card: v.card.value, card_owner: v.card_owner.value, tax: num(v.tax.value), footer: v.footer.value, gateway: v.gateway.value, merchant: v.merchant.value.trim(), sandbox: v.sandbox.checked } })
         .then(function (n) { settings = n; MP.toast('تنظیمات فاکتور ذخیره شد'); MP.invoices(); }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
     };
     MP.dialog.open('تنظیمات فاکتور', f);

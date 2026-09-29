@@ -68,6 +68,12 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 		<section class="cp-pane" id="pane-invoices" hidden></section>
 		<section class="cp-pane cp-chat" id="pane-chat" hidden>
 			<div class="cp-chat-card">
+				<header class="cp-chat-head">
+					<button type="button" class="icon-btn cp-chat-back" id="cp-chat-back" aria-label="بازگشت"><svg class="icon" aria-hidden="true"><use href="#right"></use></svg></button>
+					<span class="cp-chat-avatar"><img src="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>" alt=""></span>
+					<div class="cp-chat-title"><strong>تیم مربع استودیو</strong><small id="cp-chat-sub">گفت‌وگوی پروژه</small></div>
+					<span class="cp-client-logo sm" id="cp-chat-client"></span>
+				</header>
 				<div id="chat-messages" class="chat-messages cp-messages"></div>
 				<form id="client-form" class="cp-composer">
 					<input name="name" class="cp-name" placeholder="نام شما" maxlength="80" autocomplete="name" hidden>

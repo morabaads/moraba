@@ -113,8 +113,13 @@
     invoices: function () { return 'پیش‌فاکتورها و فاکتورهای این پروژه.'; },
     chat: function () { return 'گفت‌وگو با تیم مربع؛ پاسخ‌ها همین‌جا می‌آید.'; }
   };
+  var prevTab = 'progress';
   function go(k) {
+    if (k === 'chat' && tab !== 'chat') prevTab = tab;
     tab = k; tabs();
+    // Like the team's panel: an open conversation takes the whole screen.
+    document.body.classList.toggle('cp-chat-full', k === 'chat');
+    $('cp-chat-back').hidden = !(data && data.project);
     TABS.forEach(function (t) { $('pane-' + t[0]).hidden = t[0] !== k; });
     $('cp-page-title').textContent = TABS.filter(function (t) { return t[0] === k; })[0][1];
     $('cp-page-sub').textContent = SUB[k]();
@@ -287,6 +292,7 @@
     sending = sending.then(function () { return api('', { body: body, name: myName() }); }).then(function () { row.remove(); return loadChat(true); })
       .catch(function (err) { row.remove(); ta.value = body; toast(err.message || 'ارسال نشد'); });
   };
+  $('cp-chat-back').onclick = function () { go(prevTab === 'chat' ? 'progress' : prevTab); };
   form.elements.message.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
   form.elements.message.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(140, this.scrollHeight) + 'px'; });
 
@@ -305,6 +311,8 @@
       $('cp-project-name').textContent = m.title;
       logoInto($('cp-client-logo'), m.logo, m.client || m.title);
       logoInto($('cp-client-logo-m'), m.logo, m.client || m.title);
+      logoInto($('cp-chat-client'), m.logo, m.client || m.title);
+      $('cp-chat-sub').textContent = m.title + ' · پاسخ همین‌جا می‌آید';
       var hr = new Date().getHours(), first = m.logged_in ? String(m.name).split(' ')[0] : '';
       $('cp-hello').textContent = (hr < 12 ? 'صبح بخیر' : hr < 17 ? 'روز بخیر' : 'عصر بخیر') + (first ? '، ' + first : '');
       $('cp-hello-sub').textContent = (m.client || '') + (m.client && m.title ? ' · ' : '') + m.title;

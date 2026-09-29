@@ -2035,3 +2035,72 @@ html.dark .cp-studio-logo{filter:invert(1) hue-rotate(180deg) brightness(1.1)}
 @media (max-width:760px){#view-clients .page-actions{width:100%;display:flex;gap:8px;min-width:0}.cl-search{flex:1;width:auto;min-width:0}#cl-new{flex-shrink:0;padding-inline:14px}.cl-grid{grid-template-columns:1fr}.cl-kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.cl-actions{flex-wrap:nowrap}.cl-actions .btn{padding-inline:10px}.cl-card{padding:14px}}
 
 .cp-body{padding-top:env(safe-area-inset-top)}
+
+/* Portal dialog (team side) */
+.pt-hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;padding:22px;border-radius:22px;background:linear-gradient(135deg,#1c1d1f,#2a2018);color:#fff;margin-bottom:16px}
+.pt-kicker{color:#f5b26b;font-weight:700;font-size:12px}
+.pt-hero h2{margin:2px 0 10px;font-size:22px;color:#fff}
+.pt-customers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.pt-customers .chip{background:rgba(255,255,255,.1);color:#fff}
+.pt-progress{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.pt-bar{flex:1;height:8px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden}
+.pt-bar i{display:block;height:100%;border-radius:8px;background:var(--brand)}
+.pt-progress b{color:var(--brand);font-size:18px}
+.pt-hero .muted{color:rgba(255,255,255,.6)}
+.pt-hero-side{display:flex;flex-direction:column;gap:12px}
+.pt-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pt-stat{padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.07);display:flex;flex-direction:column}
+.pt-stat b{font-size:14px;white-space:nowrap}.pt-stat small{font-size:11px;color:rgba(255,255,255,.65)}
+.pt-links{display:flex;flex-direction:column;gap:6px}
+.pt-link{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 10px;border-radius:12px;background:rgba(255,255,255,.07)}
+.pt-link>span .icon{width:16px;height:16px;color:#f5b26b}
+.pt-link b{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt-link .icon-btn{color:#fff;background:rgba(255,255,255,.08)}
+.pt-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.pt-actions.two{grid-template-columns:1fr 1fr;margin:0}
+.pt-tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:14px;border-radius:18px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);text-align:start;cursor:pointer;transition:transform var(--t-fast),border-color var(--t-fast),background var(--t-fast)}
+.pt-tile:hover{transform:translateY(-2px);border-color:var(--brand)}
+.pt-tile strong{font-size:14px}.pt-tile small{font-size:11px;color:var(--muted);line-height:1.6}
+.pt-tile-ico{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);margin-bottom:4px}
+.pt-tile-ico .icon{width:19px;height:19px}
+.pt-tile.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.pt-tile.primary small{color:rgba(255,255,255,.85)}.pt-tile.primary .pt-tile-ico{background:rgba(255,255,255,.2);color:#fff}
+.pt-section{margin-bottom:18px}
+.pt-section h3{display:flex;align-items:center;gap:8px;font-size:15px;margin:0 0 10px}
+.pt-section h3>span .icon{width:17px;height:17px;color:var(--brand)}
+.pt-section h3 em{font-style:normal;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--surface-3);color:var(--ink-2)}
+.pt-blank{margin:0;padding:18px;border-radius:16px;border:1.5px dashed var(--line-strong);color:var(--muted);text-align:center;font-size:13px}
+.pt-invoices{display:flex;flex-direction:column;gap:6px}
+.pt-inv{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--surface-2);border:0;color:var(--ink);text-align:start;cursor:pointer}
+.pt-inv:hover{background:var(--surface-3)}
+.pt-inv-copy{flex:1;min-width:0;display:flex;flex-direction:column}
+.pt-inv-copy strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pt-inv-copy small{font-size:11px;color:var(--muted)}
+.pt-inv>b{font-size:13px;white-space:nowrap}
+@media (max-width:760px){.pt-hero{grid-template-columns:1fr;padding:18px}.pt-actions{grid-template-columns:1fr 1fr}.pt-inv{flex-wrap:wrap}.pt-inv-copy{flex-basis:60%}}
+
+/* Clients page: several projects per customer */
+.cl-projs{display:flex;flex-direction:column;gap:8px}
+.cl-proj-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 12px;max-height:240px;overflow:auto;padding:10px;border-radius:14px;background:var(--surface-2)}
+.cl-pick{width:100%;text-align:start;cursor:pointer}
+.inv-gw{border:1.5px solid var(--line-strong);border-radius:16px;padding:12px 14px;margin:0;display:flex;flex-direction:column;gap:10px}
+.inv-gw legend{padding:0 6px;font-weight:800;font-size:13px}
+
+/* Portal: the conversation takes the whole screen (as in the team's panel) */
+.cp-chat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-shrink:0}
+.cp-chat-avatar{width:40px;height:40px;border-radius:12px;background:#111;display:grid;place-items:center;flex-shrink:0}
+.cp-chat-avatar img{width:24px;height:24px}
+.cp-chat-title{flex:1;min-width:0;display:flex;flex-direction:column}
+.cp-chat-title strong{font-size:15px}
+.cp-chat-title small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-chat-head .cp-client-logo.sm{width:36px;height:36px;border-radius:10px}
+body.cp-chat-full .cp-topbar,body.cp-chat-full .cp-top{display:none}
+body.cp-chat-full .cp-main{padding-top:16px}
+body.cp-chat-full .cp-chat-card{height:calc(100dvh - 32px)}
+body.cp-chat-full .ios-install{display:none}
+@media (max-width:900px){
+  body.cp-chat-full{padding:0!important;overflow:hidden}
+  body.cp-chat-full .cp-tabbar{display:none}
+  body.cp-chat-full #pane-chat{position:fixed;inset:0;z-index:60;padding:0!important;background:var(--bg)}
+  body.cp-chat-full .cp-chat-card{height:100dvh;border-radius:0;box-shadow:none;padding-bottom:env(safe-area-inset-bottom)}
+  body.cp-chat-full .cp-chat-head{padding-top:calc(10px + env(safe-area-inset-top))}
+}

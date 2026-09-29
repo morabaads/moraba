@@ -248,7 +248,7 @@ $mp_nav = array(
 		<!-- ================= Clients ================= -->
 		<section class="view" id="view-clients" data-view="clients" hidden aria-label="مشتریان">
 			<div class="page-head">
-				<div><h1>مشتریان</h1><p>گروه‌های مشتری، پروژه هر کدام، افراد، پرتال و آنچه منتظر پاسخ است</p></div>
+				<div><h1>مشتریان</h1><p>هر مشتری با پروژه‌ها، گروه‌های گفت‌وگو، پرتال، فاکتورها و آنچه منتظر پاسخ است</p></div>
 				<div class="page-actions">
 					<label class="search cl-search"><?php echo $mp_i( 'search' ); // phpcs:ignore ?><input type="search" id="cl-q" placeholder="جست‌وجوی مشتری یا پروژه" aria-label="جست‌وجوی مشتری"></label>
 					<button type="button" class="btn btn-primary" id="cl-new"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>مشتری جدید</button>

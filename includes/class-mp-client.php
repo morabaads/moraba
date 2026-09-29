@@ -21,6 +21,10 @@ class MP_Client {
 		$id   = '(?P<id>\d+)';
 		$routes = array(
 			array( 'clients', 'GET', 'index', $auth ),
+			array( 'customers', 'GET', 'customers', $auth ),
+			array( 'customers', 'POST', 'save_customer', $auth ),
+			array( "customers/$id", 'POST', 'save_customer', $auth ),
+			array( "customers/$id", 'DELETE', 'archive_customer', array( 'MP_Rest', 'can_manage' ) ),
 			array( "channels/$id/client", 'GET', 'settings', $auth ),
 			array( "channels/$id/client", 'POST', 'save_settings', $auth ),
 			array( "channels/$id/contacts", 'POST', 'add_contact', $auth ),
@@ -274,62 +278,224 @@ class MP_Client {
 		);
 	}
 
+	/* ------------------------------------------------------------------ Customers */
+
+	public static function customer( $id ) {
+		global $wpdb;
+		return $id ? $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'clients' ) . ' WHERE id = %d AND archived_at IS NULL', (int) $id ) ) : null;
+	}
+
+	/** Project ids of a customer. */
+	public static function customer_projects( $id ) {
+		global $wpdb;
+		return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT project_id FROM ' . self::t( 'client_projects' ) . ' WHERE client_id = %d', (int) $id ) ) );
+	}
+
 	/**
-	 * GET clients — the «مشتریان» page: every client group the user can see, with its project,
-	 * people, last message, what waits on the client and (for managers) unpaid invoices.
+	 * The customer to use: the given id, else the one with this name, else a new one. The project
+	 * (if any) is added to the customer's projects. Returns the id (0 without a name).
+	 */
+	public static function customer_id( $name, $id = 0, $project_id = 0, $phone = '', $info = '' ) {
+		global $wpdb;
+		$c = self::customer( $id );
+		if ( ! $c ) {
+			$name = MP_Util::text( $name, 160 );
+			if ( '' === $name ) {
+				return 0;
+			}
+			$c = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'clients' ) . ' WHERE name = %s AND archived_at IS NULL ORDER BY id LIMIT 1', $name ) );
+			if ( ! $c ) {
+				$wpdb->insert( self::t( 'clients' ), array( 'name' => $name, 'phone' => MP_Util::text( $phone, 40 ), 'info' => MP_Util::long_text( $info, 1000 ), 'created_by' => get_current_user_id(), 'created_at' => MP_Util::now() ) );
+				$c = self::customer( (int) $wpdb->insert_id );
+			} elseif ( '' === $c->phone && '' !== trim( (string) $phone ) ) {
+				$wpdb->update( self::t( 'clients' ), array( 'phone' => MP_Util::text( $phone, 40 ) ), array( 'id' => $c->id ) );
+			}
+		}
+		if ( $c && $project_id ) {
+			$wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO ' . self::t( 'client_projects' ) . ' (client_id, project_id) VALUES (%d, %d)', $c->id, (int) $project_id ) ); // phpcs:ignore
+		}
+		return $c ? (int) $c->id : 0;
+	}
+
+	/** Once: customers from the names already used on client groups and invoices. */
+	public static function migrate_customers() {
+		global $wpdb;
+		foreach ( $wpdb->get_results( 'SELECT id, client_name, project_id FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND client_id = 0 AND client_name <> ''" ) as $ch ) {
+			$wpdb->update( self::t( 'channels' ), array( 'client_id' => self::customer_id( $ch->client_name, 0, (int) $ch->project_id ) ), array( 'id' => $ch->id ) );
+		}
+		foreach ( $wpdb->get_results( 'SELECT id, client_name, client_phone, client_info, project_id FROM ' . self::t( 'invoices' ) . " WHERE client_id = 0 AND client_name <> ''" ) as $x ) {
+			$wpdb->update( self::t( 'invoices' ), array( 'client_id' => self::customer_id( $x->client_name, 0, (int) $x->project_id, $x->client_phone, (string) $x->client_info ) ), array( 'id' => $x->id ) );
+		}
+	}
+
+	private static function customer_payload( $c ) {
+		return array(
+			'id'       => (int) $c->id,
+			'name'     => $c->name,
+			'phone'    => $c->phone,
+			'info'     => (string) $c->info,
+			'projects' => self::customer_projects( $c->id ),
+		);
+	}
+
+	/** GET customers — for pickers (invoice editor, new client group). */
+	public static function customers() {
+		global $wpdb;
+		return array_map( array( __CLASS__, 'customer_payload' ), $wpdb->get_results( 'SELECT * FROM ' . self::t( 'clients' ) . ' WHERE archived_at IS NULL ORDER BY name' ) );
+	}
+
+	/** POST customers[/id] {name, phone, info, project_ids[]} */
+	public static function save_customer( WP_REST_Request $r ) {
+		global $wpdb;
+		$id   = (int) $r['id'];
+		$name = MP_Util::text( $r['name'], 160 );
+		if ( '' === $name ) {
+			return self::err( 'نام مشتری را وارد کنید.' );
+		}
+		if ( $id && ! self::customer( $id ) ) {
+			return self::err( 'مشتری پیدا نشد.', 404 );
+		}
+		$row = array( 'name' => $name, 'phone' => MP_Util::text( $r['phone'], 40 ), 'info' => MP_Util::long_text( $r['info'], 1000 ) );
+		if ( $id ) {
+			$wpdb->update( self::t( 'clients' ), $row, array( 'id' => $id ) );
+			// Its client groups keep showing the same name.
+			$wpdb->update( self::t( 'channels' ), array( 'client_name' => MP_Util::text( $name, 120 ) ), array( 'client_id' => $id ) );
+		} else {
+			$wpdb->insert( self::t( 'clients' ), $row + array( 'created_by' => get_current_user_id(), 'created_at' => MP_Util::now() ) );
+			$id = (int) $wpdb->insert_id;
+		}
+		if ( is_array( $r['project_ids'] ) ) {
+			$keep = array();
+			foreach ( $r['project_ids'] as $pid ) {
+				$pid = (int) $pid;
+				if ( $pid && MP_Util::can_see_project( $pid ) ) {
+					$keep[] = $pid;
+				}
+			}
+			// Only projects this user can see are touched; others stay as they were.
+			foreach ( self::customer_projects( $id ) as $pid ) {
+				if ( ! in_array( $pid, $keep, true ) && MP_Util::can_see_project( $pid ) ) {
+					$wpdb->delete( self::t( 'client_projects' ), array( 'client_id' => $id, 'project_id' => $pid ) );
+				}
+			}
+			foreach ( $keep as $pid ) {
+				self::customer_id( '', $id, $pid );
+			}
+		}
+		MP_Audit::log( $r['id'] ? 'update' : 'create', 'client', $id, $name );
+		return self::customer_payload( self::customer( $id ) );
+	}
+
+	/** DELETE customers/{id} — archive (groups and invoices stay). */
+	public static function archive_customer( WP_REST_Request $r ) {
+		global $wpdb;
+		$c = self::customer( (int) $r['id'] );
+		if ( ! $c ) {
+			return self::err( 'مشتری پیدا نشد.', 404 );
+		}
+		$wpdb->update( self::t( 'clients' ), array( 'archived_at' => MP_Util::now() ), array( 'id' => $c->id ) );
+		MP_Audit::log( 'archive', 'client', $c->id, $c->name );
+		return array( 'archived' => true );
+	}
+
+	/** One client group for the «مشتریان» page. */
+	private static function group_summary( $ch, $uid ) {
+		global $wpdb;
+		$last   = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $ch->id ) );
+		$read   = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT last_id FROM ' . self::t( 'reads' ) . ' WHERE channel_id = %d AND user_id = %d', $ch->id, $uid ) );
+		$unread = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'messages' ) . " WHERE channel_id = %d AND id > %d AND user_id = 0 AND kind = '' AND deleted_at IS NULL", $ch->id, $read ) );
+		$lu     = $last && $last->user_id ? get_userdata( $last->user_id ) : null;
+		return array(
+			'id'         => (int) $ch->id,
+			'title'      => $ch->title,
+			'client'     => $ch->client_name,
+			'project_id' => (int) $ch->project_id,
+			'logo'       => self::logo_url( $ch ),
+			'url'        => self::url( $ch->token ),
+			'token'      => $ch->token,
+			'auth'       => ! empty( $ch->auth_required ),
+			'contacts'   => self::contacts( $ch->id ),
+			'unread'     => $unread,
+			'waiting'    => (bool) ( $last && ! $last->user_id && '' === (string) $last->kind ), // last word is the client's
+			'last'       => $last ? array(
+				'body'   => $last->body ? wp_trim_words( $last->body, 16 ) : ( $last->file_id ? '📎 فایل' : '' ),
+				'author' => $lu ? $lu->display_name : ( '' !== (string) $last->kind ? 'مربع استودیو' : ( $last->guest_name ? $last->guest_name : $ch->client_name ) ),
+				'client' => ! $last->user_id && '' === (string) $last->kind,
+				'at'     => $last->created_at,
+			) : null,
+		);
+	}
+
+	public static function project_summary( $pid ) {
+		global $wpdb;
+		$p = $wpdb->get_row( $wpdb->prepare( 'SELECT id, name, status, end_date FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $pid ) );
+		if ( ! $p ) {
+			return null;
+		}
+		$c = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) total, SUM(status = 'done') done FROM " . self::t( 'tasks' ) . ' WHERE project_id = %d AND archived_at IS NULL', $pid ) );
+		return array(
+			'id'       => (int) $p->id,
+			'name'     => $p->name,
+			'status'   => $p->status,
+			'end'      => $p->end_date,
+			'progress' => $c && $c->total ? (int) round( $c->done / $c->total * 100 ) : ( 'done' === $p->status ? 100 : 0 ),
+			'designs'  => (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'client_items' ) . " WHERE project_id = %d AND kind = 'design' AND status = 'pending' AND archived_at IS NULL", $pid ) ),
+			'changes'  => (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'client_items' ) . " WHERE project_id = %d AND kind = 'design' AND status = 'changes' AND archived_at IS NULL", $pid ) ),
+		);
+	}
+
+	/**
+	 * GET clients — the «مشتریان» page: every customer with their projects (progress, designs waiting),
+	 * client groups (people, last message, replies waiting) and, for managers, unpaid invoices.
 	 */
 	public static function index( WP_REST_Request $r ) {
 		global $wpdb;
+		self::migrate_customers(); // groups made before customers existed
 		$uid     = get_current_user_id();
 		$manager = MP_Util::is_manager();
-		$out     = array();
-		$rows    = $wpdb->get_results( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND archived_at IS NULL ORDER BY id DESC" );
-		foreach ( $rows as $ch ) {
-			if ( ! MP_Rest::can_read_channel( $ch->id ) ) {
-				continue;
+		$groups  = array();
+		foreach ( $wpdb->get_results( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND archived_at IS NULL ORDER BY id DESC" ) as $ch ) {
+			if ( MP_Rest::can_read_channel( $ch->id ) ) {
+				$groups[ (int) $ch->client_id ][] = self::group_summary( $ch, $uid );
 			}
-			$pid  = (int) $ch->project_id;
-			$p    = $pid ? $wpdb->get_row( $wpdb->prepare( 'SELECT id, name, status, end_date FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $pid ) ) : null;
-			$prog = 0;
-			if ( $p ) {
-				$c    = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) total, SUM(status = 'done') done FROM " . self::t( 'tasks' ) . ' WHERE project_id = %d AND archived_at IS NULL', $pid ) );
-				$prog = $c && $c->total ? (int) round( $c->done / $c->total * 100 ) : ( 'done' === $p->status ? 100 : 0 );
+		}
+		$out = array();
+		foreach ( $wpdb->get_results( 'SELECT * FROM ' . self::t( 'clients' ) . ' WHERE archived_at IS NULL ORDER BY id DESC' ) as $c ) {
+			$projects = array();
+			foreach ( self::customer_projects( $c->id ) as $pid ) {
+				if ( MP_Util::can_see_project( $pid ) ) {
+					$ps = self::project_summary( $pid );
+					if ( $ps ) {
+						$projects[] = $ps;
+					}
+				}
 			}
-			$last   = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 1', $ch->id ) );
-			$read   = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT last_id FROM ' . self::t( 'reads' ) . ' WHERE channel_id = %d AND user_id = %d', $ch->id, $uid ) );
-			$unread = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'messages' ) . " WHERE channel_id = %d AND id > %d AND user_id = 0 AND kind = '' AND deleted_at IS NULL", $ch->id, $read ) );
+			$mine = isset( $groups[ (int) $c->id ] ) ? $groups[ (int) $c->id ] : array();
+			if ( ! $manager && ! $mine && ! $projects ) {
+				continue; // someone else's customer
+			}
 			$unpaid = 0;
 			$due    = 0;
-			if ( $manager && $pid ) {
-				foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'invoices' ) . " WHERE project_id = %d AND kind = 'invoice' AND status = 'sent' AND archived_at IS NULL", $pid ) ) as $x ) {
+			if ( $manager ) {
+				foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'invoices' ) . " WHERE client_id = %d AND kind = 'invoice' AND status = 'sent' AND archived_at IS NULL", $c->id ) ) as $x ) {
 					++$unpaid;
 					$due += MP_Invoices::payload( $x )['total'];
 				}
 			}
-			$lu    = $last && $last->user_id ? get_userdata( $last->user_id ) : null;
-			$out[] = array(
-				'id'           => (int) $ch->id,
-				'title'        => $ch->title,
-				'client'       => $ch->client_name,
-				'logo'         => self::logo_url( $ch ),
-				'url'          => self::url( $ch->token ),
-				'token'        => $ch->token,
-				'auth'         => ! empty( $ch->auth_required ),
-				'project'      => $p ? array( 'id' => (int) $p->id, 'name' => $p->name, 'status' => $p->status, 'end' => $p->end_date, 'progress' => $prog ) : null,
-				'contacts'     => self::contacts( $ch->id ),
-				'unread'       => $unread,
-				'waiting'      => (bool) ( $last && ! $last->user_id && '' === (string) $last->kind ), // last word is the client's
-				'last'         => $last ? array(
-					'body'   => $last->body ? wp_trim_words( $last->body, 16 ) : ( $last->file_id ? '📎 فایل' : '' ),
-					'author' => $lu ? $lu->display_name : ( '' !== (string) $last->kind ? 'مربع استودیو' : ( $last->guest_name ? $last->guest_name : $ch->client_name ) ),
-					'client' => ! $last->user_id && '' === (string) $last->kind,
-					'at'     => $last->created_at,
-				) : null,
-				'designs'      => $pid ? (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'client_items' ) . " WHERE project_id = %d AND kind = 'design' AND status = 'pending' AND archived_at IS NULL", $pid ) ) : 0,
-				'changes'      => $pid ? (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'client_items' ) . " WHERE project_id = %d AND kind = 'design' AND status = 'changes' AND archived_at IS NULL", $pid ) ) : 0,
+			$logo = '';
+			foreach ( $mine as $g ) {
+				if ( $g['logo'] ) {
+					$logo = $g['logo'];
+					break;
+				}
+			}
+			$out[] = self::customer_payload( $c ) + array(
+				'logo'         => $logo,
+				'project_list' => $projects,
+				'groups'       => $mine,
 				'unpaid'       => $unpaid,
 				'due'          => $due,
-				'created_at'   => $ch->created_at,
+				'created_at'   => $c->created_at,
 			);
 		}
 		return array( 'clients' => $out, 'manager' => $manager );
@@ -371,6 +537,9 @@ class MP_Client {
 				return self::err( 'به این پروژه دسترسی ندارید.', 403 );
 			}
 			$f['project_id'] = $pid;
+			if ( $pid && $ch->client_id ) {
+				self::customer_id( '', (int) $ch->client_id, $pid );
+			}
 		}
 		if ( null !== $r['title'] && '' !== trim( (string) $r['title'] ) ) {
 			$f['title'] = MP_Util::text( $r['title'], 160 );

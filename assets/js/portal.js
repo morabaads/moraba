@@ -5,44 +5,86 @@
   var ST = { pending: 'در انتظار نظر مشتری', approved: 'تأیید شد', changes: 'نیاز به تغییر', delivered: 'تحویل شد', superseded: 'نسخه قبلی' };
   var TONE = { pending: 'brand', approved: 'ok', changes: 'danger', delivered: 'info', superseded: '' };
 
+  var IST = { draft: 'پیش‌نویس', sent: 'ارسال‌شده', accepted: 'تأیید مشتری', paid: 'پرداخت‌شده', cancelled: 'لغوشده' };
+  var ITONE = { draft: '', sent: 'info', accepted: 'brand', paid: 'ok', cancelled: 'danger' };
+  function money(n) { return J.faDigits(Number(n || 0).toLocaleString('en-US')) + ' تومان'; }
+  function copy(url) { (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { MP.toast('لینک پرتال کپی شد'); }, function () { prompt('لینک پرتال', url); }); }
+
   MP.portal = function (pid) {
     var p = MP.project(+pid);
     if (!p) { MP.toast('پروژه پیدا نشد.', { error: true }); return; }
     var body = MP.dialog.open('پرتال مشتری · ' + p.name, MP.skeleton(3), { wide: true, focus: false });
-    MP.api('portal/items', { query: { project_id: p.id } }).then(function (d) {
+    var inv = S.manager ? MP.api('invoices', { query: { project_id: p.id } }).then(function (d) { return d.items; }, function () { return []; }) : Promise.resolve(null);
+    Promise.all([MP.api('portal/items', { query: { project_id: p.id } }), inv]).then(function (res) {
       if (!MP.dialog.isOpen()) return;
-      var links = d.links.length ? el('div', { class: 'portal-links' }, d.links.map(function (l) {
-        return el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('send') + 'کپی لینک پرتال «' + l.title + '»', onclick: function () {
-          (navigator.clipboard ? navigator.clipboard.writeText(l.url) : Promise.reject()).then(function () { MP.toast('لینک پرتال کپی شد'); }, function () { prompt('لینک پرتال', l.url); });
-        } });
-      })) : el('p', { class: 'hint', text: 'این پروژه هنوز گروه مشتری ندارد. از «پیام‌ها ← گروه مشتری» با همین پروژه بسازید؛ لینک همان گروه، پرتال مشتری است (پیشرفت، طرح‌ها، فایل‌ها، فاکتورها و گفت‌وگو).' });
+      var d = res[0], invoices = res[1], sum = d.project || { progress: 0 };
       var designs = d.items.filter(function (x) { return x.kind === 'design' && x.status !== 'superseded'; });
       var files = d.items.filter(function (x) { return x.kind === 'file'; });
       var older = d.items.filter(function (x) { return x.status === 'superseded'; });
-      body.replaceChildren(
-        links,
-        el('div', { class: 'portal-actions' },
-          el('button', { type: 'button', class: 'btn btn-primary', html: icon('eye') + 'طرح برای تأیید مشتری', onclick: function () { uploadForm(p, 'design'); } }),
-          el('button', { type: 'button', class: 'btn btn-secondary', html: icon('download') + 'فایل تحویلی', onclick: function () { uploadForm(p, 'file'); } })),
-        el('h3', { class: 'tio-sub', text: 'طرح‌ها' }),
-        designs.length ? el('div', { class: 'portal-grid' }, designs.map(function (x) {
+      var cust = d.customers[0] || null;
+      var waiting = designs.filter(function (x) { return x.status === 'pending'; }).length;
+      var unpaid = (invoices || []).filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; });
+
+      // Hero: project, its customers, progress and the portal links.
+      var hero = el('section', { class: 'pt-hero' },
+        el('div', { class: 'pt-hero-main' },
+          el('small', { class: 'pt-kicker', text: 'پرتال مشتری' }),
+          el('h2', { text: p.name }),
+          el('div', { class: 'pt-customers' }, d.customers.length ? d.customers.map(function (c) { return el('span', { class: 'chip dark', html: icon('user') + '' }, c.name); })
+            : el('span', { class: 'chip', text: 'مشتری‌ای به این پروژه وصل نیست' })),
+          el('div', { class: 'pt-progress' }, el('div', { class: 'pt-bar' }, el('i', { style: { width: sum.progress + '%' } })), el('b', { text: fa(sum.progress) + '٪' })),
+          sum.end ? el('small', { class: 'muted', text: 'تحویل ' + J.formatLong(sum.end) }) : null),
+        el('div', { class: 'pt-hero-side' },
+          el('div', { class: 'pt-stats' },
+            stat(fa(waiting), 'منتظر نظر مشتری'), stat(fa(designs.filter(function (x) { return x.status === 'approved'; }).length), 'طرح تأییدشده'), stat(fa(files.length), 'فایل تحویلی'),
+            invoices ? stat(unpaid.length ? money(unpaid.reduce(function (a, x) { return a + x.total; }, 0)) : '—', 'مانده فاکتورها') : null),
+          d.links.length ? el('div', { class: 'pt-links' }, d.links.map(function (l) {
+            return el('div', { class: 'pt-link' }, el('span', { html: icon('chat') }), el('b', { text: l.title }),
+              el('button', { type: 'button', class: 'icon-btn sm', title: 'کپی لینک', 'aria-label': 'کپی لینک', html: icon('clip'), onclick: function () { copy(l.url); } }),
+              el('a', { class: 'icon-btn sm', href: l.url, target: '_blank', rel: 'noopener', title: 'باز کردن پرتال', 'aria-label': 'باز کردن پرتال', html: icon('eye') }));
+          })) : el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('plus') + 'ساخت گروه و لینک پرتال', onclick: function () { MP.dialog.close(); MP.newClientGroup({ project_id: p.id, client_id: cust ? cust.id : 0 }); } })));
+
+      // What the team sends to the client from here.
+      var tiles = el('section', { class: 'pt-actions' },
+        tile('eye', 'طرح برای تأیید', 'مشتری روی طرح نظر می‌دهد و تأیید می‌کند', 'primary', function () { uploadForm(p, 'design'); }),
+        tile('download', 'فایل تحویلی', 'فایل نهایی برای دانلود مشتری', '', function () { uploadForm(p, 'file'); }),
+        S.manager ? tile('file', 'پیش‌فاکتور', 'برای تأیید مشتری' + (cust ? ' · ' + cust.name : ''), '', function () { MP.newInvoice({ kind: 'proforma', project_id: p.id, client_id: cust ? cust.id : 0 }); }) : null,
+        S.manager ? tile('wallet', 'فاکتور', 'با لینک و پرداخت آنلاین' + (cust ? ' · ' + cust.name : ''), '', function () { MP.newInvoice({ kind: 'invoice', project_id: p.id, client_id: cust ? cust.id : 0 }); }) : null);
+
+      var parts = [hero, tiles,
+        section('eye', 'طرح‌ها', designs.length, designs.length ? el('div', { class: 'portal-grid' }, designs.map(function (x) {
           var open = x.pins.filter(function (q) { return !q.parent_id && !q.resolved; }).length;
           return el('button', { type: 'button', class: 'card portal-design', onclick: function () { review(p, x); } },
             el('img', { src: x.file.url, alt: x.title, loading: 'lazy' }),
             el('div', { class: 'pd-copy' }, el('strong', { text: x.title + (x.version > 1 ? ' · نسخه ' + fa(x.version) : '') }), el('span', { class: 'chip ' + TONE[x.status], text: ST[x.status] }), open ? el('small', { text: fa(open) + ' نظر باز' }) : null));
-        })) : el('p', { class: 'muted', text: 'طرحی ارسال نشده است.' }),
-        el('h3', { class: 'tio-sub', text: 'فایل‌های تحویلی' }),
-        files.length ? el('div', { class: 'tio-history' }, files.map(function (x) {
+        })) : blank('هنوز طرحی برای مشتری نفرستاده‌اید.')),
+        section('download', 'فایل‌های تحویلی', files.length, files.length ? el('div', { class: 'tio-history' }, files.map(function (x) {
           return el('article', { class: 'tpl-card' }, el('div', { class: 'tpl-ico', html: icon('file') }),
             el('div', { class: 'tpl-copy' }, el('strong', { text: x.title }), el('small', { text: J.format(x.created_at.slice(0, 10)) + (x.note ? ' · ' + x.note : '') })),
             el('div', { class: 'tpl-actions' }, MP.fileChip(x.file), archiveBtn(p, x)));
-        })) : el('p', { class: 'muted', text: 'فایلی تحویل نشده است.' }),
-        older.length ? el('details', { class: 'td-desc-more' }, el('summary', { text: 'نسخه‌های قبلی (' + fa(older.length) + ')' }), el('div', { class: 'tio-history' }, older.map(function (x) {
-          return el('article', { class: 'tpl-card' }, el('div', { class: 'tpl-copy' }, el('strong', { text: x.title + ' · نسخه ' + fa(x.version) }), el('small', { text: (x.decided_by ? x.decided_by + ': ' : '') + (x.decision_note || '') })),
-            el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'دیدن نظرها', onclick: function () { review(p, x); } }));
-        }))) : null);
+        })) : blank('فایلی تحویل نشده است.'))];
+      if (invoices) parts.push(section('wallet', 'فاکتورها و پیش‌فاکتورها', invoices.length, invoices.length ? el('div', { class: 'pt-invoices' }, invoices.map(function (x) {
+        return el('button', { type: 'button', class: 'pt-inv', onclick: function () { MP.invoices(x.id); } },
+          el('span', { class: 'chip ' + (x.kind === 'proforma' ? 'info' : 'brand'), text: x.kind === 'proforma' ? 'پیش‌فاکتور' : 'فاکتور' }),
+          el('div', { class: 'pt-inv-copy' }, el('strong', { text: x.number + (x.title ? ' — ' + x.title : '') }), el('small', { text: x.client_name + ' · ' + J.format(x.issue_date) })),
+          el('b', { text: money(x.total) }),
+          el('span', { class: 'chip ' + ITONE[x.status], text: IST[x.status] + (x.status === 'paid' && x.pay_gateway ? ' · آنلاین' : '') }));
+      })) : blank('برای این پروژه هنوز فاکتوری صادر نشده.')));
+      if (older.length) parts.push(el('details', { class: 'td-desc-more' }, el('summary', { text: 'نسخه‌های قبلی طرح‌ها (' + fa(older.length) + ')' }), el('div', { class: 'tio-history' }, older.map(function (x) {
+        return el('article', { class: 'tpl-card' }, el('div', { class: 'tpl-copy' }, el('strong', { text: x.title + ' · نسخه ' + fa(x.version) }), el('small', { text: (x.decided_by ? x.decided_by + ': ' : '') + (x.decision_note || '') })),
+          el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'دیدن نظرها', onclick: function () { review(p, x); } }));
+      }))));
+      body.replaceChildren.apply(body, parts);
     }).catch(MP.soft);
   };
+  function stat(v, label) { return el('div', { class: 'pt-stat' }, el('b', { text: v }), el('small', { text: label })); }
+  function tile(ic, title, sub, tone, fn) {
+    return el('button', { type: 'button', class: 'pt-tile' + (tone ? ' ' + tone : ''), onclick: fn }, el('span', { class: 'pt-tile-ico', html: icon(ic) }), el('strong', { text: title }), el('small', { text: sub }));
+  }
+  function section(ic, title, n, content) {
+    return el('section', { class: 'pt-section' }, el('h3', null, el('span', { html: icon(ic) }), title, n ? el('em', { text: fa(n) }) : null), content);
+  }
+  function blank(t) { return el('p', { class: 'pt-blank', text: t }); }
 
   function archiveBtn(p, x) {
     return el('button', { type: 'button', class: 'icon-btn sm', title: 'آرشیو', 'aria-label': 'آرشیو', html: icon('folder'), onclick: function (e) {

@@ -34,6 +34,7 @@ class MP_Install {
 			self::add_roles();
 			MP_Templates::seed();
 			MP_Costs::migrate();
+			MP_Client::migrate_customers();
 			// $wp_rewrite does not exist yet on plugins_loaded; flush on init instead.
 			update_option( 'mp_flush_rewrite', 1 );
 			update_option( 'mp_db_version', MP_DB_VERSION );
@@ -211,9 +212,31 @@ class MP_Install {
 			archived_at datetime DEFAULT NULL,
 			logo_file_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			auth_required tinyint(1) NOT NULL DEFAULT 0,
+			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
-			KEY token (token)
+			KEY token (token),
+			KEY client_id (client_id)
+		) $c;";
+
+		// Customers: one record per client company/person, linked to any number of projects.
+		$t[] = 'CREATE TABLE ' . self::table( 'clients' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			name varchar(160) NOT NULL DEFAULT '',
+			phone varchar(40) NOT NULL DEFAULT '',
+			info text NULL,
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			archived_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY name (name)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'client_projects' ) . " (
+			client_id bigint(20) unsigned NOT NULL,
+			project_id bigint(20) unsigned NOT NULL,
+			PRIMARY KEY  (client_id,project_id),
+			KEY project_id (project_id)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'client_contacts' ) . " (
@@ -240,6 +263,7 @@ class MP_Install {
 			number varchar(30) NOT NULL DEFAULT '',
 			title varchar(200) NOT NULL DEFAULT '',
 			project_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			client_name varchar(160) NOT NULL DEFAULT '',
 			client_phone varchar(40) NOT NULL DEFAULT '',
 			client_info text NULL,
@@ -251,6 +275,9 @@ class MP_Install {
 			due_date date DEFAULT NULL,
 			note text NULL,
 			pay_url varchar(500) NOT NULL DEFAULT '',
+			pay_gateway varchar(12) NOT NULL DEFAULT '',
+			pay_track varchar(80) NOT NULL DEFAULT '',
+			pay_ref varchar(80) NOT NULL DEFAULT '',
 			token varchar(40) NOT NULL DEFAULT '',
 			ledger_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			paid_at datetime DEFAULT NULL,

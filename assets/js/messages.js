@@ -605,17 +605,36 @@
   }
   var ng = $('#new-team-group'); if (ng) ng.onclick = function () { groupForm(null); };
   $('#new-dm').onclick = newDirect;
-  MP.newClientGroup = function () { MP.showView('messages'); newClientGroup(); };
+  MP.newClientGroup = function (o) { MP.showView('messages'); newClientGroup(o); };
   $('#new-client-group').onclick = function () { newClientGroup(); };
-  function newClientGroup() {
+  function newClientGroup(o) {
+    o = o || {};
+    var cust = el('select', { name: 'client_id' }, el('option', { value: 'new', text: '＋ مشتری جدید…' }));
+    var name = el('input', { name: 'client', maxlength: 120, placeholder: 'نام مشتری (شخص یا شرکت)' });
+    var nameWrap = MP.field('نام مشتری جدید', name);
+    var proj = MP.projectSelect('project_id', o.project_id || S.projectId);
+    var list = [];
+    cust.onchange = function () {
+      nameWrap.hidden = cust.value !== 'new'; name.required = cust.value === 'new';
+      var c = list.filter(function (q) { return String(q.id) === cust.value; })[0];
+      if (c && !+proj.value && c.projects.length === 1) proj.value = c.projects[0];
+    };
+    MP.api('customers').then(function (l) {
+      list = l;
+      l.forEach(function (c) { cust.insertBefore(el('option', { value: c.id, text: c.name }), cust.lastChild); });
+      if (o.client_id) cust.value = String(o.client_id);
+      cust.onchange();
+    }).catch(function () { cust.onchange(); });
     var f = el('form', { class: 'form' },
-      MP.field('نام گروه', el('input', { name: 'title', required: true, maxlength: 160, placeholder: 'مثلاً پشتیبانی وبسایت زیوا' })),
-      MP.field('نام مشتری', el('input', { name: 'client', required: true, maxlength: 120 })),
-      MP.field('پروژه', MP.projectSelect('project_id', S.projectId), 'اعضای پروژه پیام‌های مشتری را می‌بینند و اعلان می‌گیرند.'),
+      MP.field('مشتری', cust, 'یک مشتری می‌تواند چند پروژه و چند گروه داشته باشد.'),
+      nameWrap,
+      MP.field('پروژه', proj, 'پرتال همین پروژه را نشان می‌دهد و اعضای آن پیام‌های مشتری را می‌گیرند.'),
+      MP.field('نام گروه', el('input', { name: 'title', maxlength: 160, placeholder: 'خالی بماند، نام مشتری گذاشته می‌شود' })),
       MP.actions('ساخت و دریافت لینک'));
+    cust.onchange();
     f.onsubmit = function (e) {
       e.preventDefault(); MP.busy(f, true);
-      MP.api('channels', { method: 'POST', body: { type: 'client', title: f.elements.title.value, client_name: f.elements.client.value, project_id: +f.elements.project_id.value } })
+      MP.api('channels', { method: 'POST', body: { type: 'client', title: f.elements.title.value, client_id: cust.value === 'new' ? 0 : +cust.value, client_name: name.value, project_id: +proj.value } })
         .then(function (c) { S.channels.push(c); select(c.id); shareLink(c); }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
     };
     MP.dialog.open('گروه اختصاصی مشتری', f);

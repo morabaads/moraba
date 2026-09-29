@@ -48,7 +48,7 @@ class MP_Invoices {
 		$s = get_option( self::SETTINGS, array() );
 		return wp_parse_args(
 			is_array( $s ) ? $s : array(),
-			array( 'seller' => 'مربع استودیو', 'seller_info' => '', 'pay_url' => '', 'card' => '', 'card_owner' => '', 'tax' => 0, 'footer' => 'با سپاس از اعتماد شما' )
+			array( 'seller' => 'مربع استودیو', 'seller_info' => '', 'pay_url' => '', 'card' => '', 'card_owner' => '', 'tax' => 0, 'footer' => 'با سپاس از اعتماد شما', 'gateway' => '', 'merchant' => '', 'sandbox' => false )
 		);
 	}
 
@@ -88,6 +88,7 @@ class MP_Invoices {
 			'title'        => $x->title,
 			'project_id'   => (int) $x->project_id,
 			'project'      => (string) $p,
+			'client_id'    => (int) $x->client_id,
 			'client_name'  => $x->client_name,
 			'client_phone' => $x->client_phone,
 			'client_info'  => (string) $x->client_info,
@@ -105,6 +106,8 @@ class MP_Invoices {
 			'url'          => self::url( $x->token ),
 			'ledger_id'    => (int) $x->ledger_id,
 			'paid_at'      => $x->paid_at,
+			'pay_gateway'  => (string) $x->pay_gateway,
+			'pay_ref'      => (string) $x->pay_ref,
 			'archived'     => ! empty( $x->archived_at ),
 			'channels'     => self::client_channels( (int) $x->project_id ),
 		);
@@ -135,6 +138,9 @@ class MP_Invoices {
 		if ( (int) $r['project_id'] ) {
 			$where[] = $wpdb->prepare( 'project_id = %d', (int) $r['project_id'] );
 		}
+		if ( (int) $r['client_id'] ) {
+			$where[] = $wpdb->prepare( 'client_id = %d', (int) $r['client_id'] );
+		}
 		$rows = $wpdb->get_results( 'SELECT * FROM ' . self::t() . ' WHERE ' . implode( ' AND ', $where ) . ' ORDER BY id DESC LIMIT 500' ); // phpcs:ignore
 		return array( 'items' => array_map( array( __CLASS__, 'payload' ), $rows ), 'settings' => self::settings() );
 	}
@@ -155,9 +161,10 @@ class MP_Invoices {
 		if ( $id && ! $old ) {
 			return self::err( 'فاکتور پیدا نشد.', 404 );
 		}
-		$client = MP_Util::text( $r['client_name'], 160 );
+		$cust   = (int) $r['client_id'] ? MP_Client::customer( (int) $r['client_id'] ) : null;
+		$client = $cust ? $cust->name : MP_Util::text( $r['client_name'], 160 );
 		if ( '' === $client ) {
-			return self::err( 'نام مشتری را وارد کنید.' );
+			return self::err( 'مشتری را انتخاب کنید یا نام مشتری جدید را بنویسید.' );
 		}
 		list( $items, , $discount, $tax ) = self::compute( $r['items'], $r['discount'], null === $r['tax'] ? self::settings()['tax'] : $r['tax'] );
 		if ( ! $items ) {
@@ -169,6 +176,8 @@ class MP_Invoices {
 		$row   = array(
 			'title'        => MP_Util::text( $r['title'], 200 ),
 			'project_id'   => (int) $r['project_id'],
+			// An existing customer, or a new one made from the typed name; the project joins its projects.
+			'client_id'    => MP_Client::customer_id( $client, $cust ? $cust->id : 0, (int) $r['project_id'], (string) $r['client_phone'], (string) $r['client_info'] ),
 			'client_name'  => $client,
 			'client_phone' => MP_Util::text( $r['client_phone'], 40 ),
 			'client_info'  => MP_Util::long_text( $r['client_info'], 1000 ),
@@ -247,10 +256,7 @@ class MP_Invoices {
 		}
 		$f = array( 'status' => $status, 'updated_at' => MP_Util::now() );
 		if ( 'paid' === $status && 'paid' !== $x->status ) {
-			$f['paid_at'] = MP_Util::now();
-			$wpdb->update( self::t(), $f, array( 'id' => $x->id ) );
-			self::sync_ledger( self::get( $x->id ) );
-			MP_Client::system( 0, (int) $x->project_id, 'پرداخت فاکتور ' . MP_Jalali::digits( (string) $x->number ) . ' ثبت شد. سپاس از شما 🌱', array( 't' => 'invoice', 'id' => (int) $x->id, 'url' => self::url( $x->token ) ) );
+			self::mark_paid( $x );
 		} else {
 			if ( 'sent' === $status && 'draft' === $x->status ) {
 				self::announce( $x );
@@ -264,6 +270,110 @@ class MP_Invoices {
 		}
 		MP_Audit::log( 'update', 'invoice', $x->id, $x->number . ' → ' . self::STATUS[ $status ] );
 		return self::payload( self::get( $x->id ) );
+	}
+
+	/** Paid: status, income row in accounting, a card in the client chat. $ref: gateway reference. */
+	private static function mark_paid( $x, $gateway = '', $ref = '' ) {
+		global $wpdb;
+		$f = array( 'status' => 'paid', 'paid_at' => MP_Util::now(), 'updated_at' => MP_Util::now() );
+		if ( $gateway ) {
+			$f['pay_gateway'] = $gateway;
+			$f['pay_ref']     = substr( (string) $ref, 0, 80 );
+		}
+		$wpdb->update( self::t(), $f, array( 'id' => $x->id ) );
+		self::sync_ledger( self::get( $x->id ) );
+		MP_Client::system( 0, (int) $x->project_id, 'پرداخت فاکتور ' . MP_Jalali::digits( (string) $x->number ) . ' ثبت شد' . ( $ref ? ' (کد پیگیری ' . MP_Jalali::digits( (string) $ref ) . ')' : '' ) . '. سپاس از شما 🌱', array( 't' => 'invoice', 'k' => 'invoice', 'id' => (int) $x->id, 'url' => self::url( $x->token ) ) );
+	}
+
+	/* ------------------------------------------------------------------ Online payment (Zibal / ZarinPal) */
+
+	const GATEWAYS = array( 'zibal' => 'زیبال', 'zarinpal' => 'زرین‌پال' );
+
+	/** Gateway in use, or '' when online payment is off. */
+	public static function gateway() {
+		$s = self::settings();
+		return $s['gateway'] && ( $s['merchant'] || $s['sandbox'] ) ? $s['gateway'] : '';
+	}
+
+	private static function post_json( $url, $body ) {
+		$res = wp_remote_post( $url, array( 'timeout' => 25, 'headers' => array( 'Content-Type' => 'application/json', 'Accept' => 'application/json' ), 'body' => wp_json_encode( $body ) ) );
+		if ( is_wp_error( $res ) ) {
+			return null;
+		}
+		$d = json_decode( wp_remote_retrieve_body( $res ), true );
+		return is_array( $d ) ? $d : null;
+	}
+
+	/** Sends the client to the gateway; returns an error message when it could not start. */
+	private static function start_payment( $x ) {
+		global $wpdb;
+		$s      = self::settings();
+		$gw     = self::gateway();
+		$p      = self::payload( $x );
+		$rial   = (int) $p['total'] * 10; // invoices are in toman, gateways take rial
+		$cb     = add_query_arg( 'mp_cb', $gw, self::url( $x->token ) );
+		$desc   = 'فاکتور ' . $x->number . ' — ' . $s['seller'];
+		$mobile = MP_Auth::normalize( $x->client_phone );
+		if ( $rial < 10000 ) {
+			return 'مبلغ این فاکتور برای پرداخت آنلاین کم است.';
+		}
+		if ( 'zibal' === $gw ) {
+			$d = self::post_json( 'https://gateway.zibal.ir/v1/request', array_filter( array( 'merchant' => $s['sandbox'] ? 'zibal' : $s['merchant'], 'amount' => $rial, 'callbackUrl' => $cb, 'description' => $desc, 'orderId' => $x->number . '-' . time(), 'mobile' => $mobile ) ) );
+			if ( ! $d || 100 !== (int) ( isset( $d['result'] ) ? $d['result'] : 0 ) ) {
+				return 'درگاه زیبال پاسخ نداد' . ( $d && isset( $d['message'] ) ? ': ' . $d['message'] : '' ) . '.';
+			}
+			$track = (string) $d['trackId'];
+			$go    = 'https://gateway.zibal.ir/start/' . rawurlencode( $track );
+		} else {
+			$host = $s['sandbox'] ? 'https://sandbox.zarinpal.com' : 'https://payment.zarinpal.com';
+			$d    = self::post_json( $host . '/pg/v4/payment/request.json', array( 'merchant_id' => $s['sandbox'] && ! $s['merchant'] ? '00000000-0000-0000-0000-000000000000' : $s['merchant'], 'amount' => $rial, 'currency' => 'IRR', 'callback_url' => $cb, 'description' => $desc, 'metadata' => array_filter( array( 'mobile' => $mobile, 'order_id' => $x->number ) ) ) );
+			if ( ! $d || empty( $d['data']['authority'] ) || 100 !== (int) $d['data']['code'] ) {
+				return 'درگاه زرین‌پال پاسخ نداد' . ( $d && ! empty( $d['errors']['message'] ) ? ': ' . $d['errors']['message'] : '' ) . '.';
+			}
+			$track = (string) $d['data']['authority'];
+			$go    = $host . '/pg/StartPay/' . rawurlencode( $track );
+		}
+		$wpdb->update( self::t(), array( 'pay_gateway' => $gw, 'pay_track' => $track ), array( 'id' => $x->id ) );
+		wp_redirect( $go ); // phpcs:ignore WordPress.Security.SafeRedirect -- the gateway's own host
+		exit;
+	}
+
+	/** Back from the gateway: verify with the gateway (never trust the query alone), then book it. */
+	private static function verify_payment( $x, $gw ) {
+		$s    = self::settings();
+		$p    = self::payload( $x );
+		$rial = (int) $p['total'] * 10;
+		$ok   = false;
+		$ref  = '';
+		if ( 'zibal' === $gw ) {
+			$track = isset( $_GET['trackId'] ) ? sanitize_text_field( wp_unslash( $_GET['trackId'] ) ) : ''; // phpcs:ignore
+			if ( $track && hash_equals( (string) $x->pay_track, $track ) && ! empty( $_GET['success'] ) ) { // phpcs:ignore
+				$d = self::post_json( 'https://gateway.zibal.ir/v1/verify', array( 'merchant' => $s['sandbox'] ? 'zibal' : $s['merchant'], 'trackId' => $track ) );
+				// 100 = verified now, 201 = verified before.
+				$ok  = $d && in_array( (int) $d['result'], array( 100, 201 ), true ) && ( ! isset( $d['amount'] ) || (int) $d['amount'] === $rial );
+				$ref = $d && isset( $d['refNumber'] ) ? (string) $d['refNumber'] : $track;
+			}
+		} elseif ( 'zarinpal' === $gw ) {
+			$auth = isset( $_GET['Authority'] ) ? sanitize_text_field( wp_unslash( $_GET['Authority'] ) ) : ''; // phpcs:ignore
+			if ( $auth && hash_equals( (string) $x->pay_track, $auth ) && isset( $_GET['Status'] ) && 'OK' === $_GET['Status'] ) { // phpcs:ignore
+				$host = $s['sandbox'] ? 'https://sandbox.zarinpal.com' : 'https://payment.zarinpal.com';
+				$d    = self::post_json( $host . '/pg/v4/payment/verify.json', array( 'merchant_id' => $s['sandbox'] && ! $s['merchant'] ? '00000000-0000-0000-0000-000000000000' : $s['merchant'], 'amount' => $rial, 'authority' => $auth ) );
+				// 100 = verified now, 101 = verified before.
+				$ok  = $d && isset( $d['data']['code'] ) && in_array( (int) $d['data']['code'], array( 100, 101 ), true );
+				$ref = $ok && isset( $d['data']['ref_id'] ) ? (string) $d['data']['ref_id'] : '';
+			}
+		}
+		if ( $ok && 'paid' !== $x->status ) {
+			self::mark_paid( $x, $gw, $ref );
+			foreach ( MP_Util::panel_users() as $m ) {
+				if ( MP_Util::is_manager( $m ) ) {
+					MP_Notify::send( $m, 'invoice', $x->client_name . ' فاکتور ' . $x->number . ' را آنلاین پرداخت کرد', MP_Jalali::digits( number_format( $p['total'] ) ) . ' تومان · ' . self::GATEWAYS[ $gw ] . ( $ref ? ' · کد پیگیری ' . $ref : '' ), 'invoices', $x->id, true );
+				}
+			}
+			MP_Audit::log( 'update', 'invoice', $x->id, $x->number . ' پرداخت آنلاین ' . $gw . ' ' . $ref );
+		}
+		wp_safe_redirect( add_query_arg( $ok ? 'mp_paid' : 'mp_failed', 1, self::url( $x->token ) ) );
+		exit;
 	}
 
 	/** POST invoices/{id}/convert — a new invoice from a pro-forma (the pro-forma stays, marked accepted). */
@@ -338,7 +448,13 @@ class MP_Invoices {
 			'card_owner'  => MP_Util::text( $r['card_owner'], 120 ),
 			'tax'         => max( 0, min( 100, (int) $r['tax'] ) ),
 			'footer'      => MP_Util::text( $r['footer'], 300 ),
+			'gateway'     => MP_Util::pick( $r['gateway'], array( '', 'zibal', 'zarinpal' ), '' ),
+			'merchant'    => preg_replace( '/[^A-Za-z0-9\-]/', '', (string) $r['merchant'] ),
+			'sandbox'     => ! empty( $r['sandbox'] ) && 'false' !== $r['sandbox'],
 		);
+		if ( $s['gateway'] && '' === $s['merchant'] && ! $s['sandbox'] ) {
+			return self::err( 'کد مرچنت درگاه را وارد کنید (یا حالت آزمایشی را روشن کنید).' );
+		}
 		update_option( self::SETTINGS, $s, false );
 		return self::settings();
 	}
@@ -363,6 +479,15 @@ class MP_Invoices {
 			}
 			wp_safe_redirect( self::url( $token ) );
 			exit;
+		}
+		$payable = 'invoice' === $x->kind && ! in_array( $x->status, array( 'paid', 'cancelled' ), true );
+		$gw      = self::gateway();
+		$pay_err = '';
+		if ( isset( $_GET['mp_cb'] ) && isset( self::GATEWAYS[ $_GET['mp_cb'] ] ) ) { // phpcs:ignore
+			self::verify_payment( $x, sanitize_key( $_GET['mp_cb'] ) ); // phpcs:ignore
+		}
+		if ( $payable && $gw && 'POST' === ( isset( $_SERVER['REQUEST_METHOD'] ) ? $_SERVER['REQUEST_METHOD'] : '' ) && ! empty( $_POST['mp_pay'] ) ) { // phpcs:ignore
+			$pay_err = self::start_payment( $x );
 		}
 		$p   = self::payload( $x );
 		$s   = self::settings();
@@ -398,9 +523,15 @@ td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:top}td.n
 .btn-pay{background:var(--brand);color:#fff}.btn-ghost{background:var(--bg);color:var(--ink)}.btn-ok{background:var(--ok);color:#fff}
 .card{margin-top:16px;padding:14px 18px;border:1px dashed #d8d8d8;border-radius:16px;font-size:13px}.card b{direction:ltr;display:inline-block;letter-spacing:1px;font-size:16px}
 footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px}
+.alert{padding:14px 18px;border-radius:16px;margin-bottom:14px;font-weight:700}.alert.ok{background:#e7f6ed;color:var(--ok)}.alert.bad{background:#fdecec;color:#b33}
+.btn-pay{flex-direction:column;align-items:flex-start;gap:0;line-height:1.5}.btn-pay .gw{font-size:11px;font-weight:600;opacity:.85}
 @media (max-width:600px){.sheet{padding:26px 18px}.parties{grid-template-columns:1fr}th:nth-child(2),td:nth-child(2){display:none}}
 @media print{body{background:#fff}.wrap{margin:0;max-width:none}.sheet{box-shadow:none;border-radius:0;padding:0}.pay,.noprint{display:none!important}}
-</style></head><body><div class="wrap"><div class="sheet">
+</style></head><body><div class="wrap">
+<?php if ( isset( $_GET['mp_paid'] ) && 'paid' === $x->status ) : // phpcs:ignore ?><div class="alert ok noprint">✓ پرداخت با موفقیت انجام شد<?php echo $x->pay_ref ? ' · کد پیگیری ' . esc_html( MP_Jalali::digits( $x->pay_ref ) ) : ''; ?>. سپاس از شما!</div><?php endif; ?>
+<?php if ( isset( $_GET['mp_failed'] ) && 'paid' !== $x->status ) : // phpcs:ignore ?><div class="alert bad noprint">پرداخت انجام نشد یا لغو شد. اگر مبلغی کم شده، طی ۷۲ ساعت به حسابتان برمی‌گردد. می‌توانید دوباره تلاش کنید.</div><?php endif; ?>
+<?php if ( $pay_err ) : ?><div class="alert bad noprint"><?php echo esc_html( $pay_err ); ?></div><?php endif; ?>
+<div class="sheet">
 <header><div><h1><?php echo esc_html( $kind ); ?><?php echo $x->title ? ' — ' . esc_html( $x->title ) : ''; ?></h1>
 <div class="num"><?php echo esc_html( $x->number ); ?> · تاریخ <?php echo esc_html( MP_Jalali::format( $x->issue_date ) ); ?><?php echo $x->due_date ? ' · مهلت پرداخت ' . esc_html( MP_Jalali::format( $x->due_date ) ) : ''; ?></div>
 <span class="badge <?php echo esc_attr( $x->status ); ?>"><?php echo esc_html( 'paid' === $x->status ? 'پرداخت شد' : self::STATUS[ $x->status ] ); ?></span></div>
@@ -425,6 +556,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px}
 <div class="pay">
 <?php if ( 'proforma' === $x->kind && in_array( $x->status, array( 'draft', 'sent' ), true ) ) : ?>
 <form method="post"><input type="hidden" name="mp_accept" value="1"><button class="btn btn-ok" type="submit">تأیید پیش‌فاکتور</button></form>
+<?php elseif ( $payable && $gw ) : ?>
+<form method="post"><input type="hidden" name="mp_pay" value="1"><button class="btn btn-pay" type="submit">پرداخت آنلاین <?php echo esc_html( $fa( $p['total'] ) ); ?> تومان<small class="gw">درگاه امن <?php echo esc_html( self::GATEWAYS[ $gw ] ); ?></small></button></form>
 <?php elseif ( 'invoice' === $x->kind && $pay ) : ?>
 <a class="btn btn-pay" href="<?php echo esc_url( $pay ); ?>" target="_blank" rel="noopener">پرداخت <?php echo esc_html( $fa( $p['total'] ) ); ?> تومان</a>
 <?php endif; ?>

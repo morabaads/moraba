@@ -118,10 +118,14 @@ class MP_Portal {
 		}
 		$rows  = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'client_items' ) . ' WHERE project_id = %d AND archived_at IS NULL ORDER BY id DESC', $pid ) );
 		$links = array();
-		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT title, token FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND project_id = %d AND archived_at IS NULL", $pid ) ) as $c ) {
-			$links[] = array( 'title' => $c->title, 'url' => MP_Client::url( $c->token ) );
+		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT id, title, token, client_id FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND project_id = %d AND archived_at IS NULL", $pid ) ) as $c ) {
+			$links[] = array( 'id' => (int) $c->id, 'title' => $c->title, 'url' => MP_Client::url( $c->token ), 'client_id' => (int) $c->client_id );
 		}
-		return array( 'items' => array_map( array( __CLASS__, 'payload' ), $rows ), 'links' => $links );
+		$customers = array();
+		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT c.id, c.name, c.phone FROM ' . self::t( 'clients' ) . ' c JOIN ' . self::t( 'client_projects' ) . ' cp ON cp.client_id = c.id WHERE cp.project_id = %d AND c.archived_at IS NULL ORDER BY c.name', $pid ) ) as $c ) {
+			$customers[] = array( 'id' => (int) $c->id, 'name' => $c->name, 'phone' => $c->phone );
+		}
+		return array( 'items' => array_map( array( __CLASS__, 'payload' ), $rows ), 'links' => $links, 'customers' => $customers, 'project' => MP_Client::project_summary( $pid ) );
 	}
 
 	/** POST portal/items {project_id, kind: design|file, title, note, file_id, replaces?} */

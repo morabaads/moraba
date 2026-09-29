@@ -1229,8 +1229,12 @@ class MP_Rest {
 		}
 		if ( 'client' === $r['type'] ) {
 			$title  = MP_Util::text( $r['title'], 160 );
-			$client = MP_Util::text( $r['client_name'], 120 );
+			$cust   = (int) $r['client_id'] ? MP_Client::customer( (int) $r['client_id'] ) : null;
+			$client = $cust ? $cust->name : MP_Util::text( $r['client_name'], 120 );
 			$pid    = (int) $r['project_id'];
+			if ( '' === $title && '' !== $client ) {
+				$title = $client;
+			}
 			if ( '' === $title || '' === $client ) {
 				return self::err( 'نام گروه و نام مشتری را وارد کنید.' );
 			}
@@ -1244,6 +1248,7 @@ class MP_Rest {
 					'project_id'  => $pid,
 					'title'       => $title,
 					'client_name' => $client,
+					'client_id'   => MP_Client::customer_id( $client, $cust ? $cust->id : 0, $pid ),
 					'token'       => wp_generate_password( 32, false, false ),
 					'created_by'  => $uid,
 					'created_at'  => MP_Util::now(),
