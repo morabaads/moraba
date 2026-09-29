@@ -169,8 +169,9 @@
 
   /* ------------------------------------------------------------ designs */
   function tone(s) { return s === 'approved' ? 'ok' : s === 'changes' ? 'danger' : 'brand'; }
+  var reviewing = false;
   function designs() {
-    var pane = $('pane-designs');
+    var pane = $('pane-designs'); reviewing = false;
     if (!data.designs.length) { pane.replaceChildren(empty('eye', 'هنوز طرحی برای بررسی ارسال نشده', 'وقتی تیم طرحی بفرستد، اینجا می‌بینید و نظر می‌دهید.')); return; }
     pane.replaceChildren(h('div', { class: 'cp-grid' }, data.designs.map(function (d) {
       var open = d.pins.filter(function (p) { return !p.parent_id && !p.resolved; }).length;
@@ -181,7 +182,7 @@
     })));
   }
   function review(d) {
-    var pane = $('pane-designs'), viewer = h('div');
+    var pane = $('pane-designs'), viewer = h('div'); reviewing = true;
     var note = h('textarea', { rows: 2, maxlength: 1000, placeholder: 'توضیح کلی (برای درخواست تغییر لازم است)' });
     function replace(it) { data.designs = data.designs.map(function (x) { return x.id === it.id ? it : x; }); tabs(); }
     function decide(kind) {
@@ -226,19 +227,39 @@
   }
 
   /* ------------------------------------------------------------ chat */
-  var box = $('chat-messages'), form = $('client-form'), lastDay = '';
+  var box = $('chat-messages'), form = $('client-form'), lastDay = '', sending = Promise.resolve(), chatBusy = null;
   function myName() { return me && me.name ? me.name : (form.elements.name.value.trim() || ''); }
   function hm(s) { return fa(String(s || '').slice(11, 16)); }
+  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user' };
+  function sysCard(m) {
+    var t = m.meta && m.meta.t, act = null;
+    if (t === 'invoice' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: 'مشاهده ' + (m.meta.k === 'proforma' || /^پیش‌فاکتور/.test(m.body) ? 'پیش‌فاکتور' : 'فاکتور') });
+    else if ((t === 'design' || t === 'file') && data && data.project) act = h('button', { type: 'button', class: 'sys-link', text: t === 'design' ? 'دیدن طرح' : 'دانلود فایل', onclick: function () {
+      var d = t === 'design' && data.designs.filter(function (x) { return x.id === m.meta.id; })[0];
+      go(t === 'design' ? 'designs' : 'files'); if (d) review(d);
+    } });
+    return h('div', { class: 'sys-msg' }, [h('span', { class: 'sys-ico', html: icon(SYS_ICON[t] || 'bell') }), h('p', { text: m.body }), act, h('time', { text: hm(m.created_at) })]);
+  }
   function loadChat(scroll) {
+    // One request at a time; a caller during a running one waits for it and then asks again.
+    if (chatBusy) return chatBusy.then(function () { return loadChat(scroll); });
+    chatBusy = fetchChat(scroll).then(function () { chatBusy = null; }, function () { chatBusy = null; });
+    return chatBusy;
+  }
+  function fetchChat(scroll) {
     return api('?after=' + lastId).then(function (d) {
       var near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
-      if (!lastId && !d.messages.length) box.replaceChildren(empty('chat', 'اولین پیام را بفرستید', 'تیم مربع همین‌جا پاسخ می‌دهد.'));
-      d.messages.forEach(function (m) {
+      if (!lastId && !d.messages.length && !box.querySelector('.bubble-row')) box.replaceChildren(empty('chat', 'اولین پیام را بفرستید', 'تیم مربع همین‌جا پاسخ می‌دهد.'));
+      // Polls and sends can overlap: a message already shown is never added again.
+      var first = !lastId, stale = false;
+      d.messages.filter(function (m) { return m.id > lastId; }).forEach(function (m) {
+        var tmp = box.querySelector('.bubble-row.b-pending'); if (tmp && !m.team) tmp.remove();
         if (!lastId) box.replaceChildren();
         lastId = Math.max(lastId, m.id);
         var e = box.querySelector('.cp-empty'); if (e) e.remove();
         var day = m.created_at.slice(0, 10);
         if (day !== lastDay) { lastDay = day; box.append(h('div', { class: 'day-sep', text: day === today() ? 'امروز' : jal(day) })); }
+        if (m.kind === 'system') { if (!first && m.meta && m.meta.t !== 'join') stale = true; box.append(sysCard(m)); return; }
         var mine = !m.team;
         var b = h('div', { class: 'bubble' }, [h('span', { class: 'b-author', text: m.author + (m.team ? ' · تیم مربع' : '') })]);
         if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
@@ -250,6 +271,7 @@
         box.append(h('div', { class: 'bubble-row ' + (mine ? 'me' : 'other') + (lastId && !scroll ? ' b-new' : '') }, [b]));
       });
       if (scroll || (d.messages.length && near)) box.scrollTop = box.scrollHeight;
+      if (stale) refresh(); // a new design, file or invoice: the other tabs and badges update too
     }).catch(function (e) { if (e.code === 'mp_login_required') location.reload(); });
   }
   form.onsubmit = function (e) {
@@ -258,10 +280,19 @@
     if (!body) return;
     if (!me.logged_in) { var n = form.elements.name.value.trim(); try { localStorage.setItem('mp-client-name', n); } catch (err) { /* private */ } }
     ta.value = ''; ta.style.height = '';
-    api('', { body: body, name: myName() }).then(function () { return loadChat(true); }).catch(function (err) { ta.value = body; toast(err.message || 'ارسال نشد'); });
+    // Shown at once; swapped for the saved message when the server answers.
+    var e0 = box.querySelector('.cp-empty'); if (e0) e0.remove();
+    var row = h('div', { class: 'bubble-row me b-pending' }, [h('div', { class: 'bubble' }, [h('p', { text: body }), h('span', { class: 'b-meta', text: 'در حال ارسال…' })])]);
+    box.append(row); box.scrollTop = box.scrollHeight;
+    sending = sending.then(function () { return api('', { body: body, name: myName() }); }).then(function () { row.remove(); return loadChat(true); })
+      .catch(function (err) { row.remove(); ta.value = body; toast(err.message || 'ارسال نشد'); });
   };
   form.elements.message.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
   form.elements.message.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(140, this.scrollHeight) + 'px'; });
+
+  function refresh() {
+    return api('/portal').then(function (d) { data = d; if (d.project) { progress(); if (!reviewing) designs(); files(); invoices(); } tabs(); }).catch(function () {});
+  }
 
   /* ------------------------------------------------------------ start */
   function start() {
@@ -290,7 +321,7 @@
         }
         go(tab);
         clearInterval(chatTimer);
-        chatTimer = setInterval(function () { if (!document.hidden && tab === 'chat') loadChat(false); }, 5000);
+        chatTimer = setInterval(function () { if (!document.hidden) loadChat(false); }, 5000);
         loadChat(true);
       });
     }).catch(function (e) {

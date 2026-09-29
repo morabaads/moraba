@@ -1146,7 +1146,7 @@ class MP_Rest {
 				'user_id'    => (int) $m->user_id,
 				'deleted'    => false,
 				'archived'   => true,
-				'author'     => $u ? $u->display_name : ( $m->guest_name ? $m->guest_name . ' (مشتری)' : 'مشتری' ),
+				'author'     => $u ? $u->display_name : ( ! empty( $m->kind ) ? 'مربع استودیو' : ( $m->guest_name ? $m->guest_name . ' (مشتری)' : 'مشتری' ) ),
 				'avatar'     => $u ? MP_Util::avatar_url( $u->ID ) : '',
 				'body'       => $m->body,
 				'file'       => $m->file_id ? MP_Files::payload( MP_Files::get( $m->file_id ) ) : null,
@@ -1176,7 +1176,7 @@ class MP_Rest {
 			'id'         => (int) $m->id,
 			'user_id'    => (int) $m->user_id,
 			'deleted'    => false,
-			'author'     => $u ? $u->display_name : ( $m->guest_name ? $m->guest_name . ' (مشتری)' : 'مشتری' ),
+			'author'     => $u ? $u->display_name : ( ! empty( $m->kind ) ? 'مربع استودیو' : ( $m->guest_name ? $m->guest_name . ' (مشتری)' : 'مشتری' ) ),
 			'avatar'     => $u ? MP_Util::avatar_url( $u->ID ) : '',
 			'body'       => $m->body,
 			'file'       => $m->file_id ? MP_Files::payload( MP_Files::get( $m->file_id ) ) : null,
@@ -1184,7 +1184,7 @@ class MP_Rest {
 			'mine'       => (int) $m->user_id === $uid,
 			'seen_by'    => $seen,
 			'created_at' => $m->created_at,
-		);
+		) + MP_Client::msg_extra( $m );
 	}
 
 	/** user_id => last read message id, for every reader of the channel. */
@@ -1490,12 +1490,12 @@ class MP_Rest {
 			$u     = $m->user_id ? get_userdata( $m->user_id ) : null;
 			$out[] = array(
 				'id'         => (int) $m->id,
-				'author'     => $u ? $u->display_name : ( $m->guest_name ? $m->guest_name : $ch->client_name ),
+				'author'     => $u ? $u->display_name : ( ! empty( $m->kind ) ? 'مربع استودیو' : ( $m->guest_name ? $m->guest_name : $ch->client_name ) ),
 				'team'       => (bool) $m->user_id,
 				'body'       => $m->body,
 				'file'       => $m->file_id ? self::client_file( $m->file_id, $ch->token ) : null,
 				'created_at' => $m->created_at,
-			);
+			) + MP_Client::msg_extra( $m );
 		}
 		return array( 'title' => $ch->title, 'client' => $ch->client_name, 'messages' => $out );
 	}

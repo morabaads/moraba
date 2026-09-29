@@ -38,7 +38,7 @@
     b.setAttribute('role', 'dialog');
     b.setAttribute('aria-label', 'نصب اپلیکیشن');
     b.innerHTML = '<button type="button" class="ios-install-close" aria-label="بستن"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' +
-      '<div class="ios-install-head"><img src="' + cfg.icon + '" alt=""><div><strong>پنل مربع را نصب کنید</strong><small>مثل یک اپ از صفحه اصلی باز می‌شود، تمام‌صفحه و با اعلان</small></div></div>' + inner;
+      '<div class="ios-install-head"><img src="' + cfg.icon + '" alt=""><div><strong>' + (cfg.app ? 'پرتال پروژه را نصب کنید' : 'پنل مربع را نصب کنید') + '</strong><small>' + (cfg.app ? 'مثل یک اپ از صفحه اصلی باز می‌شود؛ پیشرفت، طرح‌ها و گفت‌وگو همیشه دم دست' : 'مثل یک اپ از صفحه اصلی باز می‌شود، تمام‌صفحه و با اعلان') + '</small></div></div>' + inner;
     b.querySelector('.ios-install-close').onclick = function () { dismiss(); b.classList.add('out'); setTimeout(function () { b.remove(); }, 250); };
     document.body.appendChild(b);
     document.body.classList.add('has-ios-install');
@@ -57,7 +57,7 @@
     banner('<ol class="ios-install-steps">' +
       '<li><span class="ios-ico">' + SHARE + '</span><span>دکمه <b>اشتراک‌گذاری</b> ' + (ipad || otherBrowser ? 'بالای صفحه' : 'پایین صفحه') + ' را بزنید</span></li>' +
       '<li><span class="ios-ico">' + ADD + '</span><span>گزینه <b dir="ltr">Add to Home Screen</b> را انتخاب کنید (اگر نبود، فهرست را بالا بکشید)</span></li>' +
-      '<li><span class="ios-ico ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Add</b> را بزنید و پنل را از آیکون «مربع» باز کنید' + (cfg.login ? ' و همان‌جا وارد شوید' : '') + '</span></li>' +
+      '<li><span class="ios-ico ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Add</b> را بزنید و ' + (cfg.app ? 'پرتال را از آیکون آن' : 'پنل را از آیکون «مربع»') + ' باز کنید' + (cfg.login && !cfg.app ? ' و همان‌جا وارد شوید' : '') + '</span></li>' +
       '</ol>', !otherBrowser);
   }
 

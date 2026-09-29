@@ -250,7 +250,11 @@ class MP_Invoices {
 			$f['paid_at'] = MP_Util::now();
 			$wpdb->update( self::t(), $f, array( 'id' => $x->id ) );
 			self::sync_ledger( self::get( $x->id ) );
+			MP_Client::system( 0, (int) $x->project_id, 'پرداخت فاکتور ' . MP_Jalali::digits( (string) $x->number ) . ' ثبت شد. سپاس از شما 🌱', array( 't' => 'invoice', 'id' => (int) $x->id, 'url' => self::url( $x->token ) ) );
 		} else {
+			if ( 'sent' === $status && 'draft' === $x->status ) {
+				self::announce( $x );
+			}
 			if ( 'paid' !== $status && 'paid' === $x->status && $x->ledger_id ) {
 				$wpdb->delete( MP_Install::table( 'ledger' ), array( 'id' => $x->ledger_id ) );
 				$f['ledger_id'] = 0;
@@ -293,6 +297,17 @@ class MP_Invoices {
 		return self::payload( self::get( $x->id ) );
 	}
 
+	/** System card in the client chat with the invoice link. */
+	private static function announce( $x, $channel_id = 0 ) {
+		$p = self::payload( $x );
+		return MP_Client::system(
+			$channel_id,
+			$channel_id ? 0 : (int) $x->project_id,
+			( 'proforma' === $x->kind ? 'پیش‌فاکتور ' : 'فاکتور ' ) . MP_Jalali::digits( (string) $x->number ) . ( $x->title ? ' — ' . $x->title : '' ) . ' صادر شد. مبلغ: ' . MP_Jalali::digits( number_format( $p['total'] ) ) . ' تومان',
+			array( 't' => 'invoice', 'k' => $x->kind, 'id' => (int) $x->id, 'url' => $p['url'] )
+		);
+	}
+
 	/** POST invoices/{id}/send {channel_id} — posts the link in a client group; a draft becomes «sent». */
 	public static function send( WP_REST_Request $r ) {
 		global $wpdb;
@@ -300,15 +315,13 @@ class MP_Invoices {
 		if ( ! $x ) {
 			return self::err( 'فاکتور پیدا نشد.', 404 );
 		}
-		$p = self::payload( $x );
-		if ( (int) $r['channel_id'] ) {
-			$msg = new WP_REST_Request( 'POST' );
-			$msg->set_param( 'id', (int) $r['channel_id'] );
-			$msg->set_param( 'body', ( 'proforma' === $x->kind ? 'پیش‌فاکتور ' : 'فاکتور ' ) . $x->number . ( $x->title ? ' — ' . $x->title : '' ) . "\nمبلغ: " . MP_Jalali::digits( number_format( $p['total'] ) ) . " تومان\n" . $p['url'] );
-			$res = MP_Rest::send_message( $msg );
-			if ( is_wp_error( $res ) ) {
-				return $res;
-			}
+		$cid = (int) $r['channel_id'];
+		if ( $cid && ! MP_Rest::can_read_channel( $cid ) ) {
+			return self::err( 'به این گروه دسترسی ندارید.', 403 );
+		}
+		// Chosen group: always. Otherwise the first time it is issued, in every client group of the project.
+		if ( $cid || 'draft' === $x->status ) {
+			self::announce( $x, $cid );
 		}
 		if ( 'draft' === $x->status ) {
 			$wpdb->update( self::t(), array( 'status' => 'sent', 'updated_at' => MP_Util::now() ), array( 'id' => $x->id ) );
@@ -342,6 +355,7 @@ class MP_Invoices {
 		// A pro-forma accepted by the client.
 		if ( 'POST' === ( isset( $_SERVER['REQUEST_METHOD'] ) ? $_SERVER['REQUEST_METHOD'] : '' ) && ! empty( $_POST['mp_accept'] ) && 'proforma' === $x->kind && in_array( $x->status, array( 'draft', 'sent' ), true ) ) { // phpcs:ignore
 			$wpdb->update( self::t(), array( 'status' => 'accepted', 'updated_at' => MP_Util::now() ), array( 'id' => $x->id ) );
+			MP_Client::system( 0, (int) $x->project_id, 'پیش‌فاکتور ' . MP_Jalali::digits( (string) $x->number ) . ' توسط ' . $x->client_name . ' تأیید شد.', array( 't' => 'invoice', 'k' => 'proforma', 'id' => (int) $x->id, 'url' => self::url( $x->token ) ) );
 			foreach ( MP_Util::panel_users() as $m ) {
 				if ( MP_Util::is_manager( $m ) ) {
 					MP_Notify::send( $m, 'invoice', $x->client_name . ' پیش‌فاکتور ' . $x->number . ' را تأیید کرد', $x->title, 'invoices', $x->id, true );

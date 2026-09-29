@@ -71,7 +71,7 @@
   }
   /** Chat list preview: last message text, or an icon + label for voice / file / deleted. */
   function preview(c) {
-    if (!c.last) return el('small', { text: c.type === 'client' ? 'مشتری: ' + c.client_name : 'هنوز پیامی نیست' });
+    if (!c.last) return el('small', { text: c.type === 'client' ? 'مشتری: ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : 'هنوز پیامی نیست' });
     if (c.last.archived && !c.last.body && !c.last.file) return el('small', { class: 'ci-kind' }, MP.iconEl('ban'), 'پیام آرشیو شد');
     var who = c.last.mine ? 'شما: ' : '', l = c.last;
     if (!l.deleted && l.body) return el('small', { text: who + l.body });
@@ -89,7 +89,7 @@
     }
     box.replaceChildren(MP.skeleton(3));
     $('#chat-title').textContent = c.title;
-    $('#chat-sub').textContent = c.type === 'project' || c.type === 'group' ? fa(c.members) + ' عضو' : c.type === 'direct' ? (MP.user(c.other).title || 'گفت‌وگوی خصوصی') : 'گروه مشتری · ' + c.client_name;
+    $('#chat-sub').textContent = c.type === 'project' || c.type === 'group' ? fa(c.members) + ' عضو' : c.type === 'direct' ? (MP.user(c.other).title || 'گفت‌وگوی خصوصی') : 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · پروژه ' + MP.project(c.project_id).name : ' · بدون پروژه');
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
@@ -108,6 +108,13 @@
     var day = m.created_at.slice(0, 10);
     var out = [];
     if (day !== lastDay) { lastDay = day; out.push(el('div', { class: 'day-sep', text: day === S.today ? 'امروز' : J.formatLong(day) })); }
+    if (m.kind === 'system') {
+      // Studio notices (new design, delivered file, invoice, someone joined): a centred card, not a bubble.
+      var sys = el('div', { class: 'sys-msg' + (fresh ? ' b-new' : '') }, el('span', { class: 'sys-ico', html: icon(SYS_ICON[m.meta && m.meta.t] || 'bell') }), el('p', { text: m.body }),
+        m.meta && m.meta.url ? el('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: 'مشاهده' }) : null,
+        el('time', { text: MP.timeFa(m.created_at.slice(11, 16)) }));
+      rowsById[m.id] = sys; out.push(sys); return out;
+    }
     var content = el('div', { class: 'bubble' + (m.deleted ? ' b-deleted' : '') + (m.archived ? ' b-archived' : '') });
     if (m.archived) content.append(el('span', { class: 'b-arch', html: icon('folder') + 'آرشیو شده (فقط ناظر می‌بیند)' }));
     if (!m.mine) content.append(el('span', { class: 'b-author', text: m.author }));
@@ -214,6 +221,8 @@
       if (!lastId) box.replaceChildren();
       var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
       var fresh = !!lastId; // first load of a chat isn't animated, later arrivals are
+      // Polls, sends and reopenings can overlap; a message already on screen is never added twice.
+      d.messages = d.messages.filter(function (m) { return m.id > lastId; });
       d.messages.forEach(function (m) { lastId = Math.max(lastId, m.id); bubble(m, fresh).forEach(function (n) { box.append(n); }); });
       if (fresh && d.messages.some(function (m) { return !m.mine; })) MP.haptic && MP.haptic(8);
       Object.keys(d.seen || {}).forEach(function (mid) { if (mineRows[mid]) setSeen(mineRows[mid], d.seen[mid]); });
@@ -410,6 +419,7 @@
    * Optimistic send: the bubble appears immediately (local preview for images and voice) and is
    * swapped for the real message once the upload and post finish; a failed one can be retried.
    */
+  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user' };
   var seq = 0, queue = Promise.resolve();
   function nowStamp() { var d = new Date(); return S.today + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':00'; }
   function sendNow(o) {
@@ -454,6 +464,7 @@
   $('#chat-back').onclick = closeChat;
 
   MP.openChannel = function () { return current; };
+  MP.clientSettings = function (c) { clientSettings(c); };
   MP.startDirect = function (userId) {
     MP.api('channels', { method: 'POST', body: { type: 'direct', user_id: userId } }).then(function (ch) {
       MP.dialog.close();
@@ -527,8 +538,21 @@
               MP.confirm('حذف از گروه', x.name + ' دیگر نمی‌تواند وارد پرتال شود.', 'حذف').then(function (ok) { if (ok) MP.api('client-contacts/' + x.id, { method: 'DELETE' }).then(draw).catch(MP.soft); });
             } }))));
       });
+      var proj = MP.projectSelect('project_id', d.project_id);
+      var title = el('input', { class: 'input', value: d.title, maxlength: 160 }), client = el('input', { class: 'input', value: d.client, maxlength: 120 });
+      function save(bodyObj, msg) {
+        return MP.api('channels/' + c.id + '/client', { method: 'POST', body: bodyObj }).then(function (n) {
+          MP.toast(msg); c.title = n.title; c.client_name = n.client; c.project_id = n.project_id; MP.loadChannels(); if (c.id === current) { $('#chat-title').textContent = n.title; } draw(n);
+        }).catch(MP.soft);
+      }
+      proj.onchange = function () { save({ project_id: +proj.value }, +proj.value ? 'گروه به پروژه «' + proj.options[proj.selectedIndex].text + '» وصل شد' : 'اتصال به پروژه برداشته شد'); };
       body.replaceChildren(
-        el('section', { class: 'tio-block' }, el('h3', { text: 'لوگو و نام' }),
+        el('section', { class: 'tio-block' }, el('h3', { text: 'پروژه و نام' }),
+          el('div', { class: 'cs-proj' },
+            MP.field('پروژه این مشتری', proj, 'پیشرفت، طرح‌ها، فایل‌ها و فاکتورهای همین پروژه در پرتال مشتری نشان داده می‌شود و اعضای پروژه پیام‌ها را می‌گیرند.'),
+            MP.field('نام گروه', title), MP.field('نام مشتری', client)),
+          el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'ذخیره نام‌ها', onclick: function () { save({ title: title.value, client_name: client.value }, 'ذخیره شد'); } }))),
+        el('section', { class: 'tio-block' }, el('h3', { text: 'لوگو' }),
           el('div', { class: 'cs-brand' }, logoBox,
             el('div', { class: 'cs-brand-copy' }, el('strong', { text: d.client }), el('small', { class: 'muted', text: 'لوگوی مشتری کنار لوگوی مربع در پرتال و صفحه ورود نمایش داده می‌شود.' }),
               el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('file') + (d.logo ? 'تغییر لوگو' : 'بارگذاری لوگو'), onclick: function () { file.click(); } }),
@@ -581,7 +605,9 @@
   }
   var ng = $('#new-team-group'); if (ng) ng.onclick = function () { groupForm(null); };
   $('#new-dm').onclick = newDirect;
-  $('#new-client-group').onclick = function () {
+  MP.newClientGroup = function () { MP.showView('messages'); newClientGroup(); };
+  $('#new-client-group').onclick = function () { newClientGroup(); };
+  function newClientGroup() {
     var f = el('form', { class: 'form' },
       MP.field('نام گروه', el('input', { name: 'title', required: true, maxlength: 160, placeholder: 'مثلاً پشتیبانی وبسایت زیوا' })),
       MP.field('نام مشتری', el('input', { name: 'client', required: true, maxlength: 120 })),

@@ -546,7 +546,7 @@
   /* ------------------------------------------------------------ Navigation */
 
   var views = {}, app = $('.app');
-  var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'attendance', 'reminders', 'accounting', 'reports'];
+  var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'clients', 'attendance', 'reminders', 'accounting', 'reports'];
   MP.view = function (name, def) { views[name] = def; };
   MP.showView = function (name, opts) {
     if (!views[name]) name = 'dashboard';

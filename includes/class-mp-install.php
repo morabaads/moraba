@@ -322,6 +322,8 @@ class MP_Install {
 			body text NOT NULL,
 			file_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			transcript text NULL,
+			kind varchar(20) NOT NULL DEFAULT '',
+			meta varchar(255) NOT NULL DEFAULT '',
 			created_at datetime NOT NULL,
 			deleted_at datetime NULL,
 			deleted_by bigint(20) unsigned NOT NULL DEFAULT 0,

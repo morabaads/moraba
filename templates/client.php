@@ -12,6 +12,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <meta name="theme-color" content="#111213">
 <title><?php echo esc_html( $mp_t ); ?> | مربع استودیو</title>
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
+<?php MP_Frontend::client_head( $token, $mp_ch && $mp_ch->client_name ? $mp_ch->client_name : $mp_t ); ?>
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
 <script>document.documentElement.classList.add('dark')</script>
 </head>
@@ -85,5 +86,6 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <script>window.MP_CLIENT = <?php echo wp_json_encode( array( 'url' => esc_url_raw( rest_url( MP_Rest::NS . '/client/' . $token ) ) ) ); ?>;</script>
 <script src="<?php echo MP_Frontend::asset( 'js/pins.js' ); // phpcs:ignore ?>"></script>
 <script src="<?php echo MP_Frontend::asset( 'js/client.js' ); // phpcs:ignore ?>"></script>
+<?php echo MP_Frontend::client_pwa_script( $token, $mp_ch && $mp_ch->client_name ? $mp_ch->client_name : $mp_t ); // phpcs:ignore ?>
 </body>
 </html>

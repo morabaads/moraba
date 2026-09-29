@@ -1791,7 +1791,7 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .tl-bar.tight .chip{display:none}
 
 /* ================================================================ Client portal */
-.cp-body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh;font-family:inherit}
+.cp-body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh}
 .cp-studio-logo{height:30px;width:auto;display:block}
 html.dark .cp-studio-logo{filter:invert(1) hue-rotate(180deg) brightness(1.1)}
 .cp-studio-logo.sm{height:22px}
@@ -1909,7 +1909,7 @@ html.dark .cp-studio-logo{filter:invert(1) hue-rotate(180deg) brightness(1.1)}
 .cp-empty p{margin:0;font-size:13px}
 
 /* chat */
-.cp-chat-card{display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:420px;border-radius:24px;background:var(--surface);box-shadow:var(--sh-1);overflow:hidden}
+.cp-chat-card{display:flex;flex-direction:column;height:calc(100dvh - 240px);min-height:420px;border-radius:24px;background:var(--surface);box-shadow:var(--sh-1);overflow:hidden}
 .cp-messages{flex:1;overflow:auto;padding:18px}
 .cp-messages .cp-empty{box-shadow:none;background:none}
 .cp-composer{display:grid;gap:8px;padding:12px;border-top:1px solid var(--line)}
@@ -1979,3 +1979,59 @@ html.dark .cp-studio-logo{filter:invert(1) hue-rotate(180deg) brightness(1.1)}
   .cp-topbar .hello{display:flex;flex:1;min-width:0}
   .cp-top-mobile{display:none}
 }
+
+/* System notices in chats (new design, delivered file, invoice, someone joined) */
+.sys-msg{align-self:center;display:flex;align-items:center;flex-wrap:wrap;justify-content:center;gap:8px 10px;max-width:min(520px,92%);margin:10px auto;padding:10px 14px;border-radius:16px;background:var(--surface-2);border:1px dashed var(--line-strong);color:var(--ink-2);font-size:13px;text-align:center}
+.sys-msg p{margin:0;flex:1 1 200px;line-height:1.8}
+.sys-ico{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);flex-shrink:0}
+.sys-ico .icon{width:16px;height:16px}
+.sys-msg time{font-size:11px;color:var(--faint)}
+.sys-link{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:var(--r-pill);background:var(--brand);color:#fff;font-weight:700;font-size:12px;text-decoration:none;border:0;cursor:pointer}
+.sys-msg.b-new{animation:fade-in .3s}
+
+/* Client settings: project picker */
+.cs-proj{display:grid;grid-template-columns:1fr;gap:10px}
+@media (min-width:700px){.cs-proj{grid-template-columns:2fr 1fr 1fr}.cs-proj>.field:first-child{grid-column:1/-1}}
+
+/* Clients page */
+.cl-search{width:260px}
+.tab-n{font-size:11px;opacity:.7}
+.cl-kpis{margin-bottom:var(--gap)}
+.cl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--gap)}
+.cl-card{display:flex;flex-direction:column;gap:14px;padding:18px}
+.cl-card.hot{box-shadow:var(--sh-1),inset 0 0 0 1.5px var(--danger-soft)}
+.cl-head{display:flex;align-items:center;gap:12px}
+.cl-logo{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);overflow:hidden;flex-shrink:0;font-size:16px}
+.cl-logo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.cl-name{flex:1;min-width:0;display:flex;flex-direction:column}
+.cl-name strong{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-name small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-lock{color:var(--ok)}.cl-lock .icon{width:18px;height:18px}
+.cl-proj{display:flex;flex-direction:column;gap:6px;text-align:start;padding:12px 14px;border-radius:14px;background:var(--surface-2);border:0;cursor:pointer;color:var(--ink);transition:background var(--t-fast)}
+.cl-proj:hover{background:var(--surface-3)}
+.cl-proj-top{display:flex;align-items:center;gap:8px}
+.cl-proj-top .icon{width:16px;height:16px;color:var(--brand)}
+.cl-proj-top b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.cl-proj-top em{font-style:normal;font-weight:800;color:var(--brand)}
+.cl-proj small{font-size:11px;color:var(--muted)}
+.cl-bar{height:6px;border-radius:6px;background:var(--surface-3);overflow:hidden}
+.cl-bar i{display:block;height:100%;border-radius:6px;background:var(--brand)}
+.cl-proj.none{flex-direction:row;flex-wrap:wrap;align-items:center;border:1.5px dashed var(--line-strong);background:transparent}
+.cl-proj.none .icon{width:16px;height:16px;color:var(--brand)}
+.cl-proj.none small{flex-basis:100%}
+.cl-flags{display:flex;flex-wrap:wrap;gap:6px}
+.cl-last{display:grid;grid-template-columns:1fr auto;gap:2px 10px;text-align:start;padding:10px 12px;border-radius:12px;background:transparent;border:1px solid var(--line);cursor:pointer;color:var(--ink);margin:0}
+.cl-last.empty{display:block;font-size:13px;cursor:default}
+.cl-last.from-client{border-color:var(--danger-soft);background:color-mix(in srgb,var(--danger-soft) 35%,transparent)}
+.cl-last-who{font-size:11px;font-weight:700;color:var(--muted)}
+.cl-last time{font-size:11px;color:var(--faint);grid-row:1}
+.cl-last p{grid-column:1/-1;margin:0;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cl-people{display:flex;align-items:center;gap:10px}
+.cl-avs{display:flex}
+.cl-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-ink);font-size:11px;font-weight:700;border:2px solid var(--surface);margin-inline-start:-8px}
+.cl-av:first-child{margin-inline-start:0}
+.cl-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:4px;border-top:1px solid var(--line)}
+.cl-actions .icon-btn{margin-inline-start:auto}
+@media (max-width:760px){#view-clients .page-actions{width:100%;display:flex;gap:8px;min-width:0}.cl-search{flex:1;width:auto;min-width:0}#cl-new{flex-shrink:0;padding-inline:14px}.cl-grid{grid-template-columns:1fr}.cl-kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.cl-actions{flex-wrap:nowrap}.cl-actions .btn{padding-inline:10px}.cl-card{padding:14px}}
+
+.cp-body{padding-top:env(safe-area-inset-top)}

@@ -166,6 +166,15 @@ class MP_Portal {
 			)
 		);
 		$id = (int) $wpdb->insert_id;
+		// The client sees it in the conversation too, with a button that opens it.
+		MP_Client::system(
+			0,
+			$pid,
+			'design' === $kind
+				? ( $version > 1 ? 'نسخه ' . MP_Jalali::digits( (string) $version ) . ' طرح «' . $title . '» برای بررسی ارسال شد.' : 'طرح «' . $title . '» برای بررسی و تأیید ارسال شد.' )
+				: 'فایل «' . $title . '» تحویل داده شد.',
+			array( 't' => $kind, 'id' => $id )
+		);
 		MP_Audit::log( 'create', 'portal', $id, ( 'design' === $kind ? 'طرح «' : 'فایل تحویلی «' ) . $title . '»' . ( $version > 1 ? ' نسخه ' . $version : '' ) );
 		return self::payload( self::get( $id ) );
 	}
@@ -344,6 +353,7 @@ class MP_Portal {
 			return self::err( 'بنویسید چه چیزی باید تغییر کند، یا روی طرح نظر بگذارید.' );
 		}
 		$wpdb->update( self::t( 'client_items' ), array( 'status' => $d, 'decision_note' => $note, 'decided_by' => '' !== $name ? $name : $ch->client_name, 'decided_at' => MP_Util::now() ), array( 'id' => $x->id ) );
+		MP_Client::system( 0, $x->project_id, ( '' !== $name ? $name : $ch->client_name ) . ( 'approved' === $d ? ' طرح «' . $x->title . '» را تأیید کرد ✓' : ' برای طرح «' . $x->title . '» درخواست تغییر داد.' ), array( 't' => 'design', 'id' => (int) $x->id ) );
 		self::notify( $x->project_id, ( '' !== $name ? $name : $ch->client_name ) . ( 'approved' === $d ? ' طرح «' . $x->title . '» را تأیید کرد' : ' برای طرح «' . $x->title . '» تغییر خواست' ), $note, $x->id );
 		MP_Audit::log( 'update', 'portal', $x->id, '«' . $x->title . '»: ' . self::STATUS[ $d ] . ' توسط مشتری' );
 		return self::payload( self::get( $x->id ), $ch->token );

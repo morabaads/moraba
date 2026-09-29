@@ -9,6 +9,7 @@ $mp_nav = array(
 	'mytasks'    => array( 'tasks', 'تسک‌های من', 'tasks' ),
 	'projects'   => array( 'folder', 'پروژه‌ها', '' ),
 	'messages'   => array( 'chat', 'پیام‌ها', 'messages' ),
+	'clients'    => array( 'user', 'مشتریان', '' ),
 	'attendance' => array( 'clock', 'حضور و مرخصی', 'leaves' ),
 	'reminders'  => array( 'alarm', 'یادآوری', 'reminders' ),
 	'accounting' => array( 'wallet', 'حسابداری', '' ),
@@ -242,6 +243,19 @@ $mp_nav = array(
 			</div>
 			<div class="tabs" role="tablist" id="proj-tabs" aria-label="پروژه‌ها"></div>
 			<div id="proj-body"></div>
+		</section>
+
+		<!-- ================= Clients ================= -->
+		<section class="view" id="view-clients" data-view="clients" hidden aria-label="مشتریان">
+			<div class="page-head">
+				<div><h1>مشتریان</h1><p>گروه‌های مشتری، پروژه هر کدام، افراد، پرتال و آنچه منتظر پاسخ است</p></div>
+				<div class="page-actions">
+					<label class="search cl-search"><?php echo $mp_i( 'search' ); // phpcs:ignore ?><input type="search" id="cl-q" placeholder="جست‌وجوی مشتری یا پروژه" aria-label="جست‌وجوی مشتری"></label>
+					<button type="button" class="btn btn-primary" id="cl-new"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>مشتری جدید</button>
+				</div>
+			</div>
+			<div class="tabs" role="tablist" id="cl-tabs" aria-label="فیلتر مشتریان"></div>
+			<div id="cl-body"></div>
 		</section>
 
 		<!-- ================= Messages ================= -->

@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -62,8 +62,15 @@ class MP_Frontend {
 		if ( get_query_var( 'mp_file' ) ) {
 			MP_Files::serve( (int) get_query_var( 'mp_file' ) );
 		}
-		if ( get_query_var( 'mp_manifest' ) ) {
+		$mf = get_query_var( 'mp_manifest' );
+		if ( is_string( $mf ) && preg_match( '/^[A-Za-z0-9]{32}$/', $mf ) ) {
+			self::client_manifest( $mf );
+		}
+		if ( $mf ) {
 			self::manifest();
+		}
+		if ( 'client' === get_query_var( 'mp_sw' ) ) {
+			self::client_service_worker();
 		}
 		if ( get_query_var( 'mp_sw' ) ) {
 			self::service_worker();
@@ -211,6 +218,109 @@ self.addEventListener('notificationclick',e=>{
 });
 JS;
 		exit;
+	}
+
+	/* ------------------------------------------------------------------ Client portal as an app */
+
+	/** Scope of a client portal: its own /c/{token}/ path, so each client installs their own app. */
+	public static function client_scope( $token ) {
+		$path = wp_parse_url( MP_Client::url( $token ), PHP_URL_PATH );
+		return trailingslashit( $path ? $path : '/' );
+	}
+
+	private static function client_manifest( $token ) {
+		$ch = MP_Client::channel( $token );
+		if ( ! $ch ) {
+			status_header( 404 );
+			exit;
+		}
+		header( 'Content-Type: application/manifest+json; charset=utf-8' );
+		$url   = MP_Client::url( $token );
+		$icons = array(
+			array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any maskable' ),
+			array( 'src' => MP_URL . 'assets/img/icon-512.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any maskable' ),
+		);
+		$name = $ch->client_name ? $ch->client_name : $ch->title;
+		echo wp_json_encode(
+			array(
+				'name'             => $name . ' | مربع استودیو',
+				'short_name'       => function_exists( 'mb_substr' ) ? mb_substr( $name, 0, 12 ) : $name,
+				'description'      => 'پرتال پروژه «' . $ch->title . '»: پیشرفت، طرح‌ها، فایل‌ها، فاکتورها و گفت‌وگو با تیم مربع',
+				'lang'             => 'fa',
+				'dir'              => 'rtl',
+				'start_url'        => $url,
+				'scope'            => self::client_scope( $token ),
+				'id'               => self::client_scope( $token ),
+				'display'          => 'standalone',
+				'display_override' => array( 'standalone', 'minimal-ui' ),
+				'orientation'      => 'any',
+				'categories'       => array( 'business', 'productivity' ),
+				'background_color' => '#111213',
+				'theme_color'      => '#111213',
+				'icons'            => $icons,
+				'shortcuts'        => array(
+					array( 'name' => 'گفت‌وگو', 'url' => $url . '#chat', 'icons' => array( $icons[0] ) ),
+					array( 'name' => 'طرح‌ها', 'url' => $url . '#designs', 'icons' => array( $icons[0] ) ),
+					array( 'name' => 'فاکتورها', 'url' => $url . '#invoices', 'icons' => array( $icons[0] ) ),
+				),
+			),
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+		);
+		exit;
+	}
+
+	/**
+	 * Service worker of the client portal: static files from cache (instant start), the page itself
+	 * network-first with the last copy as offline fallback. API calls always go to the network.
+	 */
+	private static function client_service_worker() {
+		header( 'Content-Type: application/javascript; charset=utf-8' );
+		header( 'Service-Worker-Allowed: /' );
+		header( 'Cache-Control: no-cache' );
+		$assets = array();
+		foreach ( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'js/pwa.js', 'js/pins.js', 'js/client.js' ) as $a ) {
+			$assets[] = MP_URL . 'assets/' . $a . ( 0 === strpos( $a, 'fonts/' ) ? '' : '?ver=' . MP_VERSION );
+		}
+		echo 'const CACHE=' . wp_json_encode( 'mpc-' . MP_VERSION ) . ',ASSETS=' . wp_json_encode( $assets ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ";\n"; // phpcs:ignore
+		echo <<<'JS'
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith('mpc-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{
+  const r=e.request; if(r.method!=='GET')return;
+  const u=new URL(r.url);
+  if(u.pathname.includes('/wp-json/')||u.search.includes('rest_route')||u.search.includes('mp_file'))return;
+  if(ASSETS.includes(r.url)){e.respondWith(caches.match(r).then(m=>m||fetch(r)));return;}
+  if(r.mode==='navigate'){
+    e.respondWith(fetch(r).then(res=>{if(res.ok){const c=res.clone();caches.open(CACHE).then(x=>x.put(u.origin+u.pathname,c));}return res;})
+      .catch(()=>caches.match(u.origin+u.pathname).then(m=>m||new Response('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><style>@font-face{font-family:Dana;src:url('+FONT+') format("woff2");font-weight:10 990}body{font-family:Dana,Tahoma,sans-serif;direction:rtl;text-align:center;padding:40px;background:#111213;color:#eee}</style><body>اتصال اینترنت برقرار نیست؛ دوباره تلاش کنید.</body>',{headers:{'Content-Type':'text/html; charset=utf-8'}}))));
+  }
+});
+JS;
+		exit;
+	}
+
+	/** Head tags of the client portal: its own manifest, icons and theme. */
+	public static function client_head( $token, $title ) {
+		printf(
+			'<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="%1$s"><meta name="application-name" content="%1$s"><meta name="format-detection" content="telephone=no"><link rel="manifest" href="%2$s"><link rel="apple-touch-icon" sizes="180x180" href="%3$s"><link rel="preload" href="%4$s" as="font" type="font/woff2" crossorigin>' . "\n",
+			esc_attr( function_exists( 'mb_substr' ) ? mb_substr( $title, 0, 20 ) : $title ),
+			esc_url( add_query_arg( 'mp_manifest', $token, home_url( '/' ) ) ),
+			esc_url( self::asset( 'img/icon-180.png' ) ),
+			esc_url( MP_URL . 'assets/fonts/dana.woff2' )
+		);
+	}
+
+	/** Install banner + service worker for the client portal (only with its own /c/ scope). */
+	public static function client_pwa_script( $token, $title ) {
+		$pretty = (bool) get_option( 'permalink_structure' );
+		return sprintf(
+			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="1" data-app="%s" defer></script>',
+			esc_url( self::asset( 'js/pwa.js' ) ),
+			$pretty ? esc_url( add_query_arg( 'mp_sw', 'client', home_url( '/' ) ) ) : '',
+			esc_attr( self::client_scope( $token ) ),
+			esc_url( self::asset( 'img/icon-180.png' ) ),
+			esc_attr( $title )
+		);
 	}
 
 	public static function asset( $path ) {
