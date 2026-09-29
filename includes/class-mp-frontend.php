@@ -27,6 +27,10 @@ class MP_Frontend {
 		// Short public links for clients: /c/{token} (portal) and /i/{token} (invoice).
 		add_rewrite_rule( '^c/([A-Za-z0-9]{32})/?$', 'index.php?mp_client=$matches[1]', 'top' );
 		add_rewrite_rule( '^i/([A-Za-z0-9]{32})/?$', 'index.php?mp_invoice=$matches[1]', 'top' );
+		if ( did_action( 'init' ) && get_option( 'mp_flush_rewrite' ) ) {
+			delete_option( 'mp_flush_rewrite' );
+			flush_rewrite_rules( false );
+		}
 	}
 
 	public static function query_vars( $vars ) {

@@ -34,8 +34,8 @@ class MP_Install {
 			self::add_roles();
 			MP_Templates::seed();
 			MP_Costs::migrate();
-			MP_Frontend::add_rewrite();
-			flush_rewrite_rules( false );
+			// $wp_rewrite does not exist yet on plugins_loaded; flush on init instead.
+			update_option( 'mp_flush_rewrite', 1 );
 			update_option( 'mp_db_version', MP_DB_VERSION );
 		}
 	}
