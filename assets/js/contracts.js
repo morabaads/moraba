@@ -105,7 +105,8 @@
           el('small', { class: 'muted', text: no(c.number) + ' · ' + J.format(c.created_at.slice(0, 10)) }),
           el('strong', { text: c.title }),
           el('span', { class: 'ct-who', text: [c.client_name, c.project].filter(Boolean).join(' · ') || 'بدون مشتری' }),
-          el('div', { class: 'ct-chips' }, el('span', { class: 'chip ' + TONE[c.status], text: STATUS[c.status] }), c.amount ? el('span', { class: 'chip', text: money(c.amount) }) : null))),
+          el('div', { class: 'ct-chips' }, el('span', { class: 'chip ' + (c.expired ? 'danger' : TONE[c.status]), text: c.expired ? 'مهلت امضا تمام شده' : STATUS[c.status] }), c.kind === 'amendment' ? el('span', { class: 'chip info', text: 'الحاقیه' }) : null, c.amount ? el('span', { class: 'chip', text: money(c.amount) }) : null))),
+      c.status === 'sent' && settings.f_track ? el('p', { class: 'ct-track' }, el('span', { html: icon('eye') }), c.views ? 'باز شده ' + fa(c.views) + ' بار · خوانده ' + fa(c.read_pct) + '٪ · آخرین بار ' + MP.relTime(c.last_viewed_at) : 'مشتری هنوز باز نکرده', c.reminders_sent ? el('em', { text: fa(c.reminders_sent) + ' یادآوری' }) : null) : null,
       c.status === 'signed' ? el('p', { class: 'ct-signed', html: icon('checks') + ' ' }, 'امضا: ' + c.signer_name + ' · ' + J.format(c.signed_at.slice(0, 10))) : null,
       el('footer', { class: 'ct-actions' },
         el('a', { class: 'btn btn-ghost btn-sm', href: c.url, target: '_blank', rel: 'noopener', html: icon('eye') + 'نمایش' }),
@@ -123,6 +124,11 @@
     var preview = el('div', { class: 'ct-doc' }), fieldsBox = el('div', { class: 'ct-fields' });
     var customers = [];
     var f = el('form', { class: 'form ct-form' });
+    var annexTitle = el('input', { maxlength: 200, value: c.annex_title || 'فهرست امکانات و مشخصات فنی' });
+    var annexText = el('textarea', { class: 'ct-text', rows: 8, placeholder: '### صفحات\n- صفحه اصلی\n- فروشگاه\n### امکانات\n- درگاه پرداخت' }, c.annex || '');
+    var signers = (c.signers && c.signers.length > 1 || (c.signers && c.signers[0] && c.signers[0].role && c.signers[0].role !== 'کارفرما')) ? c.signers.map(function (x) { return { name: x.name, mobile: x.mobile, role: x.role, signed_at: x.signed_at }; }) : [];
+    var stages = (c.stages && c.stages.length ? c.stages : (settings.stages || [])).map(function (x) { return { pct: x.pct, title: x.title, on: x.on, milestone_id: x.milestone_id || 0, invoice: x.invoice || null }; });
+    var expires = c.expires_at || J.addDays(S.today, settings.expire_days || 14);
     var tplSel = MP.select('template_id', templates.map(function (t) { return [t.id, t.title]; }), tpl.id);
     var title = el('input', { name: 'title', maxlength: 200, value: c.title || 'قرارداد طراحی و توسعه وب‌سایت', placeholder: 'عنوان قرارداد' });
     var proj = MP.projectSelect('project_id', c.project_id || 0);
@@ -194,8 +200,20 @@
       autofill(false);
     }).catch(function () { autofill(false); });
 
-    var info = c.status === 'signed' ? el('div', { class: 'ct-signinfo' }, el('b', { html: icon('checks') + ' امضاشده توسط ' + esc(c.signer_name) }),
-      el('small', { text: J.format(c.signed_at.slice(0, 10)) + ' · ' + (c.signer_mobile ? 'تأیید پیامکی ' + J.faDigits(c.signer_mobile) : 'امضای دستی') + ' · اثر انگشت ' + c.fingerprint })) : null;
+    var info = null;
+    if (c.status === 'signed') {
+      info = el('div', { class: 'ct-signinfo' }, el('b', { html: icon('checks') + ' امضاشده توسط ' + esc(c.signer_name) }),
+        el('small', { text: J.format(c.signed_at.slice(0, 10)) + ' · اثر انگشت ' + c.fingerprint }),
+        (c.signers || []).filter(function (x) { return x.id_card; }).length ? el('div', { class: 'ct-ids' }, c.signers.filter(function (x) { return x.id_card; }).map(function (x) {
+          return el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('user') + ' کارت ملی ' + esc(x.name), onclick: function () { var w = window.open(''); if (w) w.document.write('<img src="' + x.id_card + '" style="max-width:100%">'); } });
+        })) : null,
+        el('div', { class: 'ct-ids' },
+          c.pdf ? el('a', { class: 'btn btn-secondary btn-sm', href: c.pdf.url, target: '_blank', rel: 'noopener', html: icon('download') + 'PDF امضاشده' }) : settings.f_pdf ? el('a', { class: 'btn btn-ghost btn-sm', href: c.url, target: '_blank', rel: 'noopener', html: icon('download') + 'ساخت و بایگانی PDF' }) : null,
+          settings.f_annex ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('plus') + 'الحاقیه', onclick: function () { MP.api('contracts/' + c.id + '/amend', { method: 'POST' }).then(function (n) { MP.toast('الحاقیه ' + n.number + ' ساخته شد'); load(n.id); }).catch(MP.soft); } }) : null));
+    } else if (c.status === 'sent' && settings.f_track) {
+      info = el('div', { class: 'ct-trackinfo' }, el('b', { html: icon('eye') + ' ' + (c.views ? 'مشتری ' + fa(c.views) + ' بار باز کرده و ' + fa(c.read_pct) + '٪ متن را دیده' : 'مشتری هنوز قرارداد را باز نکرده') }),
+        el('small', { text: [c.first_viewed_at ? 'اولین بازدید ' + MP.relTime(c.first_viewed_at) : '', c.last_viewed_at ? 'آخرین ' + MP.relTime(c.last_viewed_at) : '', c.reminders_sent ? fa(c.reminders_sent) + ' یادآوری پیامکی' : '', (c.signers || []).length > 1 ? fa(c.signers.filter(function (x) { return x.signed_at; }).length) + ' از ' + fa(c.signers.length) + ' امضا' : ''].filter(Boolean).join(' · ') }));
+    }
     if (info) f.append(info);
     f.append(
       el('div', { class: 'ct-edit' },
@@ -205,6 +223,7 @@
           newWrap,
           el('div', { class: 'ct-fields-head' }, el('strong', { text: 'جاهای خالی قرارداد' }), el('small', { class: 'ct-progress muted' })),
           fieldsBox,
+          extras(),
           el('details', { class: 'ct-custom' }, el('summary', { text: 'ویرایش متن همین قرارداد' }),
             el('p', { class: 'hint', text: '«## » ماده، «### » زیرعنوان، «- » بند، «> » تبصره؛ هر چیزی داخل {آکولاد} یک جای خالی است.' }), text)),
         el('div', { class: 'ct-preview' }, el('div', { class: 'ct-preview-bar' }, el('span', { html: icon('eye') + ' پیش‌نمایش' }), c.url ? el('a', { href: c.url, target: '_blank', rel: 'noopener', text: 'صفحه کامل' }) : null), preview)),
@@ -216,10 +235,92 @@
         el('button', { type: 'button', class: 'btn btn-secondary', html: icon('send') + 'ذخیره و ارسال برای امضا', onclick: function () { save(true); } }),
         !isNew ? el('button', { type: 'button', class: 'btn btn-ghost', text: 'لغو', onclick: function () { MP.api('contracts/' + c.id + '/status', { method: 'POST', body: { status: 'cancelled' } }).then(function () { MP.dialog.close(); load(); }).catch(MP.soft); } }) : null,
         !isNew ? el('button', { type: 'button', class: 'btn btn-ghost', text: c.archived ? 'بازگرداندن' : 'آرشیو', onclick: function () { archive(c); } }) : null)));
+    /* Optional sections, each only when its feature is on. */
+    function extras() {
+      var wrap = el('div', { class: 'ct-extras' });
+      if (settings.f_clauses && !locked && (settings.clauses || []).length) {
+        wrap.append(el('div', { class: 'ct-block' }, el('strong', { text: 'بندهای آماده' }), el('small', { class: 'muted', text: 'با یک کلیک به انتهای متن اضافه می‌شود.' }),
+          el('div', { class: 'ct-clauses' }, settings.clauses.map(function (cl) {
+            return el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' ' + esc(cl.title), onclick: function () {
+              var n = (body.match(/^## /gm) || []).length + 1;
+              body = body.replace(/\s+$/, '') + '\n\n## ماده ' + J.faDigits(n) + ': ' + cl.title + '\n' + cl.body + '\n';
+              text.value = body; fields(); paint(); MP.toast('بند «' + cl.title + '» اضافه شد');
+            } });
+          }))));
+      }
+      if (settings.f_expiry && c.status !== 'signed') {
+        var dateF = MP.dateField('ct_exp', expires, 'مهلت امضای مشتری', function () { expires = dateF.querySelector('input').value; });
+        wrap.append(el('div', { class: 'ct-block' }, dateF, c.expired ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('repeat') + 'تمدید ' + fa(settings.expire_days) + ' روز', onclick: function () { MP.api('contracts/' + c.id + '/extend', { method: 'POST' }).then(function (n) { MP.toast('مهلت تا ' + J.formatLong(n.expires_at) + ' تمدید شد'); load(n.id); }).catch(MP.soft); } }) : null));
+      }
+      if (settings.f_multi) {
+        var rows = el('div', { class: 'ct-signers' });
+        var drawS = function () {
+          rows.replaceChildren();
+          if (!signers.length) rows.append(el('p', { class: 'muted', text: 'یک امضاکننده: خود مشتری با شماره تماس قرارداد. برای شرکت‌ها چند نفر را به ترتیب اضافه کنید.' }));
+          signers.forEach(function (x, i) {
+            var done = !!x.signed_at, dis = locked || done;
+            rows.append(el('div', { class: 'ct-signer' + (done ? ' done' : '') },
+              el('b', { text: J.faDigits(i + 1) }),
+              el('input', { value: x.name || '', placeholder: 'نام', disabled: dis, oninput: function (e) { x.name = e.target.value; } }),
+              el('input', { value: x.role || '', placeholder: 'سمت (مدیرعامل…)', disabled: dis, oninput: function (e) { x.role = e.target.value; } }),
+              el('input', { value: x.mobile || '', placeholder: '۰۹…', dir: 'ltr', inputmode: 'tel', disabled: dis, oninput: function (e) { x.mobile = J.latinDigits(e.target.value); } }),
+              done ? el('span', { class: 'chip ok', text: 'امضا شد' }) : dis ? null : el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'حذف', html: icon('close'), onclick: function () { signers.splice(i, 1); drawS(); } })));
+          });
+        };
+        drawS();
+        wrap.append(el('div', { class: 'ct-block' }, el('strong', { text: 'امضاکنندگان (به ترتیب)' }), rows,
+          locked ? null : el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' امضاکننده', onclick: function () {
+            if (!signers.length) { var cu = customers.filter(function (q) { return String(q.id) === cust.value; })[0]; signers.push({ name: (cu && cu.name) || newName.value || '', mobile: (cu && cu.phone) || '', role: 'کارفرما' }); }
+            signers.push({ name: '', mobile: '', role: '' }); drawS();
+          } })));
+      }
+      if (settings.f_invoice) {
+        var sb = el('div', { class: 'ct-stages' });
+        var drawT = function () {
+          sb.replaceChildren();
+          var sum = stages.reduce(function (a, x) { return a + (+x.pct || 0); }, 0), amt = num(values[vars(body).filter(function (n) { return kind(n) === 'money'; })[0]] || 0);
+          var p = MP.project(+proj.value), miles = p && p.milestones ? p.milestones : [];
+          stages.forEach(function (x, i) {
+            var on = el('select', { disabled: locked }, [['sign', 'همزمان با امضا'], ['manual', 'دستی'], ['milestone', 'با اتمام مرحله پروژه']].map(function (o) { return el('option', { value: o[0], text: o[1], selected: x.on === o[0] }); }));
+            var ms = el('select', { disabled: locked, hidden: x.on !== 'milestone' }, el('option', { value: 0, text: miles.length ? '— مرحله پروژه —' : 'این پروژه مرحله ندارد' }), miles.map(function (m) { return el('option', { value: m.id, text: m.title, selected: +x.milestone_id === m.id }); }));
+            on.onchange = function () { x.on = on.value; ms.hidden = on.value !== 'milestone'; };
+            ms.onchange = function () { x.milestone_id = +ms.value; };
+            var inv = x.invoice;
+            sb.append(el('div', { class: 'ct-stage' },
+              el('input', { class: 'ct-pct', value: J.faDigits(x.pct), inputmode: 'numeric', disabled: locked, oninput: function (e) { x.pct = +J.latinDigits(e.target.value).replace(/\D/g, '') || 0; drawSum(); } }),
+              el('span', { class: 'muted', text: '٪' }),
+              el('input', { class: 'ct-stitle', value: x.title || '', placeholder: 'شرح مرحله', disabled: locked, oninput: function (e) { x.title = e.target.value; } }),
+              on, ms,
+              el('b', { class: 'ct-samt', text: amt ? money(Math.round(amt * x.pct / 100)) : '' }),
+              inv ? el('a', { class: 'chip ' + (inv.status === 'paid' ? 'ok' : 'brand'), href: inv.url, target: '_blank', rel: 'noopener', text: 'فاکتور ' + J.faDigits(inv.number) + (inv.status === 'paid' ? ' · پرداخت شد' : '') })
+                : c.status === 'signed' ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'صدور فاکتور', onclick: function () { MP.api('contracts/' + c.id + '/stage', { method: 'POST', body: { index: i } }).then(function (n) { MP.toast('فاکتور صادر و در گفت‌وگوی مشتری ارسال شد'); load(n.id); }).catch(MP.soft); } })
+                : locked ? null : el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'حذف', html: icon('close'), onclick: function () { stages.splice(i, 1); drawT(); } })));
+          });
+          var total = el('small', { class: 'ct-sum' }); sb.append(total);
+          function drawSum() { var t = stages.reduce(function (a, x) { return a + (+x.pct || 0); }, 0); total.textContent = 'جمع: ' + fa(t) + '٪' + (t !== 100 ? ' — باید ۱۰۰٪ باشد' : ' ✓'); total.className = 'ct-sum ' + (t === 100 ? 'ok' : 'bad'); }
+          drawSum(); void sum;
+        };
+        drawT(); proj.addEventListener('change', drawT);
+        wrap.append(el('div', { class: 'ct-block' }, el('strong', { text: 'مراحل پرداخت و فاکتور' }), el('small', { class: 'muted', text: 'پس از امضا، فاکتور هر مرحله خودکار (همزمان با امضا یا با اتمام مرحله پروژه) یا با یک کلیک صادر و برای مشتری ارسال می‌شود.' }), sb,
+          locked ? null : el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' مرحله', onclick: function () { stages.push({ pct: 0, title: '', on: 'manual', milestone_id: 0 }); drawT(); } })));
+      }
+      if (settings.f_annex) {
+        annexTitle.disabled = locked; annexText.disabled = locked;
+        wrap.append(el('details', { class: 'ct-block ct-custom', open: !!(c.annex) }, el('summary', { text: 'پیوست قرارداد (فهرست امکانات و مشخصات فنی)' }),
+          MP.field('عنوان پیوست', annexTitle), annexText,
+          el('p', { class: 'hint', text: 'در صفحه جدا بعد از متن قرارداد می‌آید و جزء قرارداد امضا می‌شود؛ خالی بماند، پیوستی ندارد.' })));
+      }
+      return wrap;
+    }
+
     function save(andSend) {
       if (!cust.value) { MP.toast('مشتری را انتخاب کنید یا «مشتری جدید» را بزنید.', { error: true }); cust.focus(); return; }
       MP.busy(f, true);
-      MP.api(isNew ? 'contracts' : 'contracts/' + c.id, { method: 'POST', body: { title: title.value, template_id: +tplSel.value, project_id: +proj.value, client_id: /^\d+$/.test(cust.value) ? +cust.value : 0, client_name: cust.value === 'new' ? newName.value : '', body: body, vars: values } })
+      MP.api(isNew ? 'contracts' : 'contracts/' + c.id, { method: 'POST', body: { title: title.value, template_id: +tplSel.value, project_id: +proj.value, client_id: /^\d+$/.test(cust.value) ? +cust.value : 0, client_name: cust.value === 'new' ? newName.value : '', body: body, vars: values,
+        annex_title: settings.f_annex ? annexTitle.value : null, annex: settings.f_annex ? annexText.value : null,
+        signers: settings.f_multi ? signers.filter(function (x) { return x.name; }) : null,
+        stages: settings.f_invoice ? stages.map(function (x) { return { pct: x.pct, title: x.title, on: x.on, milestone_id: x.milestone_id }; }) : null,
+        expires_at: settings.f_expiry ? expires : null } })
         .then(function (saved) { MP.toast('قرارداد ' + saved.number + ' ذخیره شد'); load(); if (andSend) sendDialog(saved); else MP.dialog.close(); })
         .catch(function (err) { MP.busy(f, false); MP.soft(err); });
     }
@@ -256,6 +357,9 @@
 
   function settingsDialog() {
     var s = settings, sig = s.signature || '';
+    var clauses = (s.clauses || []).map(function (x) { return { title: x.title, body: x.body }; });
+    var dstages = (s.stages || []).map(function (x) { return { pct: x.pct, title: x.title, on: x.on }; });
+
     var pad = el('canvas', { class: 'ct-pad' }), ctx, drawn = false, down = false, last = null;
     var sigImg = el('img', { class: 'ct-sig-img', alt: 'امضای مجری', src: sig || '', hidden: !sig });
     function padInit() {
@@ -285,12 +389,58 @@
           el('div', { class: 'ct-sig-actions' },
             el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'پاک کردن', onclick: function () { if (ctx) ctx.clearRect(0, 0, pad.width, pad.height); drawn = false; sig = ''; sigImg.hidden = true; } }),
             el('small', { class: 'muted', text: 'امضای خود را در کادر بکشید؛ روی همه قراردادهای ارسال‌شده می‌نشیند.' })))),
-      MP.actions('ذخیره ظاهر'));
+      features(),
+      MP.actions('ذخیره تنظیمات'));
+    /* Every extra is optional. */
+    function features() {
+      var F = [
+        ['f_invoice', 'مراحل پرداخت → فاکتور خودکار', 'بعد از امضا فاکتور پیش‌پرداخت صادر می‌شود؛ مراحل بعد با اتمام مرحله پروژه یا یک کلیک.'],
+        ['f_track', 'پیگیری باز شدن و مطالعه', 'ببینید مشتری کی و چند بار قرارداد را باز کرده و تا کجا خوانده.'],
+        ['f_remind', 'یادآور پیامکی امضا', 'اگر امضا نشد، هر چند روز یک پیامک یادآوری (ساعت ۹ تا ۲۰).'],
+        ['f_expiry', 'مهلت امضا', 'بعد از مهلت، لینک امضا بسته می‌شود تا تمدید کنید.'],
+        ['f_annex', 'پیوست و الحاقیه', 'فهرست امکانات/مشخصات فنی به‌عنوان پیوست، و الحاقیه برای تغییرات بعد از امضا.'],
+        ['f_multi', 'چند امضاکننده', 'برای شرکت‌ها: چند نفر به ترتیب امضا می‌کنند؛ هر کدام با کد پیامکی خودش.'],
+        ['f_clauses', 'بندهای آماده', 'مالکیت، فسخ، حل اختلاف، محرمانگی و… با یک کلیک در متن.'],
+        ['f_idcard', 'تصویر کارت ملی هنگام امضا', 'مشتری هنگام امضا عکس کارت ملی را هم بارگذاری می‌کند (فقط تیم می‌بیند).'],
+        ['f_pdf', 'فایل PDF واقعی و بایگانی', 'دکمه «دانلود PDF»؛ بعد از امضا، PDF خودکار در فایل‌های پروژه و گفت‌وگوی مشتری قرار می‌گیرد.']
+      ];
+      var box = el('div', { class: 'ct-features' }, F.map(function (x) {
+        return el('label', { class: 'ct-feature' }, el('input', { type: 'checkbox', name: x[0], checked: !!s[x[0]], class: 'switch' }), el('div', null, el('b', { text: x[1] }), el('small', { text: x[2] })));
+      }));
+      var nums = el('div', { class: 'row' },
+        MP.field('یادآوری هر چند روز', el('input', { name: 'remind_days', inputmode: 'numeric', value: J.faDigits(s.remind_days || 3) })),
+        MP.field('حداکثر یادآوری', el('input', { name: 'remind_max', inputmode: 'numeric', value: J.faDigits(s.remind_max || 3) })),
+        MP.field('مهلت پیش‌فرض (روز)', el('input', { name: 'expire_days', inputmode: 'numeric', value: J.faDigits(s.expire_days || 14) })));
+      var st = el('div', { class: 'ct-stages' });
+      (function drawD() {
+        st.replaceChildren.apply(st, dstages.map(function (x, i) {
+          return el('div', { class: 'ct-stage' },
+            el('input', { class: 'ct-pct', value: J.faDigits(x.pct), inputmode: 'numeric', oninput: function (e) { x.pct = +J.latinDigits(e.target.value).replace(/\D/g, '') || 0; } }), el('span', { class: 'muted', text: '٪' }),
+            el('input', { class: 'ct-stitle', value: x.title, oninput: function (e) { x.title = e.target.value; } }),
+            el('select', { onchange: function (e) { x.on = e.target.value; } }, [['sign', 'همزمان با امضا'], ['manual', 'دستی / مرحله پروژه']].map(function (o) { return el('option', { value: o[0], text: o[1], selected: (x.on === 'sign') === (o[0] === 'sign') }); })),
+            el('button', { type: 'button', class: 'icon-btn sm', html: icon('close'), onclick: function () { dstages.splice(i, 1); drawD(); } }));
+        }).concat([el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' مرحله', onclick: function () { dstages.push({ pct: 0, title: '', on: 'manual' }); drawD(); } })]));
+      })();
+      var cl = el('div', { class: 'ct-cl-list' });
+      (function drawC() {
+        cl.replaceChildren.apply(cl, clauses.map(function (x, i) {
+          return el('details', { class: 'ct-cl' }, el('summary', null, el('b', { text: x.title || 'بند جدید' }), el('button', { type: 'button', class: 'icon-btn sm', html: icon('trash'), onclick: function (e) { e.preventDefault(); clauses.splice(i, 1); drawC(); } })),
+            el('input', { value: x.title, placeholder: 'عنوان بند', oninput: function (e) { x.title = e.target.value; } }),
+            el('textarea', { rows: 4, oninput: function (e) { x.body = e.target.value; } }, x.body));
+        }).concat([el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' بند آماده', onclick: function () { clauses.push({ title: '', body: '' }); drawC(); } })]));
+      })();
+      return el('div', null,
+        el('h3', { class: 'tio-sub', text: 'امکانات (هر کدام را روشن یا خاموش کنید)' }), box, nums,
+        el('details', { class: 'ct-custom' }, el('summary', { text: 'مراحل پرداخت پیش‌فرض قرارداد جدید' }), st),
+        el('details', { class: 'ct-custom' }, el('summary', { text: 'کتابخانه بندهای آماده' }), cl));
+    }
     f.onsubmit = function (e) {
       e.preventDefault(); MP.busy(f, true);
       var v = f.elements;
-      MP.api('contracts/settings', { method: 'POST', body: { style: f.querySelector('[name=style]:checked').value, accent: v.accent.value, logo: v.logo.checked, studio: v.studio.value, agent: v.agent.value, address: v.address.value, footer: v.footer.value, otp: v.otp.checked, signature: drawn ? pad.toDataURL('image/png') : sig } })
-        .then(function (n) { settings = n; MP.toast('ظاهر قرارداد ذخیره شد'); MP.dialog.close(); }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
+      MP.api('contracts/settings', { method: 'POST', body: { style: f.querySelector('[name=style]:checked').value, accent: v.accent.value, logo: v.logo.checked, studio: v.studio.value, agent: v.agent.value, address: v.address.value, footer: v.footer.value, otp: v.otp.checked, signature: drawn ? pad.toDataURL('image/png') : sig,
+        f_invoice: v.f_invoice.checked, f_track: v.f_track.checked, f_remind: v.f_remind.checked, f_expiry: v.f_expiry.checked, f_annex: v.f_annex.checked, f_multi: v.f_multi.checked, f_clauses: v.f_clauses.checked, f_idcard: v.f_idcard.checked, f_pdf: v.f_pdf.checked,
+        remind_days: num(v.remind_days.value), remind_max: num(v.remind_max.value), expire_days: num(v.expire_days.value), stages: dstages, clauses: clauses } })
+        .then(function (n) { settings = n; MP.toast('تنظیمات قرارداد ذخیره شد'); MP.dialog.close(); draw(); }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
     };
     var tl = el('div', { class: 'tio-history' });
     function drawTemplates() {

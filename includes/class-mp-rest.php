@@ -968,6 +968,9 @@ class MP_Rest {
 		}
 		if ( $f ) {
 			$wpdb->update( self::t( 'milestones' ), $f, array( 'id' => (int) $r['id'] ) );
+			if ( isset( $f['status'] ) && 'done' === $f['status'] ) {
+				MP_Contracts::milestone_done( (int) $r['id'] ); // a contract's payment stage may wait on it
+			}
 		}
 		return self::list_projects();
 	}

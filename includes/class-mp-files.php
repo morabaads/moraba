@@ -140,6 +140,31 @@ class MP_Files {
 		return self::get( $wpdb->insert_id );
 	}
 
+	/** Stores bytes made by the plugin itself (e.g. a signed contract's PDF). */
+	public static function store_bytes( $context, $context_id, $name, $mime, $bytes, $ext ) {
+		global $wpdb;
+		$sub = gmdate( 'Y/m' );
+		wp_mkdir_p( self::dir() . '/' . $sub );
+		$rel = $sub . '/' . wp_generate_password( 32, false, false ) . '.' . $ext;
+		if ( false === file_put_contents( self::dir() . '/' . $rel, $bytes ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions
+			return null;
+		}
+		$wpdb->insert(
+			MP_Install::table( 'files' ),
+			array(
+				'user_id'    => get_current_user_id(),
+				'context'    => $context,
+				'context_id' => (int) $context_id,
+				'name'       => sanitize_file_name( $name ),
+				'mime'       => $mime,
+				'size'       => strlen( $bytes ),
+				'path'       => $rel,
+				'created_at' => MP_Util::now(),
+			)
+		);
+		return self::get( $wpdb->insert_id );
+	}
+
 	/** Attach an uploaded (still unattached) file to its object; only the uploader may do this. */
 	public static function claim( $file_id, $context, $context_id ) {
 		global $wpdb;

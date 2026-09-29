@@ -14,7 +14,7 @@ $mp_date   = function ( $dt ) {
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <style>
 @font-face{font-family:Dana;src:url(<?php echo esc_url( MP_URL . 'assets/fonts/dana.woff2' ); ?>) format('woff2');font-weight:10 990}
-:root{--a:<?php echo esc_html( $s['accent'] ); ?>;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e8e6e2;--bg:#efeeeb;--paper:#fff;--ok:#1f7a45}
+:root{--a:<?php echo esc_html( $s['accent'] ); ?>;--a22:<?php echo esc_html( vsprintf( 'rgba(%d,%d,%d,.22)', sscanf( $s['accent'], '#%02x%02x%02x' ) ) ); ?>;--ink:#1b1b1b;--muted:#6f6f6f;--line:#e8e6e2;--bg:#efeeeb;--paper:#fff;--ok:#1f7a45}
 *{box-sizing:border-box}html,body{margin:0}
 body{background:var(--bg);font:14px/2.05 Dana,Tahoma,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
 .bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(20,20,20,.92);color:#fff;backdrop-filter:blur(10px)}
@@ -42,7 +42,7 @@ h1.title{margin:2px 0 6px;font-size:25px;line-height:1.5}
 .doc li{margin:2px 0}
 .doc li::marker{color:var(--a)}
 .doc .note{background:#faf8f5;border-right:3px solid var(--a);padding:8px 14px;border-radius:0 0 0 0;font-size:13px}
-.doc .v{font-weight:800;color:var(--ink);background:linear-gradient(transparent 62%,color-mix(in srgb,var(--a) 22%,transparent) 0);padding:0 2px}
+.doc .v{font-weight:800;color:var(--ink);background:linear-gradient(transparent 62%,var(--a22) 0);padding:0 2px}
 .doc .blank{display:inline-block;min-width:120px;border-bottom:1.5px dotted #b9b4ad;color:#b9b4ad;font-size:11px;line-height:1.6;text-align:center}
 /* styles */
 .s-modern .sheet:before{content:'';position:absolute;inset:0 0 auto 0;height:8px;background:var(--a)}
@@ -64,7 +64,7 @@ h1.title{margin:2px 0 6px;font-size:25px;line-height:1.5}
 .sign .img img{max-height:90px;max-width:100%}
 .sign .wait{color:#b9b4ad;font-size:12px;border:1.5px dashed #ddd8d0;border-radius:12px;padding:18px;text-align:center;width:100%}
 .sign .when{font-size:11px;color:var(--muted)}
-.cert{margin-top:18px;border:1.5px solid color-mix(in srgb,var(--ok) 35%,transparent);background:#f3faf6;border-radius:16px;padding:12px 16px;font-size:12px;line-height:1.9;page-break-inside:avoid}
+.cert{margin-top:18px;border:1.5px solid #b9dcc8;background:#f3faf6;border-radius:16px;padding:12px 16px;font-size:12px;line-height:1.9;page-break-inside:avoid}
 .cert b{color:var(--ok)}.cert code{font-family:ui-monospace,monospace;direction:ltr;display:inline-block;letter-spacing:1px}
 .cert.bad{background:#fdf1f1;border-color:#f0c9c9}.cert.bad b{color:#b33}
 .foot{margin-top:24px;text-align:center;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
@@ -101,19 +101,36 @@ body.has-dock .page{padding-bottom:110px}
 @media (max-width:640px){.sheet{padding:34px 20px 30px}.s-classic .sheet{padding:44px 26px 34px;outline-offset:-10px}.parties,.signs{grid-template-columns:1fr}.stamp{position:static;display:inline-block;transform:none;font-size:12px;margin:0 0 8px}h1.title{font-size:20px}.bar .t{display:none}}
 @page{size:A4;margin:14mm 14mm 16mm}
 @media print{body{background:#fff}.bar,.signbox,.noprint{display:none!important}.page{margin:0;max-width:none;padding:0}.sheet{box-shadow:none;padding:0}.s-classic .sheet{border:0;outline:0;padding:0}.s-modern .sheet:before{display:none}.doc h2{page-break-after:avoid}}
+.annex{margin-top:34px;padding-top:26px;border-top:2px dashed var(--line);page-break-before:always}
+.annex-kicker{font-size:12px;font-weight:800;color:var(--a)}
+.parent{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:99px;background:#f4f1ec;font-size:11px;font-weight:700}
+.deadline{display:inline-block;margin-top:6px;margin-inline-start:6px;padding:2px 10px;border-radius:99px;background:#fff3e6;color:#b45f0a;font-size:11px;font-weight:700}
+.deadline.over{background:#fdecec;color:#b33}
+.signs{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.sign .role{color:var(--muted);font-size:11px;font-weight:600}
+.sign.next{border-color:var(--a);box-shadow:0 0 0 3px var(--a22)}
+.idcard{display:block;margin-top:4px}.cardbtn{width:100%;border:1.5px dashed #cfc9c0;padding:14px}
+.idprev{max-width:180px;max-height:110px;border-radius:10px;margin-top:6px;display:none}
+.who{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--a22);font-size:12px;font-weight:800;margin-bottom:6px}
+.expired{padding:14px 18px;border-radius:18px;background:#fdecec;color:#b33;font-weight:700;text-align:center;box-shadow:0 14px 40px rgba(0,0,0,.15)}
+.busy{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(255,255,255,.85);font-weight:800;font-size:15px}
 </style></head>
 <body class="s-<?php echo esc_attr( $s['style'] ); ?>">
-<div class="bar noprint"><b><?php echo esc_html( $s['studio'] . ' · قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" ); ?></b>
-<?php if ( 'sent' === $c->status ) : ?><button class="btn btn-a" type="button" onclick="document.getElementById('k-open').click()">امضای قرارداد</button><?php endif; ?>
-<button class="btn btn-g" type="button" onclick="window.print()">چاپ / PDF</button></div>
+<div class="bar noprint"><b><?php echo esc_html( $s['studio'] . ' · ' . ( 'amendment' === $c->kind ? 'الحاقیه ' : 'قرارداد ' ) . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" ); ?></b>
+<?php if ( 'sent' === $c->status && ! $expired ) : ?><button class="btn btn-a" type="button" onclick="document.getElementById('k-open').click()">امضای قرارداد</button><?php endif; ?>
+<?php if ( $s['f_pdf'] ) : ?><button class="btn btn-g" type="button" id="k-pdf">دانلود PDF</button><?php endif; ?>
+<button class="btn btn-g" type="button" onclick="window.print()">چاپ</button></div>
 
-<div class="page"><article class="sheet">
+<div class="page"><article class="sheet" id="sheet">
 <?php if ( 'draft' === $c->status ) : ?><div class="water">پیش‌نویس</div><?php endif; ?>
-<span class="stamp <?php echo esc_attr( $c->status ); ?>"><?php echo esc_html( $mp_status[ $c->status ] ); ?></span>
+<span class="stamp <?php echo esc_attr( $c->status ); ?>"><?php echo esc_html( $expired ? 'مهلت تمام شده' : $mp_status[ $c->status ] ); ?></span>
 <header class="head">
 <div><div class="kicker"><?php echo esc_html( $s['studio'] ); ?></div>
 <h1 class="title"><?php echo esc_html( $c->title ); ?></h1>
-<div class="meta"><span>شماره <?php echo esc_html( "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" ); ?></span><span>تاریخ <?php echo esc_html( MP_Jalali::format( substr( $c->created_at, 0, 10 ) ) ); ?></span></div></div>
+<div class="meta"><span>شماره <?php echo esc_html( "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" ); ?></span><span>تاریخ <?php echo esc_html( MP_Jalali::format( substr( $c->created_at, 0, 10 ) ) ); ?></span></div>
+<?php if ( $parent ) : ?><span class="parent">الحاقیه قرارداد شماره <?php echo esc_html( "\u{2066}" . MP_Jalali::digits( $parent->number ) . "\u{2069}" ); ?></span><?php endif; ?>
+<?php if ( $s['f_expiry'] && 'sent' === $c->status && $c->expires_at ) : ?><span class="deadline<?php echo $expired ? ' over' : ''; ?> noprint">مهلت امضا تا <?php echo esc_html( MP_Jalali::format( $c->expires_at ) ); ?></span><?php endif; ?>
+</div>
 <?php if ( $s['logo'] ) : ?><img src="<?php echo esc_url( MP_URL . 'assets/img/logo.png' ); ?>" alt="<?php echo esc_attr( $s['studio'] ); ?>"><?php endif; ?>
 </header>
 <section class="parties">
@@ -122,48 +139,114 @@ body.has-dock .page{padding-bottom:110px}
 <?php foreach ( $vars as $k => $v ) : if ( $v && in_array( MP_Contracts::kind( $k ), array( 'national', 'phone' ), true ) ) : ?><p><?php echo esc_html( preg_replace( '/\s*(مشتری|کارفرما)$/u', '', $k ) . ': ' . MP_Jalali::digits( $v ) ); ?></p><?php endif; endforeach; ?></div>
 </section>
 <div class="doc"><?php echo MP_Contracts::render_body( $c->body, $vars, $c ); // phpcs:ignore -- escaped inside ?></div>
+<?php if ( $s['f_annex'] && trim( (string) $c->annex ) ) : ?>
+<section class="annex doc"><div class="annex-kicker">پیوست ۱</div><h2><?php echo esc_html( $c->annex_title ? $c->annex_title : 'فهرست امکانات و مشخصات فنی' ); ?></h2><?php echo MP_Contracts::render_body( $c->annex, $vars, $c ); // phpcs:ignore ?></section>
+<?php endif; ?>
 
 <section class="signs">
-<div class="sign"><small>امضای مجری</small><strong><?php echo esc_html( $agent ); ?></strong>
+<div class="sign"><small>امضای مجری</small><strong><?php echo esc_html( $agent ); ?></strong><span class="role"><?php echo esc_html( $s['studio'] ); ?></span>
 <div class="img"><?php if ( 'draft' !== $c->status && $s['signature'] ) : ?><img src="<?php echo esc_attr( $s['signature'] ); ?>" alt="امضای مجری"><?php else : ?><div class="wait"><?php echo 'draft' === $c->status ? 'پس از ارسال قرارداد' : 'امضای مجری'; ?></div><?php endif; ?></div>
 <div class="when"><?php echo $c->sent_at ? 'تاریخ: ' . esc_html( $mp_date( $c->sent_at ) ) : ''; ?></div></div>
-<div class="sign"><small>امضای کارفرما</small><strong><?php echo esc_html( $c->signer_name ? $c->signer_name : $client ); ?></strong>
-<div class="img"><?php if ( 'signed' === $c->status && $c->client_sig ) : ?><img src="<?php echo esc_attr( $c->client_sig ); ?>" alt="امضای کارفرما"><?php else : ?><div class="wait">منتظر امضای کارفرما</div><?php endif; ?></div>
-<div class="when"><?php echo $c->signed_at ? 'تاریخ: ' . esc_html( $mp_date( $c->signed_at ) ) : ''; ?></div></div>
+<?php foreach ( $signers as $i => $sg ) : ?>
+<div class="sign<?php echo 'sent' === $c->status && $i === $next ? ' next' : ''; ?>"><small>امضای <?php echo esc_html( ! empty( $sg['role'] ) ? $sg['role'] : 'کارفرما' ); ?></small><strong><?php echo esc_html( $sg['name'] ); ?></strong>
+<div class="img"><?php if ( ! empty( $sg['sig'] ) ) : ?><img src="<?php echo esc_attr( $sg['sig'] ); ?>" alt="امضا"><?php else : ?><div class="wait"><?php echo 'sent' === $c->status && $i === $next ? 'نوبت امضا' : 'منتظر امضا'; ?></div><?php endif; ?></div>
+<div class="when"><?php echo ! empty( $sg['signed_at'] ) ? 'تاریخ: ' . esc_html( $mp_date( $sg['signed_at'] ) ) : ''; ?></div></div>
+<?php endforeach; ?>
 </section>
 <?php if ( 'signed' === $c->status ) : ?>
 <div class="cert<?php echo $intact ? '' : ' bad'; ?>">
 <b><?php echo $intact ? '✓ امضای الکترونیکی معتبر' : '⚠ متن قرارداد پس از امضا تغییر کرده است'; ?></b><br>
-امضاکننده: <?php echo esc_html( $c->signer_name ); ?><?php echo $c->signer_mobile ? ' · تأیید با کد پیامکی به ' . esc_html( MP_Jalali::digits( substr( $c->signer_mobile, 0, 4 ) . '•••' . substr( $c->signer_mobile, -4 ) ) ) : ' · امضای دستی'; ?> · <?php echo esc_html( $mp_date( $c->signed_at ) ); ?><?php echo $c->signer_ip ? ' · IP ' . esc_html( $c->signer_ip ) : ''; ?><br>
+<?php foreach ( $signers as $sg ) : ?>
+<?php echo esc_html( $sg['name'] ); ?><?php echo ! empty( $sg['mobile'] ) && 'otp' === ( isset( $sg['method'] ) ? $sg['method'] : '' ) ? ' · تأیید با کد پیامکی به ' . esc_html( MP_Jalali::digits( substr( $sg['mobile'], 0, 4 ) . '•••' . substr( $sg['mobile'], -4 ) ) ) : ' · امضای دستی'; ?><?php echo ! empty( $sg['signed_at'] ) ? ' · ' . esc_html( $mp_date( $sg['signed_at'] ) ) : ''; ?><?php echo ! empty( $sg['ip'] ) ? ' · IP ' . esc_html( $sg['ip'] ) : ''; ?><br>
+<?php endforeach; ?>
 اثر انگشت سند (SHA-256): <code><?php echo esc_html( strtoupper( implode( ' ', str_split( substr( $c->doc_hash, 0, 32 ), 4 ) ) ) ); ?></code>
 </div>
 <?php endif; ?>
 <?php if ( $s['footer'] ) : ?><div class="foot"><?php echo esc_html( $s['footer'] ); ?> · <?php echo esc_html( MP_Contracts::url( $c->token ) ); ?></div><?php endif; ?>
 </article></div>
 
+<?php $mp_sg = $next >= 0 ? $signers[ $next ] : null; ?>
 <?php if ( 'sent' === $c->status ) : ?>
 <div class="signbox noprint" id="sign">
-<div class="dock"><div><b>این قرارداد منتظر امضای شماست</b><small>بعد از مطالعه، همین‌جا امضا کنید<?php echo $otp ? ' و با کد پیامکی تأیید کنید' : ''; ?></small></div><button class="btn btn-a" type="button" id="k-open">امضای قرارداد</button></div>
+<?php if ( $expired ) : ?>
+<div class="expired">مهلت امضای این قرارداد در <?php echo esc_html( MP_Jalali::format( $c->expires_at ) ); ?> تمام شده است؛ برای تمدید با <?php echo esc_html( $s['studio'] ); ?> تماس بگیرید.</div>
+<?php else : ?>
+<div class="dock"><div><b><?php echo count( $signers ) > 1 ? esc_html( 'نوبت امضای ' . $mp_sg['name'] . ( ! empty( $mp_sg['role'] ) ? ' (' . $mp_sg['role'] . ')' : '' ) ) : 'این قرارداد منتظر امضای شماست'; ?></b><small>بعد از مطالعه، همین‌جا امضا کنید<?php echo $otp ? ' و با کد پیامکی تأیید کنید' : ''; ?><?php echo $s['f_expiry'] && $c->expires_at ? ' · مهلت تا ' . esc_html( MP_Jalali::format( $c->expires_at ) ) : ''; ?></small></div><button class="btn btn-a" type="button" id="k-open">امضای قرارداد</button></div>
 <div class="panel" id="panel"><button class="x" type="button" id="k-close" aria-label="بستن">×</button>
 <h2>امضای قرارداد</h2>
+<?php if ( count( $signers ) > 1 ) : ?><span class="who">امضاکننده <?php echo esc_html( MP_Jalali::digits( (string) ( $next + 1 ) ) . ' از ' . MP_Jalali::digits( (string) count( $signers ) ) . ( ! empty( $mp_sg['role'] ) ? ' · ' . $mp_sg['role'] : '' ) ); ?></span><?php endif; ?>
 <p class="sub">متن قرارداد را کامل بخوانید، نام خود را بنویسید، امضا کنید<?php echo $otp ? ' و با کد پیامکی تأیید کنید' : ''; ?>.</p>
-<label class="field"><span>نام و نام خانوادگی امضاکننده</span><input id="k-name" autocomplete="name" maxlength="120" value="<?php echo esc_attr( $client ); ?>"></label>
+<label class="field"><span>نام و نام خانوادگی امضاکننده</span><input id="k-name" autocomplete="name" maxlength="120" value="<?php echo esc_attr( $mp_sg['name'] ); ?>"></label>
 <div class="field"><span>امضا</span><div class="pad"><canvas id="k-pad"></canvas><div class="hint" id="k-hint">با انگشت یا ماوس اینجا امضا کنید</div><button class="btn btn-l" type="button" id="k-clear">پاک کردن</button></div></div>
-<label class="check"><input type="checkbox" id="k-agree"><span>تمام مفاد این قرارداد را خوانده‌ام و می‌پذیرم؛ امضای الکترونیکی من به منزله امضای تمامی صفحات قرارداد است.</span></label>
+<?php if ( $s['f_idcard'] ) : ?>
+<div class="field idcard"><span>تصویر کارت ملی</span><label class="btn btn-l cardbtn"><input type="file" id="k-card" accept="image/*" hidden>📷 عکس یا انتخاب تصویر کارت ملی</label><img class="idprev" id="k-card-prev" alt=""></div>
+<?php endif; ?>
+<label class="check"><input type="checkbox" id="k-agree"><span>تمام مفاد این قرارداد<?php echo $s['f_annex'] && trim( (string) $c->annex ) ? ' و پیوست آن' : ''; ?> را خوانده‌ام و می‌پذیرم؛ امضای الکترونیکی من به منزله امضای تمامی صفحات قرارداد است.</span></label>
 <?php if ( $otp ) : ?>
 <div class="otp"><label class="field"><span id="k-code-label">کد تأیید پیامکی</span><input id="k-code" inputmode="numeric" maxlength="5" autocomplete="one-time-code" placeholder="•••••"></label><button class="btn btn-l" type="button" id="k-send">دریافت کد</button></div>
 <?php endif; ?>
 <button class="btn btn-a" type="button" id="k-submit" style="width:100%;margin-top:14px;padding:14px">امضا و ثبت نهایی</button>
 <div class="msg" id="k-msg" role="alert"></div>
-</div></div>
+</div>
+<?php endif; ?>
+</div>
+<?php endif; ?>
+<?php if ( 'signed' === $c->status && $team && $s['f_pdf'] && ! $c->pdf_file_id ) : ?>
+<div class="signbox noprint"><div class="dock"><div><b>نسخه PDF این قرارداد هنوز بایگانی نشده</b><small>فایل PDF ساخته و در فایل‌های پروژه و گفت‌وگوی مشتری قرار می‌گیرد.</small></div><button class="btn btn-a" type="button" id="k-archive">بایگانی PDF</button></div></div>
+<?php endif; ?>
+
 <script>
 (function(){
+var API=<?php echo wp_json_encode( esc_url_raw( rest_url( MP_Rest::NS . '/contract/' . $token ) ) ); ?>,OTP=<?php echo $otp ? 'true' : 'false'; ?>,NONCE=<?php echo wp_json_encode( $nonce ); ?>;
+var V=<?php echo wp_json_encode( MP_URL . 'assets/vendor/' ); ?>,NAME=<?php echo wp_json_encode( ( 'amendment' === $c->kind ? 'amendment-' : 'contract-' ) . $c->number . '.pdf' ); ?>;
+function post(p,b,keep){var h={'Content-Type':'application/json'};if(NONCE)h['X-WP-Nonce']=NONCE;return fetch(API+p,{method:'POST',credentials:'same-origin',keepalive:!!keep,headers:h,body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.message||'خطا');return d;});});}
+
+/* ---- PDF: rendered by the browser itself (correct Persian), cut into A4 pages between paragraphs */
+function load(src){return new Promise(function(ok,no){var s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s);});}
+function makePdf(){
+  var sheet=document.getElementById('sheet'),busy=document.createElement('div');busy.className='busy';busy.textContent='در حال ساخت PDF…';document.body.appendChild(busy);
+  return (window.htmlToImage?Promise.resolve():load(V+'html-to-image.js')).then(function(){return window.jspdf?0:load(V+'jspdf.umd.min.js');}).then(function(){
+    var W=sheet.offsetWidth,top=sheet.getBoundingClientRect().top,pageH=W*277/190,cuts=[],forced=[];
+    sheet.querySelectorAll('.head,.parties,.doc>*,.doc li,.annex,.annex>*,.signs,.cert,.foot').forEach(function(n){var r=n.getBoundingClientRect();cuts.push(r.bottom-top+6);if(n.classList.contains('annex'))forced.push(r.top-top-4);});
+    cuts.sort(function(a,b){return a-b;});
+    return htmlToImage.toCanvas(sheet,{pixelRatio:2,backgroundColor:'#ffffff',filter:function(n){return !(n.classList&&n.classList.contains('noprint'));}}).then(function(cv){
+      var H=sheet.offsetHeight,k=cv.width/W,pdf=new jspdf.jsPDF({unit:'mm',format:'a4'}),y=0,page=0;
+      while(y<H-2){
+        var limit=y+pageH,end=H,hard=false;
+        forced.forEach(function(f){if(f>y+2&&f<limit){limit=f;hard=true;}});
+        if(hard)end=limit; // the attachment starts on its own page
+        else if(limit<H){end=y;cuts.forEach(function(c){if(c>y+20&&c<=limit)end=c;});if(end<=y)end=limit;}
+        var part=document.createElement('canvas');part.width=cv.width;part.height=Math.ceil((end-y)*k);
+        part.getContext('2d').drawImage(cv,0,y*k,cv.width,part.height,0,0,cv.width,part.height);
+        if(page)pdf.addPage();
+        pdf.addImage(part.toDataURL('image/jpeg',0.92),'JPEG',10,10,190,(end-y)*190/W);
+        y=end;page++;
+      }
+      return pdf;
+    });
+  }).finally(function(){busy.remove();});
+}
+var pb=document.getElementById('k-pdf');
+if(pb)pb.onclick=function(){makePdf().then(function(p){p.save(NAME);}).catch(function(){alert('ساخت PDF انجام نشد؛ از «چاپ» و گزینه Save as PDF استفاده کنید.');});};
+function archive(){return makePdf().then(function(p){return post('/pdf',{pdf:p.output('datauristring').replace(/;filename=[^;]*/,'')});});}
+var ab=document.getElementById('k-archive');
+if(ab)ab.onclick=function(){ab.disabled=true;archive().then(function(){location.reload();}).catch(function(e){ab.disabled=false;alert(e.message);});};
+
+<?php if ( $s['f_track'] && 'draft' !== $c->status ) : ?>
+/* ---- how far it was read */
+var seenMax=0,sentAt=0;
+function pct(){var d=document.getElementById('sheet'),r=d.getBoundingClientRect();return Math.max(0,Math.min(100,Math.round((innerHeight-r.top)/r.height*100)));}
+post('/seen',{open:1,pct:pct()}).catch(function(){});
+addEventListener('scroll',function(){var p=pct();if(p>seenMax)seenMax=p;if(seenMax-sentAt>=20){sentAt=seenMax;post('/seen',{pct:seenMax}).catch(function(){});}},{passive:true});
+addEventListener('pagehide',function(){if(seenMax>sentAt)post('/seen',{pct:seenMax},true).catch(function(){});});
+<?php endif; ?>
+
+var box=document.getElementById('sign'),cv=document.getElementById('k-pad');
+if(!box||!cv)return;
 document.body.classList.add('has-dock');
-var box=document.getElementById('sign');
+var ctx=cv.getContext('2d'),drawn=false,down=false,last=null;
 document.getElementById('k-open').onclick=function(){box.classList.add('open');setTimeout(size,30);};
 document.getElementById('k-close').onclick=function(){box.classList.remove('open');};
-var API=<?php echo wp_json_encode( esc_url_raw( rest_url( MP_Rest::NS . '/contract/' . $token ) ) ); ?>,OTP=<?php echo $otp ? 'true' : 'false'; ?>;
-var cv=document.getElementById('k-pad'),ctx=cv.getContext('2d'),drawn=false,down=false,last=null;
 function size(){var r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1,img=drawn?cv.toDataURL():null;cv.width=r.width*d;cv.height=r.height*d;ctx.scale(d,d);ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#1a2a6c';if(img){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,r.width,r.height)};i.src=img;}}
 size();addEventListener('resize',size);
 function pos(e){var r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
@@ -172,18 +255,24 @@ cv.addEventListener('pointermove',function(e){if(!down)return;var p=pos(e);ctx.b
 ['pointerup','pointercancel','pointerleave'].forEach(function(t){cv.addEventListener(t,function(){down=false;});});
 document.getElementById('k-clear').onclick=function(){ctx.clearRect(0,0,cv.width,cv.height);drawn=false;document.getElementById('k-hint').hidden=false;};
 var msg=document.getElementById('k-msg');function say(t,ok){msg.textContent=t;msg.className='msg '+(ok?'ok':'bad');}
-function post(p,b){return fetch(API+p,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.message||'خطا');return d;});});}
+/* ID card: shrunk to a JPEG in the browser before sending */
+var card='',ci=document.getElementById('k-card');
+if(ci)ci.onchange=function(){var f=ci.files[0];if(!f)return;var img=new Image();img.onload=function(){var m=1400,s=Math.min(1,m/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);card=c.toDataURL('image/jpeg',0.82);var pv=document.getElementById('k-card-prev');pv.src=card;pv.style.display='block';URL.revokeObjectURL(img.src);};img.src=URL.createObjectURL(f);};
 var send=document.getElementById('k-send');
 if(send)send.onclick=function(){send.disabled=true;post('/code').then(function(d){say('کد به '+d.to+' ارسال شد.',true);document.getElementById('k-code').focus();var s=d.wait||60,t=setInterval(function(){s--;send.textContent=s>0?'ارسال دوباره ('+s+')':'ارسال دوباره';if(s<=0){clearInterval(t);send.disabled=false;}},1000);}).catch(function(e){send.disabled=false;say(e.message);});};
 document.getElementById('k-submit').onclick=function(){
   var name=document.getElementById('k-name').value.trim(),agree=document.getElementById('k-agree').checked,code=OTP?document.getElementById('k-code').value.replace(/[۰-۹]/g,function(d){return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)}):'';
-  if(!name)return say('نام خود را بنویسید.');if(!drawn)return say('امضای خود را در کادر بکشید.');if(!agree)return say('پذیرش مفاد قرارداد را تأیید کنید.');if(OTP&&code.length<5)return say('کد تأیید پیامکی را وارد کنید.');
+  if(!name)return say('نام خود را بنویسید.');if(!drawn)return say('امضای خود را در کادر بکشید.');if(ci&&!card)return say('تصویر کارت ملی را بارگذاری کنید.');if(!agree)return say('پذیرش مفاد قرارداد را تأیید کنید.');if(OTP&&code.length<5)return say('کد تأیید پیامکی را وارد کنید.');
   var b=this;b.disabled=true;b.textContent='در حال ثبت…';
-  post('/sign',{name:name,agree:true,code:code,signature:cv.toDataURL('image/png')}).then(function(){document.getElementById('panel').innerHTML='<div class="done"><div class="ico">✓</div><h2>قرارداد امضا شد</h2><p class="sub">یک نسخه از همین صفحه قابل چاپ و ذخیره به صورت PDF است.</p></div>';setTimeout(function(){location.reload()},1600);})
-  .catch(function(e){b.disabled=false;b.textContent='امضا و ثبت نهایی';say(e.message);});
+  post('/sign',{name:name,agree:true,code:code,signature:cv.toDataURL('image/png'),id_card:card}).then(function(d){
+    document.getElementById('panel').innerHTML='<div class="done"><div class="ico">✓</div><h2>'+(d.complete?'قرارداد امضا شد':'امضای شما ثبت شد')+'</h2><p class="sub">'+(d.complete?'نسخه نهایی با همه امضاها آماده است.':'امضاکننده بعدی با پیامک خبردار شد.')+'</p></div>';
+    // The signed PDF is made here, once, and kept in the project.
+    var after=d.complete&&d.pdf?new Promise(function(r){setTimeout(r,300);}).then(function(){location.hash='';return fetch(location.href,{credentials:'same-origin'}).then(function(r){return r.text();}).then(function(h){var doc=new DOMParser().parseFromString(h,'text/html');document.getElementById('sheet').replaceWith(doc.getElementById('sheet'));return archive();});}).catch(function(){}):Promise.resolve();
+    after.then(function(){setTimeout(function(){location.reload()},800);});
+  }).catch(function(e){b.disabled=false;b.textContent='امضا و ثبت نهایی';say(e.message);});
 };
 })();
 </script>
-<?php endif; ?>
 <?php if ( isset( $_GET['print'] ) ) : // phpcs:ignore ?><script>addEventListener('load',function(){setTimeout(print,400)})</script><?php endif; ?>
+<?php if ( isset( $_GET['pdf'] ) && $s['f_pdf'] ) : // phpcs:ignore ?><script>addEventListener('load',function(){setTimeout(function(){document.getElementById('k-pdf').click()},500)})</script><?php endif; ?>
 </body></html>

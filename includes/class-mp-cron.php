@@ -50,6 +50,7 @@ class MP_Cron {
 
 		MP_Daily::tick();
 		MP_Digest::tick();
+		MP_Contracts::tick();
 
 		// Meetings starting within the next 10 minutes.
 		$soon     = gmdate( 'H:i', strtotime( $now . ' UTC' ) + 10 * MINUTE_IN_SECONDS );

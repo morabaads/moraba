@@ -407,6 +407,58 @@ class MP_Invoices {
 		return self::payload( self::get( $x->id ) );
 	}
 
+	/**
+	 * Issues an invoice from elsewhere (a contract's payment stage): created, marked sent and
+	 * announced in the client chat. Returns the invoice id (0 on failure).
+	 */
+	public static function issue( $a ) {
+		global $wpdb;
+		$amount = (int) $a['amount'];
+		if ( $amount <= 0 || '' === trim( (string) $a['client_name'] ) ) {
+			return 0;
+		}
+		$items = array( array( 'title' => MP_Util::text( $a['item'], 200 ), 'qty' => 1, 'price' => $amount, 'total' => $amount ) );
+		$wpdb->insert(
+			self::t(),
+			array(
+				'kind'         => 'invoice',
+				'number'       => self::next_number( 'invoice' ),
+				'title'        => MP_Util::text( $a['title'], 200 ),
+				'project_id'   => (int) $a['project_id'],
+				'client_id'    => (int) $a['client_id'],
+				'client_name'  => MP_Util::text( $a['client_name'], 160 ),
+				'client_phone' => MP_Util::text( isset( $a['client_phone'] ) ? $a['client_phone'] : '', 40 ),
+				'client_info'  => '',
+				'items'        => wp_json_encode( $items ),
+				'discount'     => 0,
+				'tax_percent'  => 0,
+				'status'       => 'draft',
+				'issue_date'   => MP_Util::today(),
+				'due_date'     => gmdate( 'Y-m-d', strtotime( MP_Util::today() . ' +7 days UTC' ) ),
+				'note'         => MP_Util::long_text( isset( $a['note'] ) ? $a['note'] : '', 2000 ),
+				'pay_url'      => '',
+				'token'        => wp_generate_password( 32, false, false ),
+				'created_by'   => get_current_user_id(),
+				'created_at'   => MP_Util::now(),
+				'updated_at'   => MP_Util::now(),
+			)
+		);
+		$id = (int) $wpdb->insert_id;
+		if ( ! $id ) {
+			return 0;
+		}
+		$x = self::get( $id );
+		self::announce( $x );
+		$wpdb->update( self::t(), array( 'status' => 'sent' ), array( 'id' => $id ) );
+		MP_Audit::log( 'create', 'invoice', $id, $x->number . ' · ' . $x->title );
+		return $id;
+	}
+
+	public static function status_of( $id ) {
+		$x = self::get( (int) $id );
+		return $x ? array( 'id' => (int) $x->id, 'number' => $x->number, 'status' => $x->status, 'url' => self::url( $x->token ) ) : null;
+	}
+
 	/** System card in the client chat with the invoice link. */
 	private static function announce( $x, $channel_id = 0 ) {
 		$p = self::payload( $x );

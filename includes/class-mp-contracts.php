@@ -18,7 +18,7 @@ class MP_Contracts {
 
 	const SETTINGS = 'mp_contract_settings';
 	/** Filled by the system from the settings and the contract itself; never asked for. */
-	const SYSTEM_VARS = array( 'نام استودیو', 'نشانی استودیو', 'شماره قرارداد', 'تاریخ قرارداد', 'نام پروژه' );
+	const SYSTEM_VARS = array( 'نام استودیو', 'نشانی استودیو', 'شماره قرارداد', 'تاریخ قرارداد', 'نام پروژه', 'شماره قرارداد اصلی' );
 	const STATUS   = array( 'draft' => 'پیش‌نویس', 'sent' => 'منتظر امضای مشتری', 'signed' => 'امضاشده', 'cancelled' => 'لغوشده' );
 
 	public static function register() {
@@ -32,12 +32,17 @@ class MP_Contracts {
 			array( "contracts/$id/send", 'POST', 'send', $m ),
 			array( "contracts/$id/status", 'POST', 'set_status', $m ),
 			array( "contracts/$id/duplicate", 'POST', 'duplicate', $m ),
+			array( "contracts/$id/amend", 'POST', 'amend', $m ),
+			array( "contracts/$id/stage", 'POST', 'issue_stage', $m ),
+			array( "contracts/$id/extend", 'POST', 'extend', $m ),
 			array( 'contracts/settings', 'POST', 'save_settings', $m ),
 			array( 'contract-templates', 'POST', 'save_template', $m ),
 			array( "contract-templates/$id", 'POST', 'save_template', $m ),
 			array( "contract-templates/$id", 'DELETE', 'delete_template', $m ),
 			array( 'contract/(?P<token>[A-Za-z0-9]{32})/code', 'POST', 'client_code', '__return_true' ),
 			array( 'contract/(?P<token>[A-Za-z0-9]{32})/sign', 'POST', 'client_sign', '__return_true' ),
+			array( 'contract/(?P<token>[A-Za-z0-9]{32})/seen', 'POST', 'client_seen', '__return_true' ),
+			array( 'contract/(?P<token>[A-Za-z0-9]{32})/pdf', 'POST', 'client_pdf', '__return_true' ),
 		);
 		foreach ( $routes as $r ) {
 			register_rest_route( MP_Rest::NS, '/' . $r[0], array( 'methods' => $r[1], 'callback' => array( __CLASS__, $r[2] ), 'permission_callback' => $r[3] ) );
@@ -68,9 +73,38 @@ class MP_Contracts {
 				'footer'     => 'این قرارداد به صورت الکترونیکی تنظیم و امضا شده است.',
 				'signature'  => '', // studio signature (PNG data URL)
 				'otp'        => true,
+				// Optional features, each can be switched off.
+				'f_invoice'   => true,  // payment stages → invoices (at signing / when a milestone is done)
+				'f_track'     => true,  // who opened it, how often, how far they read
+				'f_remind'    => true,  // SMS reminders while unsigned
+				'remind_days' => 3,
+				'remind_max'  => 3,
+				'f_expiry'    => true,  // signing deadline
+				'expire_days' => 14,
+				'f_annex'     => true,  // attachments (features / specs) and amendments
+				'f_multi'     => false, // several signers in order
+				'f_clauses'   => true,  // ready-made clauses in the editor
+				'f_idcard'    => false, // photo of the national ID card when signing
+				'f_pdf'       => true,  // real PDF file, archived in the project after signing
+				'stages'      => array(
+					array( 'pct' => 50, 'title' => 'پیش‌پرداخت همزمان با امضای قرارداد', 'on' => 'sign' ),
+					array( 'pct' => 30, 'title' => 'پس از ارائه و تأیید طرح اولیه (UI)', 'on' => 'manual' ),
+					array( 'pct' => 20, 'title' => 'پس از پیاده‌سازی روی هاست و آماده شدن نسخه اولیه', 'on' => 'manual' ),
+				),
+				'clauses'     => self::DEFAULT_CLAUSES,
 			)
 		);
 	}
+
+	const DEFAULT_CLAUSES = array(
+		array( 'title' => 'مالکیت کد و فایل‌ها', 'body' => "پس از تسویه کامل مبلغ قرارداد، مالکیت فایل‌های نهایی طراحی و کدهای اختصاصی پروژه به کارفرما منتقل می‌شود.\nمجری حق دارد نمونه‌ای از کار را در نمونه‌کارهای خود نمایش دهد، مگر آنکه کارفرما کتباً مخالفت کند.\nکتابخانه‌ها، قالب‌ها و افزونه‌های عمومی یا تجاری مشمول مجوز سازنده خود هستند." ),
+		array( 'title' => 'فسخ قرارداد', 'body' => "هر یک از طرفین در صورت نقض تعهدات توسط طرف مقابل و عدم رفع آن ظرف ۷ روز پس از اخطار کتبی، حق فسخ قرارداد را دارد.\nدر صورت فسخ از سوی کارفرما، مبالغ پرداخت‌شده بابت مراحل انجام‌شده قابل استرداد نیست و هزینه کار انجام‌شده در مرحله جاری به نسبت پیشرفت محاسبه می‌شود.\nدر صورت فسخ از سوی مجری بدون قصور کارفرما، مبلغ مرحله انجام‌نشده به کارفرما بازگردانده می‌شود." ),
+		array( 'title' => 'حل اختلاف', 'body' => "طرفین تلاش می‌کنند اختلافات احتمالی را از راه گفت‌وگو و توافق حل کنند.\nدر صورت عدم توافق ظرف ۱۵ روز، موضوع به داوری مرضی‌الطرفین ارجاع می‌شود و رأی داور برای طرفین لازم‌الاجراست؛ در غیر این صورت مراجع قضایی صالح رسیدگی خواهند کرد." ),
+		array( 'title' => 'محرمانگی', 'body' => "طرفین متعهد می‌شوند کلیه اطلاعات، اسناد، داده‌ها و دسترسی‌هایی را که در اجرای این قرارداد در اختیارشان قرار می‌گیرد محرمانه نگه دارند و جز برای اجرای قرارداد استفاده نکنند.\nاین تعهد پس از پایان قرارداد نیز به قوت خود باقی است." ),
+		array( 'title' => 'فورس ماژور', 'body' => "در صورت بروز حوادث قهری و خارج از اراده طرفین (مانند بلایای طبیعی، قطعی گسترده اینترنت یا تصمیمات حاکمیتی)، مدت قرارداد به میزان تأخیر ناشی از آن تمدید می‌شود و هیچ‌یک از طرفین مسئول تأخیر نخواهد بود." ),
+	);
+
+	const AMENDMENT_BODY = "## موضوع الحاقیه\nاین الحاقیه به قرارداد شماره {شماره قرارداد اصلی} فی‌مابین {نام استودیو} و {نام مشتری} تنظیم می‌گردد و جزء لاینفک آن قرارداد است.\n\n## تغییرات\n- شرح تغییر: {شرح تغییرات}\n- مبلغ الحاقیه: {مبلغ الحاقیه}\n- مدت اضافه: {مدت اضافه}\n\n## سایر مفاد\nسایر مفاد قرارداد اصلی بدون تغییر به قوت خود باقی است.";
 
 	public static function save_settings( WP_REST_Request $r ) {
 		$old = self::settings();
@@ -86,8 +120,47 @@ class MP_Contracts {
 			'signature' => null === $r['signature'] ? $old['signature'] : ( self::valid_png( $sig ) ? $sig : '' ),
 			'otp'       => ! empty( $r['otp'] ) && 'false' !== $r['otp'],
 		);
+		foreach ( array( 'f_invoice', 'f_track', 'f_remind', 'f_expiry', 'f_annex', 'f_multi', 'f_clauses', 'f_idcard', 'f_pdf' ) as $k ) {
+			$s[ $k ] = null === $r[ $k ] ? $old[ $k ] : ( ! empty( $r[ $k ] ) && 'false' !== $r[ $k ] );
+		}
+		$s['remind_days'] = null === $r['remind_days'] ? $old['remind_days'] : max( 1, min( 30, (int) $r['remind_days'] ) );
+		$s['remind_max']  = null === $r['remind_max'] ? $old['remind_max'] : max( 1, min( 10, (int) $r['remind_max'] ) );
+		$s['expire_days'] = null === $r['expire_days'] ? $old['expire_days'] : max( 1, min( 365, (int) $r['expire_days'] ) );
+		$s['stages']      = null === $r['stages'] ? $old['stages'] : self::clean_stages( $r['stages'], false );
+		$s['clauses']     = $old['clauses'];
+		if ( is_array( $r['clauses'] ) ) {
+			$s['clauses'] = array();
+			foreach ( array_slice( $r['clauses'], 0, 40 ) as $cl ) {
+				$t = MP_Util::text( isset( $cl['title'] ) ? $cl['title'] : '', 120 );
+				$b = MP_Util::long_text( isset( $cl['body'] ) ? $cl['body'] : '', 4000 );
+				if ( '' !== $t && '' !== trim( $b ) ) {
+					$s['clauses'][] = array( 'title' => $t, 'body' => $b );
+				}
+			}
+		}
 		update_option( self::SETTINGS, $s, false );
 		return self::settings();
+	}
+
+	/** Payment stages: [{pct, title, on: sign|manual|milestone, milestone_id, invoice_id}]. */
+	private static function clean_stages( $in, $keep_invoice ) {
+		$out = array();
+		foreach ( is_array( $in ) ? array_slice( $in, 0, 10 ) : array() as $st ) {
+			$pct = max( 0, min( 100, (int) ( isset( $st['pct'] ) ? $st['pct'] : 0 ) ) );
+			if ( ! $pct ) {
+				continue;
+			}
+			$mid   = (int) ( isset( $st['milestone_id'] ) ? $st['milestone_id'] : 0 );
+			$on    = MP_Util::pick( isset( $st['on'] ) ? $st['on'] : '', array( 'sign', 'manual', 'milestone' ), 'manual' );
+			$out[] = array(
+				'pct'          => $pct,
+				'title'        => MP_Util::text( isset( $st['title'] ) ? $st['title'] : '', 160 ),
+				'on'           => 'milestone' === $on && ! $mid ? 'manual' : $on,
+				'milestone_id' => 'milestone' === $on ? $mid : 0,
+				'invoice_id'   => $keep_invoice && ! empty( $st['invoice_id'] ) ? (int) $st['invoice_id'] : 0,
+			);
+		}
+		return $out;
 	}
 
 	private static function valid_png( $data ) {
@@ -228,6 +301,7 @@ class MP_Contracts {
 			'شماره قرارداد'  => $c ? $c->number : '',
 			'تاریخ قرارداد'  => $c ? MP_Jalali::format( substr( $c->created_at, 0, 10 ) ) : '',
 			'نام پروژه'      => (string) $p,
+			'شماره قرارداد اصلی' => $c && ! empty( $c->parent_id ) ? (string) $wpdb->get_var( $wpdb->prepare( 'SELECT number FROM ' . self::t() . ' WHERE id = %d', $c->parent_id ) ) : '',
 		);
 	}
 
@@ -282,7 +356,7 @@ class MP_Contracts {
 
 	/** Fingerprint of exactly what was signed (text + values). */
 	private static function fingerprint( $c ) {
-		return hash( 'sha256', $c->number . "\n" . $c->body . "\n" . wp_json_encode( self::vars_of( $c ) ) );
+		return hash( 'sha256', $c->number . "\n" . $c->body . "\n" . wp_json_encode( self::vars_of( $c ) ) . ( ! empty( $c->annex ) ? "\n" . $c->annex_title . "\n" . $c->annex : '' ) );
 	}
 
 	private static function vars_of( $c ) {
@@ -324,40 +398,117 @@ class MP_Contracts {
 		return 0;
 	}
 
-	public static function payload( $c ) {
-		global $wpdb;
-		$p     = $c->project_id ? $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $c->project_id ) ) : '';
-		$vars  = self::vars_of( $c );
-		$phone = '';
-		foreach ( $vars as $k => $v ) {
+	/** Customer's phone from the contract's values. */
+	private static function phone_of( $c ) {
+		foreach ( self::vars_of( $c ) as $k => $v ) {
 			if ( 'phone' === self::kind( $k ) && $v ) {
-				$phone = $v;
-				break;
+				return $v;
 			}
 		}
+		return '';
+	}
+
+	private static function client_of( $c ) {
+		foreach ( self::vars_of( $c ) as $k => $v ) {
+			if ( preg_match( '/نام.*(مشتری|کارفرما)/u', $k ) && $v ) {
+				return $v;
+			}
+		}
+		return $c->client_name;
+	}
+
+	/**
+	 * Who signs, in order. Without the multi-signer feature (or none set) it is one person: the
+	 * customer named in the contract, with the contract's phone.
+	 */
+	public static function signers_of( $c ) {
+		$list = json_decode( (string) $c->signers, true );
+		$list = is_array( $list ) ? $list : array();
+		if ( ! $list || ! self::settings()['f_multi'] ) {
+			$one  = $list ? $list[0] : array();
+			$list = array( array_merge( array( 'name' => self::client_of( $c ), 'mobile' => MP_Auth::normalize( self::phone_of( $c ) ), 'role' => 'کارفرما' ), $one ) );
+		}
+		return $list;
+	}
+
+	private static function next_signer( $c ) {
+		foreach ( self::signers_of( $c ) as $i => $sg ) {
+			if ( empty( $sg['signed_at'] ) ) {
+				return $i;
+			}
+		}
+		return -1;
+	}
+
+	public static function expired( $c ) {
+		return self::settings()['f_expiry'] && 'sent' === $c->status && $c->expires_at && $c->expires_at < MP_Util::today();
+	}
+
+	private static function stages_of( $c ) {
+		$st = json_decode( (string) $c->stages, true );
+		return is_array( $st ) ? $st : array();
+	}
+
+	public static function payload( $c ) {
+		global $wpdb;
+		$p       = $c->project_id ? $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $c->project_id ) ) : '';
+		$amount  = self::amount( $c );
+		$signers = array();
+		foreach ( self::signers_of( $c ) as $sg ) {
+			$signers[] = array(
+				'name'      => isset( $sg['name'] ) ? $sg['name'] : '',
+				'mobile'    => isset( $sg['mobile'] ) ? $sg['mobile'] : '',
+				'role'      => isset( $sg['role'] ) ? $sg['role'] : '',
+				'signed_at' => isset( $sg['signed_at'] ) ? $sg['signed_at'] : null,
+				'method'    => isset( $sg['method'] ) ? $sg['method'] : '',
+				'id_card'   => ! empty( $sg['id_card'] ) ? $sg['id_card'] : '', // only the team sees this payload
+			);
+		}
+		$stages = array();
+		foreach ( self::stages_of( $c ) as $st ) {
+			$st['amount']  = (int) round( $amount * $st['pct'] / 100 );
+			$st['invoice'] = ! empty( $st['invoice_id'] ) && class_exists( 'MP_Invoices' ) ? MP_Invoices::status_of( $st['invoice_id'] ) : null;
+			$stages[]      = $st;
+		}
+		$pdf = $c->pdf_file_id ? MP_Files::payload( MP_Files::get( $c->pdf_file_id ) ) : null;
 		return array(
-			'id'             => (int) $c->id,
-			'number'         => $c->number,
-			'title'          => $c->title,
-			'project_id'     => (int) $c->project_id,
-			'project'        => (string) $p,
-			'client_id'      => (int) $c->client_id,
-			'client_name'    => $c->client_name,
-			'template_id'    => (int) $c->template_id,
-			'body'           => $c->body,
-			'vars'           => (object) $vars,
-			'amount'         => self::amount( $c ),
-			'phone'          => $phone,
-			'status'         => $c->status,
-			'url'            => self::url( $c->token ),
-			'sent_at'        => $c->sent_at,
-			'signed_at'      => $c->signed_at,
-			'signer_name'    => $c->signer_name,
-			'signer_mobile'  => $c->signer_mobile,
-			'fingerprint'    => $c->doc_hash ? strtoupper( substr( $c->doc_hash, 0, 16 ) ) : '',
-			'created_at'     => $c->created_at,
-			'archived'       => ! empty( $c->archived_at ),
-			'channels'       => self::channels( (int) $c->project_id, (int) $c->client_id ),
+			'id'              => (int) $c->id,
+			'number'          => $c->number,
+			'title'           => $c->title,
+			'kind'            => $c->kind ? $c->kind : 'contract',
+			'parent_id'       => (int) $c->parent_id,
+			'parent_number'   => $c->parent_id ? (string) $wpdb->get_var( $wpdb->prepare( 'SELECT number FROM ' . self::t() . ' WHERE id = %d', $c->parent_id ) ) : '',
+			'project_id'      => (int) $c->project_id,
+			'project'         => (string) $p,
+			'client_id'       => (int) $c->client_id,
+			'client_name'     => $c->client_name,
+			'template_id'     => (int) $c->template_id,
+			'body'            => $c->body,
+			'annex_title'     => (string) $c->annex_title,
+			'annex'           => (string) $c->annex,
+			'vars'            => (object) self::vars_of( $c ),
+			'amount'          => $amount,
+			'phone'           => self::phone_of( $c ),
+			'status'          => $c->status,
+			'expired'         => self::expired( $c ),
+			'expires_at'      => $c->expires_at,
+			'url'             => self::url( $c->token ),
+			'sent_at'         => $c->sent_at,
+			'signed_at'       => $c->signed_at,
+			'signer_name'     => $c->signer_name,
+			'signer_mobile'   => $c->signer_mobile,
+			'signers'         => $signers,
+			'stages'          => $stages,
+			'views'           => (int) $c->views,
+			'first_viewed_at' => $c->first_viewed_at,
+			'last_viewed_at'  => $c->last_viewed_at,
+			'read_pct'        => (int) $c->read_pct,
+			'reminders_sent'  => (int) $c->reminders_sent,
+			'pdf'             => $pdf,
+			'fingerprint'     => $c->doc_hash ? strtoupper( substr( $c->doc_hash, 0, 16 ) ) : '',
+			'created_at'      => $c->created_at,
+			'archived'        => ! empty( $c->archived_at ),
+			'channels'        => self::channels( (int) $c->project_id, (int) $c->client_id ),
 		);
 	}
 
@@ -432,6 +583,52 @@ class MP_Contracts {
 		);
 		if ( '' === $row['title'] ) {
 			$row['title'] = 'قرارداد' . ( $client ? ' ' . $client : '' );
+		}
+		$set = self::settings();
+		if ( $set['f_annex'] && null !== $r['annex'] ) {
+			$row['annex_title'] = MP_Util::text( $r['annex_title'], 200 );
+			$row['annex']       = MP_Util::long_text( $r['annex'], 40000 );
+		}
+		if ( $set['f_multi'] && is_array( $r['signers'] ) ) {
+			$list = array();
+			foreach ( array_slice( $r['signers'], 0, 6 ) as $sg ) {
+				$n = MP_Util::text( isset( $sg['name'] ) ? $sg['name'] : '', 120 );
+				if ( '' === $n ) {
+					continue;
+				}
+				$list[] = array( 'name' => $n, 'mobile' => MP_Auth::normalize( isset( $sg['mobile'] ) ? $sg['mobile'] : '' ), 'role' => MP_Util::text( isset( $sg['role'] ) ? $sg['role'] : '', 60 ) );
+			}
+			if ( $old && 'sent' === $old->status && $old->signers ) {
+				// Keep signatures already given; only the people after them can change.
+				$prev = json_decode( $old->signers, true );
+				foreach ( is_array( $prev ) ? $prev : array() as $i => $sg ) {
+					if ( ! empty( $sg['signed_at'] ) ) {
+						$list[ $i ] = $sg;
+					}
+				}
+				ksort( $list );
+				$list = array_values( $list );
+			}
+			$row['signers'] = $list ? wp_json_encode( $list, JSON_UNESCAPED_UNICODE ) : null;
+		}
+		if ( $set['f_invoice'] && null !== $r['stages'] ) {
+			$prev = $old ? self::stages_of( $old ) : array();
+			$new  = self::clean_stages( $r['stages'], false );
+			foreach ( $new as $i => $st ) {
+				if ( ! empty( $prev[ $i ]['invoice_id'] ) ) {
+					$new[ $i ]['invoice_id'] = (int) $prev[ $i ]['invoice_id']; // an issued stage keeps its invoice
+				}
+			}
+			$row['stages'] = wp_json_encode( $new, JSON_UNESCAPED_UNICODE );
+		}
+		if ( $set['f_expiry'] && null !== $r['expires_at'] ) {
+			$row['expires_at'] = MP_Util::valid_date( $r['expires_at'] ) ? $r['expires_at'] : null;
+		}
+		if ( ! $old && $set['f_expiry'] && ! isset( $row['expires_at'] ) ) {
+			$row['expires_at'] = gmdate( 'Y-m-d', strtotime( MP_Util::today() . ' +' . (int) $set['expire_days'] . ' days UTC' ) );
+		}
+		if ( ! $old && $set['f_invoice'] && ! isset( $row['stages'] ) ) {
+			$row['stages'] = wp_json_encode( self::clean_stages( $set['stages'], false ), JSON_UNESCAPED_UNICODE );
 		}
 		if ( $old ) {
 			$wpdb->update( self::t(), $row, array( 'id' => $id ) );
@@ -532,6 +729,10 @@ class MP_Contracts {
 				'template_id' => $c->template_id,
 				'body'        => $c->body,
 				'vars'        => $c->vars,
+				'annex_title' => $c->annex_title,
+				'annex'       => $c->annex,
+				'stages'      => wp_json_encode( self::clean_stages( self::stages_of( $c ), false ), JSON_UNESCAPED_UNICODE ),
+				'expires_at'  => self::settings()['f_expiry'] ? gmdate( 'Y-m-d', strtotime( MP_Util::today() . ' +' . (int) self::settings()['expire_days'] . ' days UTC' ) ) : null,
 				'status'      => 'draft',
 				'token'       => wp_generate_password( 32, false, false ),
 				'created_by'  => get_current_user_id(),
@@ -542,22 +743,168 @@ class MP_Contracts {
 		return self::payload( self::get( (int) $wpdb->insert_id ) );
 	}
 
-	/* ------------------------------------------------------------------ Client signing */
-
-	private static function otp_key( $c ) {
-		return 'mp_ksig_' . $c->id;
+	/** POST contracts/{id}/amend — a draft amendment (الحاقیه) to a signed contract. */
+	public static function amend( WP_REST_Request $r ) {
+		global $wpdb;
+		$c = self::get( (int) $r['id'] );
+		if ( ! $c || 'signed' !== $c->status ) {
+			return self::err( 'الحاقیه فقط برای قرارداد امضاشده ساخته می‌شود.' );
+		}
+		$root = $c->parent_id ? self::get( $c->parent_id ) : $c;
+		$n    = 1 + (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t() . " WHERE parent_id = %d AND kind = 'amendment'", $root->id ) );
+		$old  = self::vars_of( $root );
+		$vars = array();
+		foreach ( self::variables( self::AMENDMENT_BODY ) as $k ) {
+			if ( ! in_array( $k, self::SYSTEM_VARS, true ) ) {
+				$vars[ $k ] = isset( $old[ $k ] ) ? $old[ $k ] : '';
+			}
+		}
+		$wpdb->insert(
+			self::t(),
+			array(
+				'number'      => $root->number . '-A' . $n,
+				'title'       => 'الحاقیه ' . $n . ' — ' . $root->title,
+				'kind'        => 'amendment',
+				'parent_id'   => (int) $root->id,
+				'project_id'  => $root->project_id,
+				'client_id'   => $root->client_id,
+				'client_name' => $root->client_name,
+				'body'        => self::AMENDMENT_BODY,
+				'vars'        => wp_json_encode( $vars, JSON_UNESCAPED_UNICODE ),
+				'signers'     => $root->signers,
+				'status'      => 'draft',
+				'token'       => wp_generate_password( 32, false, false ),
+				'expires_at'  => self::settings()['f_expiry'] ? gmdate( 'Y-m-d', strtotime( MP_Util::today() . ' +' . (int) self::settings()['expire_days'] . ' days UTC' ) ) : null,
+				'created_by'  => get_current_user_id(),
+				'created_at'  => MP_Util::now(),
+				'updated_at'  => MP_Util::now(),
+			)
+		);
+		// Signatures of the original are not carried over.
+		$new = self::get( (int) $wpdb->insert_id );
+		if ( $new->signers ) {
+			$list = array_map(
+				function ( $sg ) {
+					return array( 'name' => $sg['name'], 'mobile' => $sg['mobile'], 'role' => isset( $sg['role'] ) ? $sg['role'] : '' );
+				},
+				json_decode( $new->signers, true )
+			);
+			$wpdb->update( self::t(), array( 'signers' => wp_json_encode( $list, JSON_UNESCAPED_UNICODE ) ), array( 'id' => $new->id ) );
+		}
+		MP_Audit::log( 'create', 'contract', $new->id, $new->number );
+		return self::payload( self::get( $new->id ) );
 	}
 
-	/** Mobile the signing code goes to: the contract's phone value, else the logged-in portal contact. */
-	private static function signer_mobile( $c ) {
-		$p = self::payload( $c );
-		$m = MP_Auth::normalize( $p['phone'] );
-		if ( ! $m && $c->project_id ) {
+	/** POST contracts/{id}/extend {days} — a new signing deadline (and the link works again). */
+	public static function extend( WP_REST_Request $r ) {
+		global $wpdb;
+		$c = self::get( (int) $r['id'] );
+		if ( ! $c || 'signed' === $c->status ) {
+			return self::err( 'قرارداد پیدا نشد.', 404 );
+		}
+		$days = max( 1, min( 365, (int) ( $r['days'] ? $r['days'] : self::settings()['expire_days'] ) ) );
+		$wpdb->update( self::t(), array( 'expires_at' => gmdate( 'Y-m-d', strtotime( MP_Util::today() . ' +' . $days . ' days UTC' ) ), 'reminders_sent' => 0 ), array( 'id' => $c->id ) );
+		return self::payload( self::get( $c->id ) );
+	}
+
+	/** Issues the invoice of one payment stage (once). */
+	private static function stage_invoice( $c, $i ) {
+		global $wpdb;
+		$stages = self::stages_of( $c );
+		if ( ! isset( $stages[ $i ] ) || ! empty( $stages[ $i ]['invoice_id'] ) || ! class_exists( 'MP_Invoices' ) ) {
+			return 0;
+		}
+		$amount = (int) round( self::amount( $c ) * $stages[ $i ]['pct'] / 100 );
+		$id     = MP_Invoices::issue(
+			array(
+				'amount'       => $amount,
+				'title'        => 'مرحله ' . MP_Jalali::digits( (string) ( $i + 1 ) ) . ' قرارداد ' . $c->number,
+				'item'         => $stages[ $i ]['title'] . ' (' . MP_Jalali::digits( (string) $stages[ $i ]['pct'] ) . '٪ مبلغ قرارداد ' . $c->number . ')',
+				'project_id'   => $c->project_id,
+				'client_id'    => $c->client_id,
+				'client_name'  => self::client_of( $c ),
+				'client_phone' => self::phone_of( $c ),
+				'note'         => 'بر اساس ماده شرایط پرداخت قرارداد ' . $c->number,
+			)
+		);
+		if ( $id ) {
+			$stages[ $i ]['invoice_id'] = $id;
+			$wpdb->update( self::t(), array( 'stages' => wp_json_encode( $stages, JSON_UNESCAPED_UNICODE ) ), array( 'id' => $c->id ) );
+		}
+		return $id;
+	}
+
+	/** POST contracts/{id}/stage {index} — issue a stage's invoice now. */
+	public static function issue_stage( WP_REST_Request $r ) {
+		$c = self::get( (int) $r['id'] );
+		if ( ! $c || 'signed' !== $c->status ) {
+			return self::err( 'فاکتور مراحل بعد از امضای قرارداد صادر می‌شود.' );
+		}
+		if ( ! self::stage_invoice( $c, (int) $r['index'] ) ) {
+			return self::err( 'فاکتور صادر نشد (مبلغ قرارداد یا نام مشتری را بررسی کنید، یا قبلاً صادر شده است).' );
+		}
+		return self::payload( self::get( $c->id ) );
+	}
+
+	/** A project milestone is done: issue the stages waiting on it. */
+	public static function milestone_done( $mid ) {
+		global $wpdb;
+		if ( ! self::settings()['f_invoice'] ) {
+			return;
+		}
+		foreach ( $wpdb->get_results( 'SELECT * FROM ' . self::t() . " WHERE status = 'signed' AND archived_at IS NULL AND stages IS NOT NULL" ) as $c ) {
+			foreach ( self::stages_of( $c ) as $i => $st ) {
+				if ( 'milestone' === $st['on'] && (int) $st['milestone_id'] === (int) $mid && empty( $st['invoice_id'] ) ) {
+					self::stage_invoice( self::get( $c->id ), $i );
+				}
+			}
+		}
+	}
+
+	/** Every few minutes (cron): SMS reminders for unsigned contracts. */
+	public static function tick() {
+		global $wpdb;
+		$s = self::settings();
+		if ( ! $s['f_remind'] || get_transient( 'mp_contract_tick' ) ) {
+			return;
+		}
+		set_transient( 'mp_contract_tick', 1, HOUR_IN_SECONDS );
+		$h = (int) current_time( 'H' );
+		if ( $h < 9 || $h >= 20 ) {
+			return; // no texts at night
+		}
+		$gap  = gmdate( 'Y-m-d H:i:s', strtotime( MP_Util::now() . ' -' . (int) $s['remind_days'] . ' days' ) );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t() . " WHERE status = 'sent' AND archived_at IS NULL AND sent_at <= %s AND reminders_sent < %d AND (last_reminded_at IS NULL OR last_reminded_at <= %s) LIMIT 20", $gap, (int) $s['remind_max'], $gap ) );
+		foreach ( $rows as $c ) {
+			if ( self::expired( $c ) ) {
+				continue;
+			}
+			$i  = self::next_signer( $c );
+			$sg = $i >= 0 ? self::signers_of( $c )[ $i ] : null;
+			$m  = $sg ? MP_Auth::normalize( $sg['mobile'] ) : '';
+			if ( $m ) {
+				MP_Auth::text( $m, $sg['name'] . ' عزیز، قرارداد «' . $c->title . '» از ' . $s['studio'] . ' منتظر امضای شماست' . ( $c->expires_at && $s['f_expiry'] ? ' (مهلت تا ' . MP_Jalali::format( $c->expires_at ) . ')' : '' ) . ': ' . self::url( $c->token ) );
+			}
+			$wpdb->update( self::t(), array( 'reminders_sent' => $c->reminders_sent + 1, 'last_reminded_at' => MP_Util::now() ), array( 'id' => $c->id ) );
+		}
+	}
+
+	/* ------------------------------------------------------------------ Client signing */
+
+	private static function otp_key( $c, $i ) {
+		return 'mp_ksig_' . $c->id . '_' . $i;
+	}
+
+	/** Mobile the next signer's code goes to; for a single signer, the portal login is a fallback. */
+	private static function signer_mobile( $c, $i ) {
+		$list = self::signers_of( $c );
+		$m    = isset( $list[ $i ]['mobile'] ) ? MP_Auth::normalize( $list[ $i ]['mobile'] ) : '';
+		if ( ! $m && 1 === count( $list ) && $c->project_id ) {
 			global $wpdb;
 			foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND project_id = %d AND archived_at IS NULL", $c->project_id ) ) as $ch ) {
-				$s = MP_Client::session( $ch );
-				if ( $s ) {
-					return $s->mobile;
+				$sess = MP_Client::session( $ch );
+				if ( $sess ) {
+					return $sess->mobile;
 				}
 			}
 		}
@@ -572,26 +919,39 @@ class MP_Contracts {
 		return self::settings()['otp'] && MP_Auth::otp_enabled();
 	}
 
-	/** POST contract/{token}/code — 5-digit code to the client's mobile. */
-	public static function client_code( WP_REST_Request $r ) {
-		$c = self::by_token( $r['token'] );
+	/** The contract when it can be signed now, else an error. */
+	private static function signable( $token ) {
+		$c = self::by_token( $token );
 		if ( ! $c || 'sent' !== $c->status ) {
 			return self::err( 'این قرارداد برای امضا باز نیست.', 404 );
+		}
+		if ( self::expired( $c ) ) {
+			return self::err( 'مهلت امضای این قرارداد تمام شده است؛ از تیم بخواهید آن را تمدید کند.' );
+		}
+		return $c;
+	}
+
+	/** POST contract/{token}/code — 5-digit code to the next signer's mobile. */
+	public static function client_code( WP_REST_Request $r ) {
+		$c = self::signable( $r['token'] );
+		if ( is_wp_error( $c ) ) {
+			return $c;
 		}
 		if ( ! self::need_otp() ) {
 			return self::err( 'تأیید پیامکی فعال نیست.' );
 		}
-		$mobile = self::signer_mobile( $c );
+		$i      = self::next_signer( $c );
+		$mobile = self::signer_mobile( $c, $i );
 		if ( ! $mobile ) {
-			return self::err( 'شماره موبایلی برای این قرارداد ثبت نشده؛ با تیم تماس بگیرید.' );
+			return self::err( 'شماره موبایلی برای امضاکننده ثبت نشده؛ با تیم تماس بگیرید.' );
 		}
-		$state = get_transient( self::otp_key( $c ) );
+		$state = get_transient( self::otp_key( $c, $i ) );
 		$now   = time();
 		if ( is_array( $state ) && $state['sent'] > $now - MP_Auth::RESEND_WAIT ) {
 			return self::err( 'کد تازه ارسال شده؛ ' . MP_Jalali::digits( (string) ( MP_Auth::RESEND_WAIT - ( $now - $state['sent'] ) ) ) . ' ثانیه دیگر دوباره امتحان کنید.', 429 );
 		}
 		$code = (string) wp_rand( 10000, 99999 );
-		set_transient( self::otp_key( $c ), array( 'hash' => wp_hash( $mobile . '|' . $code ), 'exp' => $now + 300, 'tries' => 0, 'sent' => $now, 'mobile' => $mobile ), HOUR_IN_SECONDS );
+		set_transient( self::otp_key( $c, $i ), array( 'hash' => wp_hash( $mobile . '|' . $code ), 'exp' => $now + 300, 'tries' => 0, 'sent' => $now, 'mobile' => $mobile ), HOUR_IN_SECONDS );
 		if ( defined( 'MP_TESTING' ) && MP_TESTING ) {
 			$GLOBALS['mp_last_otp'] = $code;
 		}
@@ -601,13 +961,16 @@ class MP_Contracts {
 		return array( 'sent' => true, 'to' => self::mask( $mobile ), 'wait' => MP_Auth::RESEND_WAIT );
 	}
 
-	/** POST contract/{token}/sign {name, signature, code, agree} */
+	/** POST contract/{token}/sign {name, signature, code, agree, id_card?} — the next signer signs. */
 	public static function client_sign( WP_REST_Request $r ) {
 		global $wpdb;
-		$c = self::by_token( $r['token'] );
-		if ( ! $c || 'sent' !== $c->status ) {
-			return self::err( 'این قرارداد برای امضا باز نیست.', 404 );
+		$c = self::signable( $r['token'] );
+		if ( is_wp_error( $c ) ) {
+			return $c;
 		}
+		$set  = self::settings();
+		$i    = self::next_signer( $c );
+		$list = self::signers_of( $c );
 		$name = MP_Util::text( $r['name'], 120 );
 		$sig  = (string) $r['signature'];
 		if ( empty( $r['agree'] ) || '' === $name ) {
@@ -616,10 +979,18 @@ class MP_Contracts {
 		if ( ! self::valid_png( $sig ) ) {
 			return self::err( 'امضای خود را در کادر بکشید.' );
 		}
+		$card = (string) $r['id_card'];
+		if ( $set['f_idcard'] ) {
+			if ( strlen( $card ) > 2500000 || ! preg_match( '#^data:image/jpeg;base64,[A-Za-z0-9+/=]+$#', $card ) ) {
+				return self::err( 'تصویر کارت ملی را بارگذاری کنید.' );
+			}
+		} else {
+			$card = '';
+		}
 		$mobile = '';
 		$method = 'draw';
 		if ( self::need_otp() ) {
-			$state = get_transient( self::otp_key( $c ) );
+			$state = get_transient( self::otp_key( $c, $i ) );
 			if ( ! is_array( $state ) || empty( $state['hash'] ) || $state['exp'] < time() ) {
 				return self::err( 'کد تأیید منقضی شده؛ کد جدید بگیرید.' );
 			}
@@ -629,39 +1000,133 @@ class MP_Contracts {
 				if ( $state['tries'] >= MP_Auth::MAX_TRIES ) {
 					$state['hash'] = '';
 				}
-				set_transient( self::otp_key( $c ), $state, HOUR_IN_SECONDS );
+				set_transient( self::otp_key( $c, $i ), $state, HOUR_IN_SECONDS );
 				return self::err( 'کد تأیید درست نیست.' );
 			}
-			delete_transient( self::otp_key( $c ) );
+			delete_transient( self::otp_key( $c, $i ) );
 			$mobile = $state['mobile'];
 			$method = 'otp';
 		}
 		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
 		$ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 255 ) : '';
-		$wpdb->update(
-			self::t(),
-			array(
-				'status'         => 'signed',
-				'signed_at'      => MP_Util::now(),
-				'signer_name'    => $name,
-				'signer_mobile'  => $mobile,
-				'signer_ip'      => $ip,
-				'signer_ua'      => $ua,
-				'sign_method'    => $method,
-				'client_sig'     => $sig,
-				'doc_hash'       => self::fingerprint( $c ),
-				'updated_at'     => MP_Util::now(),
-			),
-			array( 'id' => $c->id )
-		);
-		MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط ' . $name . ' امضا شد ✓', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
+		$list[ $i ] = array_merge( $list[ $i ], array( 'name' => $name, 'mobile' => $mobile ? $mobile : ( isset( $list[ $i ]['mobile'] ) ? $list[ $i ]['mobile'] : '' ), 'signed_at' => MP_Util::now(), 'sig' => $sig, 'ip' => $ip, 'ua' => $ua, 'method' => $method, 'id_card' => $card ) );
+		$f    = array( 'signers' => wp_json_encode( $list, JSON_UNESCAPED_UNICODE ), 'updated_at' => MP_Util::now() );
+		$done = self::next_signer( (object) array_merge( (array) $c, array( 'signers' => $f['signers'] ) ) ) < 0;
+		if ( $done ) {
+			$names = implode( '، ', wp_list_pluck( $list, 'name' ) );
+			$f    += array(
+				'status'        => 'signed',
+				'signed_at'     => MP_Util::now(),
+				'signer_name'   => $names,
+				'signer_mobile' => $mobile,
+				'signer_ip'     => $ip,
+				'signer_ua'     => $ua,
+				'sign_method'   => $method,
+				'client_sig'    => $sig,
+				'doc_hash'      => self::fingerprint( $c ),
+			);
+		}
+		$wpdb->update( self::t(), $f, array( 'id' => $c->id ) );
+		if ( ! $done ) {
+			// Tell the next person in line.
+			$n  = $list[ $i + 1 ];
+			$nm = MP_Auth::normalize( isset( $n['mobile'] ) ? $n['mobile'] : '' );
+			if ( $nm ) {
+				MP_Auth::text( $nm, $n['name'] . ' عزیز، ' . $name . ' قرارداد «' . $c->title . '» را امضا کرد؛ نوبت امضای شماست: ' . self::url( $c->token ) );
+			}
+			MP_Client::system( 0, (int) $c->project_id, $name . ' قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' را امضا کرد؛ نوبت ' . $n['name'] . ' است.', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
+			return array( 'signed' => true, 'complete' => false );
+		}
+		MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط ' . $f['signer_name'] . ' امضا شد ✓', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
 		foreach ( MP_Util::panel_users() as $m ) {
 			if ( MP_Util::is_manager( $m ) ) {
-				MP_Notify::send( $m, 'contract', $name . ' قرارداد ' . $c->number . ' را امضا کرد', $c->title, 'contracts', $c->id, true );
+				MP_Notify::send( $m, 'contract', $f['signer_name'] . ' قرارداد ' . $c->number . ' را امضا کرد', $c->title, 'contracts', $c->id, true );
 			}
 		}
 		MP_Audit::log( 'update', 'contract', $c->id, $c->number . ' امضای مشتری (' . $method . ')' );
-		return array( 'signed' => true );
+		// Payment stages due at signing get their invoice right away.
+		if ( $set['f_invoice'] ) {
+			foreach ( self::stages_of( $c ) as $k => $st ) {
+				if ( 'sign' === $st['on'] ) {
+					self::stage_invoice( self::get( $c->id ), $k );
+				}
+			}
+		}
+		return array( 'signed' => true, 'complete' => true, 'pdf' => (bool) $set['f_pdf'] );
+	}
+
+	/** POST contract/{token}/seen {pct} — opened / read this far (not counted for the team). */
+	public static function client_seen( WP_REST_Request $r ) {
+		global $wpdb;
+		$c = self::by_token( $r['token'] );
+		if ( ! $c || ! self::settings()['f_track'] || 'draft' === $c->status || current_user_can( 'mp_access_panel' ) ) {
+			return array( 'ok' => true );
+		}
+		$f = array( 'read_pct' => max( (int) $c->read_pct, min( 100, (int) $r['pct'] ) ) );
+		if ( ! empty( $r['open'] ) ) {
+			$f['views']          = (int) $c->views + 1;
+			$f['last_viewed_at'] = MP_Util::now();
+			if ( ! $c->first_viewed_at ) {
+				$f['first_viewed_at'] = MP_Util::now();
+				foreach ( MP_Util::panel_users() as $m ) {
+					if ( MP_Util::is_manager( $m ) ) {
+						MP_Notify::send( $m, 'contract', self::client_of( $c ) . ' قرارداد ' . $c->number . ' را باز کرد', $c->title, 'contracts', $c->id );
+					}
+				}
+			}
+		}
+		$wpdb->update( self::t(), $f, array( 'id' => $c->id ) );
+		return array( 'ok' => true );
+	}
+
+	/**
+	 * POST contract/{token}/pdf {pdf: data URL} — the signed contract's PDF (made in the browser
+	 * with the page's own rendering), stored once and put in the project's delivered files.
+	 */
+	public static function client_pdf( WP_REST_Request $r ) {
+		global $wpdb;
+		$c = self::by_token( $r['token'] );
+		if ( ! $c || 'signed' !== $c->status || $c->pdf_file_id || ! self::settings()['f_pdf'] ) {
+			return array( 'stored' => false );
+		}
+		// The signer's browser right after signing, or a manager later; nobody else.
+		if ( ! current_user_can( 'mp_manage_panel' ) && strtotime( $c->signed_at ) < strtotime( MP_Util::now() ) - 30 * MINUTE_IN_SECONDS ) {
+			return self::err( 'زمان ثبت PDF گذشته است.', 403 );
+		}
+		$data = (string) $r['pdf'];
+		if ( strlen( $data ) > 14000000 || ! preg_match( '#^data:application/pdf;(?:filename=[^;]*;)?base64,([A-Za-z0-9+/=]+)$#', $data, $m ) ) {
+			return self::err( 'فایل PDF معتبر نیست.' );
+		}
+		$bytes = base64_decode( $m[1], true );
+		if ( ! $bytes || 0 !== strpos( $bytes, '%PDF' ) ) {
+			return self::err( 'فایل PDF معتبر نیست.' );
+		}
+		$name = 'contract-' . $c->number . '.pdf';
+		$file = MP_Files::store_bytes( 'client_item', (int) $c->project_id, $name, 'application/pdf', $bytes, 'pdf' );
+		if ( ! $file ) {
+			return self::err( 'ذخیره PDF انجام نشد.', 500 );
+		}
+		$wpdb->update( self::t(), array( 'pdf_file_id' => (int) $file->id ), array( 'id' => $c->id ) );
+		if ( $c->project_id ) {
+			// In the portal's delivered files (the project archive), and announced in the chat.
+			$wpdb->insert(
+				self::t( 'client_items' ),
+				array(
+					'project_id' => (int) $c->project_id,
+					'kind'       => 'file',
+					'title'      => ( 'amendment' === $c->kind ? 'الحاقیه' : 'قرارداد' ) . ' امضاشده ' . $c->number,
+					'note'       => $c->title,
+					'file_id'    => (int) $file->id,
+					'version'    => 1,
+					'parent_id'  => 0,
+					'status'     => 'delivered',
+					'created_by' => 0,
+					'created_at' => MP_Util::now(),
+				)
+			);
+			MP_Client::system( 0, (int) $c->project_id, 'نسخه PDF قرارداد امضاشده ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' در فایل‌های پروژه قرار گرفت.', array( 't' => 'file', 'id' => (int) $wpdb->insert_id ) );
+		}
+		return array( 'stored' => true );
 	}
 
 	/** Contracts of a project for the client portal (never drafts). */
@@ -697,7 +1162,17 @@ class MP_Contracts {
 		}
 		$client = $client ? $client : $c->client_name;
 		$agent  = isset( $vars['نام مجری'] ) && $vars['نام مجری'] ? $vars['نام مجری'] : $s['agent'];
-		$otp    = self::need_otp();
+		$otp     = self::need_otp();
+		$signers = self::signers_of( $c );
+		$next    = self::next_signer( $c );
+		$expired = self::expired( $c );
+		$team    = current_user_can( 'mp_manage_panel' );
+		$nonce   = is_user_logged_in() ? wp_create_nonce( 'wp_rest' ) : '';
+		$parent  = $c->parent_id ? self::get( $c->parent_id ) : null;
+		// Contracts signed before multi-signer support keep their single signature.
+		if ( 'signed' === $c->status && 1 === count( $signers ) && empty( $signers[0]['sig'] ) ) {
+			$signers[0] = array_merge( $signers[0], array( 'name' => $c->signer_name, 'mobile' => $c->signer_mobile, 'signed_at' => $c->signed_at, 'sig' => $c->client_sig, 'ip' => $c->signer_ip, 'method' => $c->sign_method ) );
+		}
 		include MP_DIR . 'templates/contract.php';
 		exit;
 	}
