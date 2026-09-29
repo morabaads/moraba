@@ -44,25 +44,26 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 .ribbon{margin:64px -40px 0;background:var(--o);color:#150b04;font-weight:900;font-size:30px;padding:16px 0;transform:rotate(-2.2deg);white-space:nowrap;text-align:center;letter-spacing:.3px;box-shadow:0 20px 70px rgba(255,90,31,.35)}
 .ribbon i{display:inline-block;width:12px;height:12px;background:#150b04;transform:rotate(45deg);margin:0 22px}
 
-/* bento */
-.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:22px;padding:70px 56px 0}
-.card{grid-column:span 6;position:relative;background:linear-gradient(160deg,#1e1913,var(--card));border:1px solid var(--line);border-radius:38px;padding:34px 34px 30px;display:flex;flex-direction:column;overflow:hidden}
-.card::before{content:"";position:absolute;width:260px;height:260px;left:-90px;top:-90px;background:radial-gradient(circle,rgba(255,90,31,.28),transparent 70%)}
-.s7{grid-column:span 7}.s5{grid-column:span 5}
-.num{position:absolute;left:26px;top:14px;font-size:96px;font-weight:950;color:transparent;-webkit-text-stroke:1.5px rgba(255,255,255,.16);line-height:1;pointer-events:none}
-.ico{width:66px;height:66px;border-radius:20px;display:grid;place-items:center;background:rgba(255,90,31,.14);border:1px solid rgba(255,90,31,.45);color:var(--o2);margin-bottom:20px;position:relative}
-.ico .i{width:32px;height:32px;stroke-width:1.9}
-.card h2{font-size:36px;font-weight:850;line-height:1.35;position:relative}
-.card p{font-size:20px;color:var(--mu);line-height:1.95;margin-top:10px;position:relative;margin-bottom:26px}
-.card.hot{background:linear-gradient(150deg,var(--o2),#ea4210 70%);border-color:transparent}
-.card.hot::before{background:radial-gradient(circle,rgba(255,255,255,.3),transparent 70%)}
-.card.hot p{color:rgba(20,8,2,.78)}.card.hot h2{color:#150b04}
-.card.hot .ico{background:#150b04;border-color:#150b04;color:var(--o2)}
-.card.hot .num{-webkit-text-stroke-color:rgba(20,8,2,.25)}
-.card.cream{background:var(--cream);border-color:transparent}
-.card.cream::before{background:radial-gradient(circle,rgba(255,90,31,.25),transparent 70%)}
-.card.cream h2{color:#1a120b}.card.cream p{color:#5f5446}
-.card.cream .num{-webkit-text-stroke-color:rgba(26,18,11,.16)}
+/* rows */
+.rows{position:relative;padding:20px 40px 0}
+.rows::before{content:"";position:absolute;left:50%;top:0;bottom:60px;border-left:3px dashed rgba(255,138,61,.55);transform:translateX(-1.5px)}
+.row{display:flex;align-items:center;gap:90px;margin-top:80px;position:relative}
+.row.alt{flex-direction:row-reverse}
+.row>.txt,.row>.stage{flex:1;min-width:0}
+.dot{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:70px;height:70px;border-radius:50%;background:linear-gradient(140deg,var(--o2),var(--o));color:#150b04;font-size:26px;font-weight:900;display:grid;place-items:center;box-shadow:0 0 0 10px var(--bg),0 0 50px rgba(255,90,31,.6);z-index:3}
+.txt{position:relative}
+.num{font-size:150px;font-weight:950;line-height:.9;color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.18);margin-bottom:-24px}
+.ico{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;background:rgba(255,90,31,.14);border:1px solid rgba(255,90,31,.5);color:var(--o2);margin-bottom:22px;position:relative}
+.ico .i{width:38px;height:38px;stroke-width:1.8}
+.txt h2{font-size:44px;font-weight:900;line-height:1.35}
+.txt p{font-size:22px;color:var(--mu);line-height:2;margin-top:12px}
+.stage{position:relative;padding:14px}
+.stack{position:absolute;inset:0;border-radius:30px;border:2px solid rgba(255,138,61,.55);transform:translate(-22px,22px) rotate(-2deg);background:linear-gradient(140deg,rgba(255,90,31,.22),transparent)}
+.alt .stack{transform:translate(22px,22px) rotate(2deg)}
+.stage .panel{transform:rotate(1.6deg)}
+.alt .stage .panel{transform:rotate(-1.6deg)}
+.tag{position:absolute;top:-14px;right:-10px;background:var(--o);color:#150b04;font-weight:900;font-size:19px;padding:7px 18px;border-radius:14px;transform:rotate(5deg);box-shadow:0 12px 40px rgba(255,90,31,.5);z-index:4}
+.alt .tag{right:auto;left:-10px;transform:rotate(-5deg)}
 
 /* panel mock */
 .panel{margin-top:auto;background:#0f0c09;border:1px solid #3a3126;border-radius:22px;overflow:hidden;box-shadow:0 26px 60px rgba(0,0,0,.55);position:relative}
@@ -120,40 +121,49 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
 
 <div class="ribbon">برگشت‌پذیر<i></i>فارسی‌محور<i></i>پیش‌نمایش قبل از انتقال<i></i>همگام‌سازی خودکار<i></i>برگشت‌پذیر</div>
 
-<main class="grid">
-<article class="card s7 ">
-  <div class="num">۰۱</div>
-  <div class="ico"><svg class="i"><use href="#i-link"/></svg></div>
-  <h2>فقط آدرس را بچسبانید</h2>
-  <p>آدرس محصول یا دسته را وارد کنید؛ کوچ پلتفرم و ارز را خودکار تشخیص می‌دهد و ویزارد سه‌مرحله‌ای شما را تا انتقال همراهی می‌کند.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>افزودن کوچ جدید</b></div><div class="body">
+<main class="rows">
+<section class="row ">
+  <div class="dot">۰۱</div>
+  <div class="txt">
+    <div class="num">۰۱</div>
+    <div class="ico"><svg class="i"><use href="#i-link"/></svg></div>
+    <h2>فقط آدرس را بچسبانید</h2>
+    <p>آدرس محصول یا دسته را وارد کنید؛ کوچ پلتفرم و ارز را خودکار تشخیص می‌دهد و ویزارد سه‌مرحله‌ای شما را تا انتقال همراهی می‌کند.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>افزودن کوچ جدید</b></div><div class="body">
         <div class="steps"><div class="on">۱ · آدرس</div><div>۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
         <div class="input">https://shop.example.com/product/sneaker-x</div>
         <div class="btn">تشخیص و ادامه</div>
         <div class="chips"><span class="chip ok"><svg class="i"><use href="#i-check"/></svg> ووکامرس تشخیص داده شد</span><span class="chip o">ارز: تومان</span><span class="chip">Store API</span></div>
         <div class="fld"><span class="l">robots.txt</span><span class="v">گزارش شد و رعایت می‌شود</span><span class="conf h">امن</span></div>
-      </div></div>
-</article>
-<article class="card s5 ">
-  <div class="num">۰۲</div>
-  <div class="ico"><svg class="i"><use href="#i-eye"/></svg></div>
-  <h2>اول پیش‌نمایش، بعد انتقال</h2>
-  <p>محصول دقیقاً همان‌طور که ذخیره می‌شود نمایش داده می‌شود، با درجه‌ی اطمینان برای هر فیلد. «تست‌ران» بدون نوشتن چیزی تغییرات را نشان می‌دهد.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>پیش‌نمایش نهایی</b></div><div class="body">
+      </div></div><div class="tag">۳ مرحله</div></div>
+</section>
+<section class="row alt">
+  <div class="dot">۰۲</div>
+  <div class="txt">
+    <div class="num">۰۲</div>
+    <div class="ico"><svg class="i"><use href="#i-eye"/></svg></div>
+    <h2>اول پیش‌نمایش، بعد انتقال</h2>
+    <p>محصول دقیقاً همان‌طور که ذخیره می‌شود نمایش داده می‌شود، با درجه‌ی اطمینان برای هر فیلد. «تست‌ران» بدون نوشتن چیزی تغییرات را نشان می‌دهد.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>پیش‌نمایش نهایی</b></div><div class="body">
         <div class="steps"><div class="done"><svg class="i"><use href="#i-check"/></svg> آدرس</div><div class="on">۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
         <div class="prod"><div class="im"><svg class="i"><use href="#i-box"/></svg></div><div style="flex:1"><b style="font-size:18px">کفش ورزشی مدل X</b><div style="color:var(--mu);font-size:14px;margin-top:6px">۴ متغیر · ۱۲ تصویر</div></div></div>
         <div class="fld"><span class="l">عنوان</span><span class="v">کفش ورزشی مدل X</span><span class="conf h">۹۸٪</span></div>
         <div class="fld"><span class="l">قیمت</span><span class="v">۱٬۲۵۰٬۰۰۰ تومان</span><span class="conf h">۹۵٪</span></div>
         <div class="fld"><span class="l">دسته</span><span class="v">کفش › مردانه</span><span class="conf m">۷۲٪</span></div>
         <div class="grid2"><div class="btn g">تست‌ران</div><div class="btn">تأیید و شروع انتقال</div></div>
-      </div></div>
-</article>
-<article class="card s5 ">
-  <div class="num">۰۳</div>
-  <div class="ico"><svg class="i"><use href="#i-globe"/></svg></div>
-  <h2>از هر منبع مجاز</h2>
-  <p>دیجی‌کالا، تکنولایف، ووکامرسی و سایت‌های اختصاصی. برای سایت‌های دیگر، انتخابگر بصری فیلد و سرویس رندر برای صفحه‌های جاوااسکریپتی.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>منابع پشتیبانی‌شده</b></div><div class="body">
+      </div></div><div class="tag">۹۸٪ اطمینان</div></div>
+</section>
+<section class="row ">
+  <div class="dot">۰۳</div>
+  <div class="txt">
+    <div class="num">۰۳</div>
+    <div class="ico"><svg class="i"><use href="#i-globe"/></svg></div>
+    <h2>از هر منبع مجاز</h2>
+    <p>دیجی‌کالا، تکنولایف، ووکامرسی و سایت‌های اختصاصی. برای سایت‌های دیگر، انتخابگر بصری فیلد و سرویس رندر برای صفحه‌های جاوااسکریپتی.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>منابع پشتیبانی‌شده</b></div><div class="body">
         <div class="grid2">
           <div class="tile"><b>دیجی‌کالا</b><span>محصول و دسته</span></div>
           <div class="tile"><b>تکنولایف</b><span>فروشگاه‌های تکنولایف</span></div>
@@ -162,14 +172,17 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
         </div>
         <div class="fld" style="margin-top:6px"><span class="l" style="width:auto"><svg class="i"><use href="#i-target"/></svg></span><span class="v">انتخابگر بصری فیلد برای سایت‌های دیگر</span></div>
         <div class="fld"><span class="l" style="width:auto"><svg class="i"><use href="#i-cog"/></svg></span><span class="v">سرویس رندر اختیاری برای صفحه‌های JS</span></div>
-      </div></div>
-</article>
-<article class="card s7 hot">
-  <div class="num">۰۴</div>
-  <div class="ico"><svg class="i"><use href="#i-coins"/></svg></div>
-  <h2>قیمت‌گذاری هوشمند</h2>
-  <p>درصدی، مبلغ ثابت، پله‌ای یا بر اساس دسته؛ پایان جذاب (…۹۰۰)، نرخ ارز زنده و «نگهبان قیمت» که جهش‌های عجیب را برای تأیید شما نگه می‌دارد.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>قیمت و زمان‌بندی</b></div><div class="body">
+      </div></div><div class="tag">۴ منبع</div></div>
+</section>
+<section class="row alt">
+  <div class="dot">۰۴</div>
+  <div class="txt">
+    <div class="num">۰۴</div>
+    <div class="ico"><svg class="i"><use href="#i-coins"/></svg></div>
+    <h2>قیمت‌گذاری هوشمند</h2>
+    <p>درصدی، مبلغ ثابت، پله‌ای یا بر اساس دسته؛ پایان جذاب (…۹۰۰)، نرخ ارز زنده و «نگهبان قیمت» که جهش‌های عجیب را برای تأیید شما نگه می‌دارد.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>قیمت و زمان‌بندی</b></div><div class="body">
         <div class="steps"><div class="done"><svg class="i"><use href="#i-check"/></svg> آدرس</div><div class="done"><svg class="i"><use href="#i-check"/></svg> پیش‌نمایش</div><div class="on">۳ · قیمت و زمان</div></div>
         <div class="line"><span>قیمت منبع</span><b>۱٬۰۰۰٬۰۰۰</b></div>
         <div class="line"><span>حاشیه‌ی سود</span><b style="color:var(--o2)">+۲۵٪</b></div>
@@ -177,59 +190,71 @@ body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;ove
         <div class="line"><span>نرخ ارز زنده</span><span class="tgl"></span></div>
         <div class="line" style="border:0"><span>قیمت فروش</span><b style="font-size:24px;color:var(--ok)">۱٬۲۴۹٬۹۰۰ تومان</b></div>
         <div class="chip o" style="align-self:flex-start"><svg class="i"><use href="#i-shield"/></svg> نگهبان قیمت فعال</div>
-      </div></div>
-</article>
-<article class="card s7 ">
-  <div class="num">۰۵</div>
-  <div class="ico"><svg class="i"><use href="#i-refresh"/></svg></div>
-  <h2>همیشه به‌روز، بدون دردسر</h2>
-  <p>به‌روزرسانی کامل زمان‌بندی‌شده، تازه‌سازی سریع قیمت و موجودی، ساعات سکوت و مدیریت امن محصولاتی که از منبع حذف شده‌اند. قفل فیلدها ویرایش‌های خودتان را نگه می‌دارد.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>مدیریت کوچ</b></div><div class="body">
+      </div></div><div class="tag">نگهبان قیمت</div></div>
+</section>
+<section class="row ">
+  <div class="dot">۰۵</div>
+  <div class="txt">
+    <div class="num">۰۵</div>
+    <div class="ico"><svg class="i"><use href="#i-refresh"/></svg></div>
+    <h2>همیشه به‌روز، بدون دردسر</h2>
+    <p>به‌روزرسانی کامل زمان‌بندی‌شده، تازه‌سازی سریع قیمت و موجودی، ساعات سکوت و مدیریت امن محصولاتی که از منبع حذف شده‌اند. قفل فیلدها ویرایش‌های خودتان را نگه می‌دارد.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>مدیریت کوچ</b></div><div class="body">
         <div class="grid2"><div class="tile"><b>۱٬۲۴۸</b><span>محصول همگام</span></div><div class="tile"><b>۳ دقیقه</b><span>آخرین به‌روزرسانی</span></div></div>
         <div class="line"><span>به‌روزرسانی کامل</span><span class="chip">هر شب ۰۳:۰۰</span></div>
         <div class="line"><span>قیمت و موجودی سریع</span><span class="chip">هر ۳۰ دقیقه</span></div>
         <div class="line"><span>ساعات سکوت</span><span class="chip">۰۰:۰۰ – ۰۶:۰۰</span></div>
         <div class="line" style="border:0"><span><svg class="i"><use href="#i-lock"/></svg> قفل فیلدها (عنوان، توضیحات)</span><span class="tgl"></span></div>
-      </div></div>
-</article>
-<article class="card s5 cream">
-  <div class="num">۰۶</div>
-  <div class="ico"><svg class="i"><use href="#i-undo"/></svg></div>
-  <h2>هر انتقال، یک‌بار برگشت‌پذیر</h2>
-  <p>اگر نتیجه را نپسندیدید، با یک کلیک به حالت قبل برگردید. لاگ ممیزی هم همه‌چیز را ثبت می‌کند.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>لاگ ممیزی</b></div><div class="body">
+      </div></div><div class="tag">همیشه به‌روز</div></div>
+</section>
+<section class="row alt">
+  <div class="dot">۰۶</div>
+  <div class="txt">
+    <div class="num">۰۶</div>
+    <div class="ico"><svg class="i"><use href="#i-undo"/></svg></div>
+    <h2>هر انتقال، یک‌بار برگشت‌پذیر</h2>
+    <p>اگر نتیجه را نپسندیدید، با یک کلیک به حالت قبل برگردید. لاگ ممیزی هم همه‌چیز را ثبت می‌کند.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>لاگ ممیزی</b></div><div class="body">
         <div class="line"><span><svg class="i"><use href="#i-check"/></svg> انتقال ۴۲ محصول</span><span class="chip ok">موفق</span></div>
         <div class="line"><span><svg class="i"><use href="#i-alert"/></svg> ۳ محصول در انتظار تأیید قیمت</span><span class="chip o">نگهبان</span></div>
         <div class="line"><span><svg class="i"><use href="#i-refresh"/></svg> تازه‌سازی قیمت</span><span class="chip ok">موفق</span></div>
         <div class="btn g" style="margin-top:10px"><svg class="i"><use href="#i-undo"/></svg> بازگردانی این انتقال</div>
         <div class="input" style="margin-top:6px">$ wp kooch run --id=12</div>
-      </div></div>
-</article>
-<article class="card s5 ">
-  <div class="num">۰۷</div>
-  <div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>
-  <h2>اعلان و هوش مصنوعی اختیاری</h2>
-  <p>خبر بگیرید با ایمیل، تلگرام، بله و وب‌هوک امضاشده. با کلید Anthropic خودتان، بازنویسی، ترجمه، یکدست‌سازی ویژگی‌ها و پیشنهاد دسته انجام می‌شود.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>تنظیمات کوچ</b></div><div class="body">
+      </div></div><div class="tag">یک‌بار برگشت</div></div>
+</section>
+<section class="row ">
+  <div class="dot">۰۷</div>
+  <div class="txt">
+    <div class="num">۰۷</div>
+    <div class="ico"><svg class="i"><use href="#i-bell"/></svg></div>
+    <h2>اعلان و هوش مصنوعی اختیاری</h2>
+    <p>خبر بگیرید با ایمیل، تلگرام، بله و وب‌هوک امضاشده. با کلید Anthropic خودتان، بازنویسی، ترجمه، یکدست‌سازی ویژگی‌ها و پیشنهاد دسته انجام می‌شود.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>تنظیمات کوچ</b></div><div class="body">
         <div class="line"><span><svg class="i"><use href="#i-mail"/></svg> ایمیل</span><span class="tgl"></span></div>
         <div class="line"><span><svg class="i"><use href="#i-send"/></svg> تلگرام</span><span class="tgl"></span></div>
         <div class="line"><span><svg class="i"><use href="#i-chat"/></svg> بله</span><span class="tgl"></span></div>
         <div class="line"><span><svg class="i"><use href="#i-hook"/></svg> وب‌هوک امضاشده</span><span class="tgl off"></span></div>
         <div class="chips" style="margin-top:8px"><span class="chip o"><svg class="i"><use href="#i-spark"/></svg> بازنویسی</span><span class="chip o">ترجمه</span><span class="chip o">یکدست‌سازی ویژگی‌ها</span><span class="chip o">پیشنهاد دسته</span></div>
-      </div></div>
-</article>
-<article class="card s7 ">
-  <div class="num">۰۸</div>
-  <div class="ico"><svg class="i"><use href="#i-lang"/></svg></div>
-  <h2>فارسی‌محور از پایه</h2>
-  <p>ترجمه‌ی کامل فارسی، راست‌چین، تاریخ جلالی و محافظت در برابر اشتباه ریال و تومان.</p>
-  <div class="panel"><div class="bar"><i></i><i></i><i></i><b>ریال / تومان</b></div><div class="body">
+      </div></div><div class="tag">۴ کانال</div></div>
+</section>
+<section class="row alt">
+  <div class="dot">۰۸</div>
+  <div class="txt">
+    <div class="num">۰۸</div>
+    <div class="ico"><svg class="i"><use href="#i-lang"/></svg></div>
+    <h2>فارسی‌محور از پایه</h2>
+    <p>ترجمه‌ی کامل فارسی، راست‌چین، تاریخ جلالی و محافظت در برابر اشتباه ریال و تومان.</p>
+  </div>
+  <div class="stage"><div class="stack"></div><div class="panel"><div class="bar"><i></i><i></i><i></i><b>ریال / تومان</b></div><div class="body">
         <div class="line"><span>تاریخ آخرین همگام‌سازی</span><b>۱۴۰۵/۰۷/۰۷</b></div>
         <div class="line"><span>قیمت منبع</span><b>۱۲٬۵۰۰٬۰۰۰ ریال</b></div>
         <div class="line"><span>تبدیل خودکار</span><b style="color:var(--ok)">۱٬۲۵۰٬۰۰۰ تومان</b></div>
         <div class="chip ok" style="align-self:flex-start;margin-top:8px"><svg class="i"><use href="#i-check"/></svg> محافظ ریال/تومان فعال</div>
-      </div></div>
-</article>
+      </div></div><div class="tag">RTL</div></div>
+</section>
 </main>
 
 </div>
