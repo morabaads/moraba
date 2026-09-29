@@ -93,12 +93,18 @@
     var box = $('#timeline'), world = $('#tl-world'), picker = $('#timeline-picker');
     // The view is whole Jalali months from the current one: 1 month by default, zooming out adds the
     // months ahead (2, 3, 6, 12). Dragging the empty area moves the window by days.
-    var LEVELS = [1, 2, 3, 6, 12], level = 0, shift = 0, DAYS = 30, drag = null, scope = 'all', items = [];
+    // Zoom steps, small to large: a week (day by day), 2 and 4 weeks, then 1, 3, 6 and 12 Jalali months.
+    // «+» shows a longer range, «−» a shorter one; week views start on this Saturday, month views on the 1st.
+    var LEVELS = [{ w: 1, label: '۱ هفته' }, { w: 2, label: '۲ هفته' }, { w: 4, label: '۴ هفته' }, { m: 1, label: '۱ ماه' }, { m: 3, label: '۳ ماه' }, { m: 6, label: '۶ ماه' }, { m: 12, label: '۱ سال' }];
+    var DEFAULT = 3, level = DEFAULT, shift = 0, DAYS = 30, drag = null, scope = 'all', items = [];
     function monthStart(iso) { var j = J.fromIso(iso); return J.toIso(j.jy, j.jm, 1); }
-    function first() { return J.addDays(monthStart(S.today), shift); }
+    function base() { return LEVELS[level].w ? J.weekStart(S.today) : monthStart(S.today); }
+    function first() { return J.addDays(base(), shift); }
     function span() {
+      var L = LEVELS[level];
+      if (L.w) return L.w * 7;
       var j = J.fromIso(monthStart(S.today)), n = 0, y = j.jy, m = j.jm;
-      for (var k = 0; k < LEVELS[level]; k++) { n += J.monthLength(y, m); if (++m > 12) { m = 1; y++; } }
+      for (var k = 0; k < L.m; k++) { n += J.monthLength(y, m); if (++m > 12) { m = 1; y++; } }
       return n;
     }
     function x(iso) { return J.diffDays(first(), iso) / DAYS * 100; }
@@ -124,12 +130,24 @@
       DAYS = span();
       world.style.width = '100%';
       world.style.setProperty('--pan', '0px');
-      $('#timeline-zoom').textContent = fa(LEVELS[level]) + ' ماه';
+      $('#timeline-zoom').textContent = LEVELS[level].label;
       // RTL time: dates run right → left. Month starts get a strong line and the month's name;
       // a one- or two-month view also gets a line every 5 days.
-      var end = J.addDays(first(), DAYS), step = LEVELS[level] <= 2 ? 5 : 0;
+      var L = LEVELS[level], end = J.addDays(first(), DAYS), step = L.m === 1 ? 5 : 0;
+      var WD = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
       for (var d = first(); d <= end; d = J.addDays(d, 1)) {
         var jd = J.fromIso(d), pos = 100 - x(d);
+        if (L.w) {
+          // Week views: a line per day (1–2 weeks, with weekday) or per week (4 weeks); month name on the 1st.
+          var wd = J.weekday(d), mid = 100 - x(d) - 50 / DAYS;
+          if (L.w <= 2) {
+            world.append(el('i', { class: 'tl-grid' + (wd === 0 ? ' month' : ''), style: { left: pos + '%' } }));
+            if (d < end) world.append(el('span', { class: 'tl-label' + (d === S.today ? ' month' : ''), style: { left: mid + '%' }, text: (L.w === 1 ? J.weekdays[wd] + ' ' : WD[wd] + ' ') + fa(jd.jd) + (jd.jd === 1 || d === first() ? ' ' + J.format(d, false).replace(/^\S+\s/, '') : '') }));
+          } else if (wd === 0) {
+            world.append(el('i', { class: 'tl-grid month', style: { left: pos + '%' } }), el('span', { class: 'tl-label', style: { left: pos + '%' }, text: J.format(d, false) }));
+          }
+          continue;
+        }
         if (jd.jd === 1) world.append(el('i', { class: 'tl-grid month', style: { left: pos + '%' } }), el('span', { class: 'tl-label month', style: { left: pos + '%' }, text: J.format(d, false).replace(/^\S+\s/, '') + (jd.jm === 1 ? ' ' + fa(jd.jy) : '') }));
         else if (step && jd.jd % step === 1 && jd.jd < 30) world.append(el('i', { class: 'tl-grid', style: { left: pos + '%' } }), el('span', { class: 'tl-label', style: { left: pos + '%' }, text: fa(jd.jd) }));
       }
@@ -141,9 +159,9 @@
         var s = Math.max(0, x(it.start)), e = Math.min(100, x(J.addDays(it.end, 1)));
         if (e <= 0 || s >= 100) return;
         var n = 0; while (lanes[n] !== undefined && lanes[n] > s - 0.5) n++;
-        lanes[n] = e; used = Math.max(used, n + 1);
+        lanes[n] = Math.max(e, s + 128 / Math.max(1, box.clientWidth) * 100); used = Math.max(used, n + 1); // short bars still take their min width
         var bar = el('div', {
-          class: 'tl-bar' + (it.kind === 'milestone' ? ' milestone' : '') + (it.status === 'done' ? ' done' : ''), tabindex: 0, role: 'button',
+          class: 'tl-bar' + (it.kind === 'milestone' ? ' milestone' : '') + (it.status === 'done' ? ' done' : '') + ((e - s) / 100 * box.clientWidth < 220 ? ' tight' : ''), tabindex: 0, role: 'button',
           'aria-label': it.name + '، ' + J.format(it.start) + ' تا ' + J.format(it.end) + (S.manager ? '؛ برای جابه‌جایی بکشید یا کلیدهای چپ و راست' : ''),
           style: { right: s + '%', width: 'calc(' + (e - s) + '% - 4px)', top: (10 + n * 54) + 'px' }
         }, el('div', { class: 'tl-copy' }, el('strong', { text: it.name }), el('small', { text: J.format(it.start, false) + ' تا ' + J.format(it.end, false) })),
@@ -211,7 +229,10 @@
     $$('[data-tl]').forEach(function (b) {
       b.onclick = function () {
         var a = b.dataset.tl;
-        if (a === 'reset') { shift = 0; level = 0; } else if (a === 'in') level = Math.max(0, level - 1); else level = Math.min(LEVELS.length - 1, level + 1);
+        // «+» = longer range, «−» = shorter; changing between week and month views starts from today again.
+        var was = !!LEVELS[level].w;
+        if (a === 'reset') { shift = 0; level = DEFAULT; } else if (a === 'in') level = Math.min(LEVELS.length - 1, level + 1); else level = Math.max(0, level - 1);
+        if (was !== !!LEVELS[level].w) shift = 0;
         render();
       };
     });

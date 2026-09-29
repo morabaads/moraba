@@ -125,9 +125,9 @@ $mp_nav = array(
 							<select class="select sm" id="timeline-picker" aria-label="انتخاب پروژه"><option value="all">همه پروژه‌ها</option></select>
 							<button type="button" class="icon-btn sm manager-only" id="timeline-add" aria-label="افزودن مرحله" title="افزودن مرحله"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?></button>
 							<div class="zoom" role="group" aria-label="بزرگ‌نمایی">
-								<button type="button" data-tl="out" aria-label="کوچک‌نمایی">−</button>
+								<button type="button" data-tl="out" aria-label="بازه کوتاه‌تر" title="بازه کوتاه‌تر">−</button>
 								<span id="timeline-zoom">۱۰۰٪</span>
-								<button type="button" data-tl="in" aria-label="بزرگ‌نمایی">+</button>
+								<button type="button" data-tl="in" aria-label="بازه بلندتر" title="بازه بلندتر">+</button>
 								<button type="button" data-tl="reset" aria-label="برگشت به امروز" title="برگشت به امروز"><?php echo $mp_i( 'target' ); // phpcs:ignore ?></button>
 							</div>
 						</div>
