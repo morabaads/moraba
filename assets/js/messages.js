@@ -218,12 +218,15 @@
     var id = current;
     return MP.api('channels/' + id + '/messages', { query: { after: lastId } }).then(function (d) {
       if (id !== current) return;
-      if (!lastId) box.replaceChildren();
+      // First load of a chat: clear it, but keep bubbles still being sent.
+      if (!lastId) Array.prototype.slice.call(box.children).forEach(function (n) { if (!n.classList.contains('b-pending') && !n.classList.contains('b-failed')) n.remove(); });
       var nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
       var fresh = !!lastId; // first load of a chat isn't animated, later arrivals are
       // Polls, sends and reopenings can overlap; a message already on screen is never added twice.
       d.messages = d.messages.filter(function (m) { return m.id > lastId; });
       d.messages.forEach(function (m) { lastId = Math.max(lastId, m.id); bubble(m, fresh).forEach(function (n) { box.append(n); }); });
+      // Messages still being sent stay at the bottom.
+      if (d.messages.length) Array.prototype.slice.call(box.querySelectorAll('.b-pending, .b-failed')).forEach(function (n) { box.append(n); });
       if (fresh && d.messages.some(function (m) { return !m.mine; })) MP.haptic && MP.haptic(8);
       Object.keys(d.seen || {}).forEach(function (mid) { if (mineRows[mid]) setSeen(mineRows[mid], d.seen[mid]); });
       if (!S.manager) (d.deleted || []).forEach(markDeleted);
@@ -434,12 +437,13 @@
     function run() {
       row.classList.remove('b-failed');
       var up = f ? MP.upload('files', f, { context: 'message', context_id: channel }, function (p) { $('i', bar).style.width = p * 100 + '%'; }) : Promise.resolve(null);
-      // Posts go one after another so messages keep their order.
+      // Posts go one after another so messages keep their order: each waits for the one sent before it
+      // (captured now — waiting on the shared queue itself would wait on this very post, forever).
+      var before = queue;
       var done = up.then(function (file) {
-        queue = queue.then(function () {
+        return before.then(function () {
           return MP.api('channels/' + channel + '/messages', { method: 'POST', body: { body: m.body, file_id: file ? file.id : 0, transcript: typeof o.transcript === 'function' ? o.transcript() : '' } });
         });
-        return queue;
       });
       queue = done.catch(function () {});
       done.then(function () {
