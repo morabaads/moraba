@@ -42,22 +42,25 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 </main>
 
 <!-- Portal -->
-<div class="cp-app" id="cp-app" hidden>
-	<aside class="cp-side">
-		<div class="cp-brand"><img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="مربع استودیو" class="cp-studio-logo"></div>
+<div class="app cp-app" id="cp-app" hidden>
+	<aside class="sidebar cp-side" aria-label="منوی پرتال">
+		<div class="brand"><img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="MORABA" class="brand-logo"></div>
 		<div class="cp-client">
 			<span class="cp-client-logo" id="cp-client-logo"></span>
 			<div><strong id="cp-client-name"></strong><small id="cp-project-name"></small></div>
 		</div>
-		<nav class="cp-nav" id="cp-nav" aria-label="بخش‌ها"></nav>
-		<div class="cp-me" id="cp-me" hidden><span class="cp-avatar" id="cp-me-avatar"></span><div><strong id="cp-me-name"></strong><button type="button" class="cp-link" id="cp-logout">خروج</button></div></div>
-		<p class="cp-powered">پرتال اختصاصی مشتریان مربع استودیو</p>
+		<nav class="nav" id="cp-nav" aria-label="بخش‌ها"></nav>
+		<nav class="nav nav-bottom" aria-label="حساب">
+			<button type="button" class="nav-item" id="cp-logout" hidden><svg class="icon" aria-hidden="true"><use href="#logout"></use></svg><span class="nav-label">خروج</span></button>
+		</nav>
 	</aside>
-	<main class="cp-main">
-		<header class="cp-top">
-			<div class="cp-top-mobile"><img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="مربع" class="cp-studio-logo sm"><span class="cp-client-logo sm" id="cp-client-logo-m"></span></div>
-			<div><h1 id="cp-page-title"></h1><p id="cp-page-sub"></p></div>
+	<main class="main cp-main" id="main">
+		<header class="topbar cp-topbar">
+			<div class="cp-top-mobile"><img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="مربع" class="cp-studio-logo sm"></div>
+			<div class="hello"><strong id="cp-hello"></strong><span id="cp-hello-sub"></span></div>
+			<div class="topbar-tools"><time class="today-label" id="cp-today"></time><span class="cp-client-logo sm" id="cp-client-logo-m"></span><span class="cp-avatar" id="cp-me-avatar" hidden></span></div>
 		</header>
+		<div class="page-head cp-top"><div><h1 id="cp-page-title"></h1><p id="cp-page-sub"></p></div></div>
 		<section class="cp-pane" id="pane-progress" hidden></section>
 		<section class="cp-pane" id="pane-designs" hidden></section>
 		<section class="cp-pane" id="pane-files" hidden></section>

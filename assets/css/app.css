@@ -1951,3 +1951,31 @@ html.dark .cp-studio-logo{filter:invert(1) hue-rotate(180deg) brightness(1.1)}
 .cs-av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-ink);font-weight:800;flex:none}
 .cs-link{display:flex;gap:8px}.cs-link input{flex:1}
 @media (max-width:760px){.cs-add{grid-template-columns:1fr 1fr}.cs-add button{grid-column:1/-1}}
+/* portal uses the panel shell (.app/.sidebar/.nav-item/.topbar/.kpi); only the differences below */
+.cp-app{grid-template-columns:var(--sidebar) minmax(0,1fr)}
+.cp-side .brand{padding-bottom:14px}
+.cp-side .cp-client{margin:0 0 14px}
+.cp-ni{display:contents}
+.cp-main{display:flex;flex-direction:column;gap:var(--gap,18px);padding-top:0;min-width:0}
+.cp-topbar .cp-client-logo.sm{width:40px;height:40px;border-radius:12px}
+.cp-topbar .cp-avatar{width:40px;height:40px}
+.cp-top{padding-top:4px}
+.cp-top h1{font-size:28px}
+.kpi.static{cursor:default}.kpi.static:hover{transform:none;box-shadow:var(--sh-1)}
+@media (max-width:900px){
+  .cp-app{grid-template-columns:1fr}
+  .cp-topbar{position:static;min-height:0;padding:12px 14px;margin:12px 12px 0}
+  .cp-topbar .today-label{display:none}
+  .cp-top{padding:4px 16px 0}
+  .cp-main>.cp-pane{padding:0 12px}
+  .cp-top-mobile{display:block}
+  .cp-stats.kpis{grid-template-columns:1fr 1fr}
+}
+@media (max-width:760px){
+  body.cp-body{padding-bottom:calc(84px + var(--safe-b,0px))}
+  .cp-app{padding:0}
+  .cp-topbar{position:static;margin:12px 12px 0;border-radius:var(--r-xl);background:var(--surface);box-shadow:var(--sh-1)}
+  .cp-topbar::before{display:none}
+  .cp-topbar .hello{display:flex;flex:1;min-width:0}
+  .cp-top-mobile{display:none}
+}

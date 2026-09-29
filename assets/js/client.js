@@ -92,13 +92,18 @@
   }
   function tabs() {
     var list = data && data.project ? TABS : TABS.filter(function (t) { return t[0] === 'chat'; });
-    [$('cp-nav'), $('cp-tabbar')].forEach(function (nav, i) {
-      nav.replaceChildren();
-      list.forEach(function (t) {
-        var n = badge(t[0]);
-        nav.append(h('button', { type: 'button', class: 'cp-tab' + (t[0] === tab ? ' on' : ''), 'aria-current': t[0] === tab ? 'page' : null, onclick: function () { go(t[0]); } }, [
-          h('span', { class: 'cp-tab-ico', html: icon(t[2]) }), h('span', { class: 'cp-tab-label', text: i && t[0] === 'files' ? 'فایل‌ها' : i && t[0] === 'progress' ? 'پیشرفت' : t[1] }), n ? h('i', { text: fa(n) }) : null]));
-      });
+    // Sidebar: the panel's own menu items; phones: a bottom tab bar.
+    var side = $('cp-nav'); side.replaceChildren();
+    list.forEach(function (t) {
+      var n = badge(t[0]);
+      side.append(h('button', { type: 'button', class: 'nav-item' + (t[0] === tab ? ' active' : ''), 'aria-current': t[0] === tab ? 'page' : null, onclick: function () { go(t[0]); } }, [
+        h('span', { class: 'cp-ni', html: icon(t[2]) }), h('span', { class: 'nav-label', text: t[1] }), n ? h('span', { class: 'badge', text: fa(n) }) : null]));
+    });
+    var bar = $('cp-tabbar'); bar.replaceChildren();
+    list.forEach(function (t) {
+      var n = badge(t[0]);
+      bar.append(h('button', { type: 'button', class: 'cp-tab' + (t[0] === tab ? ' on' : ''), onclick: function () { go(t[0]); } }, [
+        h('span', { class: 'cp-tab-ico', html: icon(t[2]) }), h('span', { class: 'cp-tab-label', text: t[0] === 'files' ? 'فایل‌ها' : t[0] === 'progress' ? 'پیشرفت' : t[1] }), n ? h('i', { text: fa(n) }) : null]));
     });
   }
   var SUB = {
@@ -138,7 +143,7 @@
           left !== null ? h('div', { class: 'cp-left' + (left < 0 && p.status !== 'done' ? ' late' : '') }, [h('b', { text: p.status === 'done' ? 'تحویل شد 🎉' : left >= 0 ? fa(left) : fa(-left) }), h('span', { text: p.status === 'done' ? '' : left >= 0 ? 'روز تا تحویل' : 'روز از موعد گذشته' })]) : null
         ])
       ]),
-      h('div', { class: 'cp-stats' }, [
+      h('div', { class: 'kpis cp-stats' }, [
         stat('eye', 'طرح منتظر نظر شما', fa(pend), pend ? function () { go('designs'); } : null, pend ? 'warn' : ''),
         stat('download', 'فایل تحویلی', fa(data.files.length), data.files.length ? function () { go('files'); } : null),
         stat('file', 'فاکتور منتظر پرداخت', unpaid.length ? money(unpaid.reduce(function (s, x) { return s + x.total; }, 0)) : '—', unpaid.length ? function () { go('invoices'); } : null, unpaid.length ? 'warn' : ''),
@@ -158,7 +163,8 @@
     }))));
   }
   function stat(ic, label, value, onclick, tone) {
-    return h(onclick ? 'button' : 'div', { type: onclick ? 'button' : null, class: 'cp-stat ' + (tone || '') + (onclick ? ' link' : ''), onclick: onclick }, [h('span', { class: 'cp-stat-ico', html: icon(ic) }), h('div', null, [h('small', { text: label }), h('strong', { text: value })])]);
+    // Same KPI card as the panel's dashboard.
+    return h('article', { class: 'card kpi' + (onclick ? '' : ' static'), tabindex: onclick ? '0' : null, role: onclick ? 'button' : null, onclick: onclick }, [h('div', { class: 'kpi-icon' + (tone === 'warn' ? ' warn' : ''), html: icon(ic) }), h('div', { class: 'kpi-copy' }, [h('small', { text: label }), h('strong', { text: value })])]);
   }
 
   /* ------------------------------------------------------------ designs */
@@ -268,7 +274,11 @@
       $('cp-project-name').textContent = m.title;
       logoInto($('cp-client-logo'), m.logo, m.client || m.title);
       logoInto($('cp-client-logo-m'), m.logo, m.client || m.title);
-      if (m.logged_in) { $('cp-me').hidden = false; $('cp-me-name').textContent = m.name; $('cp-me-avatar').textContent = initials(m.name); }
+      var hr = new Date().getHours(), first = m.logged_in ? String(m.name).split(' ')[0] : '';
+      $('cp-hello').textContent = (hr < 12 ? 'صبح بخیر' : hr < 17 ? 'روز بخیر' : 'عصر بخیر') + (first ? '، ' + first : '');
+      $('cp-hello-sub').textContent = (m.client || '') + (m.client && m.title ? ' · ' : '') + m.title;
+      var tj = j(today()); $('cp-today').textContent = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'][new Date().getDay()] + ' ' + fa(tj[2]) + ' ' + MONTHS[tj[1] - 1] + ' ' + fa(tj[0]);
+      if (m.logged_in) { $('cp-logout').hidden = false; $('cp-me-avatar').hidden = false; $('cp-me-avatar').textContent = initials(m.name); $('cp-me-avatar').title = m.name; }
       else { form.elements.name.hidden = false; try { form.elements.name.value = localStorage.getItem('mp-client-name') || ''; } catch (e) { /* private */ } }
       return api('/portal').then(function (d) {
         data = d;
