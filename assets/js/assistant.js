@@ -197,15 +197,22 @@
       log.append(card); log.scrollTop = log.scrollHeight;
       setTimeout(function () { go.focus(); }, 30);
     }
-    function turn(extra) {
+    var llm = !!(S.boot && S.boot.channels && S.boot.channels.ai);
+    function turn(extra, text) {
       busy = true; var t = thinking();
-      return MP.api('assistant', { method: 'POST', body: Object.assign({ messages: convo, auto: pref(AUTO) }, extra || {}) }).then(function (res) {
+      // Built-in engine: only the new sentence (or the decision) goes up; memory stays on the server.
+      var body = llm ? Object.assign({ messages: convo, auto: pref(AUTO) }, extra || {}) : Object.assign({ mode: 'local', text: text || '', auto: pref(AUTO) }, extra || {});
+      return MP.api('assistant', { method: 'POST', body: body }).then(function (res) {
         t.remove(); busy = false;
-        convo = res.messages; store(KEY, JSON.stringify(convo));
+        if (llm) convo = res.messages;
+        else if (res.reply) convo.push({ role: 'assistant', content: res.reply });
+        store(KEY, JSON.stringify(convo));
         if (res.done && res.done.length) log.append(el('div', { class: 'ai-done' }, res.done.map(function (d) { return el('span', { html: icon('checks') + '' }, d); })));
         refresh(res.changed);
-        if (res.pending && res.pending.length) { pendingCard(res.pending, res); return; }
+        if (res.pending && res.pending.length) { pendingCard(res.pending, res); clientActions(res.client); return; }
         if (res.reply) { bubble('assistant', res.reply); say(res.reply); }
+        if (res.suggestions && res.suggestions.length) log.append(el('div', { class: 'ai-ideas ai-sugg' }, res.suggestions.map(function (x) { return el('button', { type: 'button', class: 'chip-btn', text: x, onclick: function () { send(x); } }); })));
+        log.scrollTop = log.scrollHeight;
         clientActions(res.client);
       }).catch(function (err) { t.remove(); busy = false; bubble('assistant error', err.message || 'خطایی رخ داد.'); });
     }
@@ -216,11 +223,11 @@
       Array.prototype.forEach.call(log.querySelectorAll('.ai-pending:not(.decided)'), function (c) { c.remove(); });
       // Changes left undecided count as cancelled, so the conversation stays valid for the model.
       var answered = {}, lastCalls = null;
-      for (var i = convo.length - 1; i >= 0; i--) { if (convo[i].role === 'tool') { answered[convo[i].tool_call_id] = 1; continue; } if (convo[i].role === 'assistant' && convo[i].tool_calls) lastCalls = convo[i].tool_calls; break; }
+      for (var i = llm ? convo.length - 1 : -1; i >= 0; i--) { if (convo[i].role === 'tool') { answered[convo[i].tool_call_id] = 1; continue; } if (convo[i].role === 'assistant' && convo[i].tool_calls) lastCalls = convo[i].tool_calls; break; }
       (lastCalls || []).forEach(function (c) { if (!answered[c.id]) convo.push({ role: 'tool', tool_call_id: c.id, content: '{"error":"کاربر این کار را لغو کرد."}' }); });
       convo.push({ role: 'user', content: text }); store(KEY, JSON.stringify(convo));
       bubble('user', text);
-      turn();
+      turn(null, text);
     }
     var bar = MP.smartBar({
       placeholder: 'بگویید یا بنویسید… (هر کاری در پنل)',
@@ -253,10 +260,9 @@
     return body;
   }
 
-  MP.assistant = function (startListening) {
-    if (S.boot && S.boot.channels && S.boot.channels.ai) return aiAssistant(startListening);
-    return simpleAssistant(startListening);
-  };
+  // One assistant for everyone: the built-in Persian engine, or a language model when one is configured.
+  MP.assistant = function (startListening) { return aiAssistant(startListening); };
+  MP.simpleAssistant = simpleAssistant;
 
   // Topbar button and shortcut.
   var tools = $('.topbar-tools');

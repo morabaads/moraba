@@ -50,14 +50,14 @@ class MP_AI {
 
 	/* ------------------------------------------------------------------ Helpers */
 
-	private static function norm( $s ) {
+	public static function norm( $s ) {
 		$s = str_replace( array( 'ي', 'ك', "\xE2\x80\x8C" ), array( 'ی', 'ک', ' ' ), (string) $s );
 		$s = preg_replace( '/\s+/u', ' ', trim( $s ) );
 		return function_exists( 'mb_strtolower' ) ? mb_strtolower( $s ) : strtolower( $s );
 	}
 
 	/** Panel user by id, full name, first name, last name or login. Returns id, or WP_Error naming the choices. */
-	private static function user( $who ) {
+	public static function user( $who ) {
 		if ( is_numeric( $who ) && MP_Util::is_panel_user( (int) $who ) ) {
 			return (int) $who;
 		}
@@ -86,7 +86,7 @@ class MP_AI {
 		return self::err( $hits ? 'چند نفر با این نام هست: ' . implode( '، ', $hits ) . '. کدام؟' : 'کسی با نام «' . $who . '» در پنل نیست.' );
 	}
 
-	private static function project( $name ) {
+	public static function project( $name ) {
 		global $wpdb;
 		if ( '' === (string) $name || null === $name ) {
 			return 0;
@@ -112,7 +112,7 @@ class MP_AI {
 	}
 
 	/** Gregorian 'Y-m-d' from ISO, Jalali (۱۴۰۵/۰۷/۰۶) or امروز/فردا/پس‌فردا/دیروز. */
-	private static function date( $v, $default = '' ) {
+	public static function date( $v, $default = '' ) {
 		$v = trim( J_latin( (string) $v ) );
 		if ( '' === $v ) {
 			return $default;
@@ -131,7 +131,7 @@ class MP_AI {
 		return $default;
 	}
 
-	private static function time( $v ) {
+	public static function time( $v ) {
 		$v = trim( J_latin( (string) $v ) );
 		if ( preg_match( '/^(\d{1,2})(?::(\d{2}))?$/', $v, $m ) && (int) $m[1] < 24 ) {
 			return sprintf( '%02d:%02d', $m[1], isset( $m[2] ) ? $m[2] : 0 );
@@ -140,7 +140,7 @@ class MP_AI {
 	}
 
 	/** Calls a panel route as the current user; returns data or WP_Error. */
-	private static function call( $method, $route, array $params = array() ) {
+	public static function call( $method, $route, array $params = array() ) {
 		$req = new WP_REST_Request( $method, '/' . MP_Rest::NS . '/' . $route );
 		foreach ( $params as $k => $v ) {
 			$req->set_param( $k, $v );
@@ -201,12 +201,14 @@ class MP_AI {
 			'request_leave'    => array( 'write', $s( 'Request leave: daily (start..end dates) or hourly (one date, from_time..to_time).', array( 'kind' => array( 'type' => 'string', 'enum' => array( 'daily', 'hourly' ) ), 'start' => $date, 'end' => $date, 'from_time' => $str( 'HH:MM' ), 'to_time' => $str( 'HH:MM' ), 'reason' => $str( '' ) ), array( 'kind', 'start' ) ) ),
 			'add_ledger'       => array( 'write', $s( 'Record income or expense in accounting (amount in toman).', array( 'type' => array( 'type' => 'string', 'enum' => array( 'income', 'expense' ) ), 'amount' => $num( 'مبلغ به تومان' ), 'title' => $str( 'بابت' ), 'category' => $str( 'دسته' ), 'project' => $str( '' ), 'date' => $date, 'time' => $str( 'HH:MM' ), 'note' => $str( '' ) ), array( 'type', 'amount', 'title' ) ) ),
 			'save_daily_report' => array( 'write', $s( 'Write or update my daily report.', array( 'date' => $date, 'done' => $str( 'کارهای انجام‌شده' ), 'progress' => $num( 'درصد ۰ تا ۱۰۰' ), 'problems' => $str( '' ), 'decisions' => $str( 'نیاز به تصمیم' ), 'tomorrow' => $str( 'برنامه فردا' ) ), array( 'done' ) ) ),
+			'create_group'     => array( 'write', $s( 'Supervisors: create a team chat group with a name and members (the user is always in it).', array( 'title' => $str( 'نام گروه' ), 'members' => $arr( 'نام افراد' ) ), array( 'members' ) ) ),
+			'add_group_members' => array( 'write', $s( 'Supervisors: add people to an existing team group.', array( 'group' => $str( 'نام گروه' ), 'members' => $arr( 'نام افراد' ) ), array( 'group', 'members' ) ) ),
 			'create_project'   => array( 'write', $s( 'Supervisors: create a project with members.', array( 'name' => $str( '' ), 'members' => $arr( 'نام افراد' ), 'start' => $date, 'end' => $date ), array( 'name' ) ) ),
 			'add_project_members' => array( 'write', $s( 'Supervisors: add people to a project.', array( 'project' => $str( '' ), 'members' => $arr( 'نام افراد' ) ), array( 'project', 'members' ) ) ),
 			'create_invoice'   => array( 'write', $s( 'Supervisors: invoice or pro-forma for a client (amounts in toman).', array( 'kind' => array( 'type' => 'string', 'enum' => array( 'invoice', 'proforma' ) ), 'client_name' => $str( '' ), 'project' => $str( '' ), 'title' => $str( '' ), 'items' => $arr( 'ردیف‌ها', array( 'type' => 'object', 'properties' => array( 'title' => array( 'type' => 'string' ), 'qty' => array( 'type' => 'number' ), 'price' => array( 'type' => 'number' ) ), 'required' => array( 'title', 'price' ) ) ), 'discount' => $num( '' ), 'tax' => $num( 'درصد' ), 'due_date' => $date, 'note' => $str( '' ) ), array( 'kind', 'client_name', 'items' ) ) ),
 		);
 		if ( ! MP_Util::is_manager() ) {
-			foreach ( array( 'get_weekly_report', 'get_invoices', 'create_project', 'add_project_members', 'create_invoice' ) as $k ) {
+			foreach ( array( 'get_weekly_report', 'get_invoices', 'create_project', 'add_project_members', 'create_invoice', 'create_group', 'add_group_members' ) as $k ) {
 				unset( $t[ $k ] );
 			}
 		}
@@ -221,13 +223,13 @@ class MP_AI {
 		return $out;
 	}
 
-	private static function kind( $name ) {
+	public static function kind( $name ) {
 		$t = self::tools();
 		return isset( $t[ $name ] ) ? $t[ $name ][0] : '';
 	}
 
 	/** Persian one-liner for a pending change, shown on its confirm card. */
-	private static function summary( $name, $a ) {
+	public static function summary( $name, $a ) {
 		$g = function ( $k, $d = '' ) use ( $a ) { return isset( $a[ $k ] ) && '' !== $a[ $k ] ? $a[ $k ] : $d; };
 		$d = self::date( $g( 'date' ) );
 		$w = $d ? self::jfmt( $d ) : '';
@@ -262,6 +264,10 @@ class MP_AI {
 				return ( 'income' === $g( 'type' ) ? 'دخل ' : 'خرج ' ) . MP_Jalali::digits( number_format( (float) $g( 'amount', 0 ) ) ) . ' تومان بابت «' . $g( 'title' ) . '»' . ( $g( 'project' ) ? ' · ' . $g( 'project' ) : '' );
 			case 'save_daily_report':
 				return 'ثبت گزارش روزانه' . ( $g( 'progress' ) !== '' ? ' (' . MP_Jalali::digits( $g( 'progress' ) ) . '٪)' : '' );
+			case 'create_group':
+				return 'ساخت گروه «' . $g( 'title', 'گروه جدید' ) . '» با ' . implode( '، ', (array) $g( 'members', array() ) );
+			case 'add_group_members':
+				return 'افزودن ' . implode( '، ', (array) $g( 'members', array() ) ) . ' به گروه «' . $g( 'group' ) . '»';
 			case 'create_project':
 				return 'ساخت پروژه «' . $g( 'name' ) . '»' . ( $g( 'members' ) ? ' با ' . implode( '، ', (array) $g( 'members' ) ) : '' );
 			case 'add_project_members':
@@ -297,7 +303,7 @@ class MP_AI {
 	}
 
 	/** Runs one tool; returns array (sent back to the model as JSON) or WP_Error. */
-	private static function run( $name, array $a, array &$client ) {
+	public static function run( $name, array $a, array &$client ) {
 		$g = function ( $k, $d = null ) use ( $a ) { return isset( $a[ $k ] ) && '' !== $a[ $k ] && null !== $a[ $k ] ? $a[ $k ] : $d; };
 		switch ( $name ) {
 			case 'get_tasks':
@@ -408,7 +414,7 @@ class MP_AI {
 				if ( is_wp_error( $d ) ) {
 					return $d;
 				}
-				$msgs = array_slice( $d['messages'], -1 * max( 1, min( 50, (int) $g( 'limit', 15 ) ) ) );
+				$msgs = array_slice( isset( $d['messages'] ) ? $d['messages'] : array(), -1 * max( 1, min( 50, (int) $g( 'limit', 15 ) ) ) );
 				return array_map( function ( $m ) { return array( 'from' => $m['author'], 'text' => $m['deleted'] ? '(آرشیو شده)' : ( $m['body'] ? $m['body'] : ( $m['transcript'] ? '(ویس) ' . $m['transcript'] : '(فایل)' ) ), 'at' => MP_Jalali::format( substr( $m['created_at'], 0, 10 ) ) . ' ' . substr( $m['created_at'], 11, 5 ) ); }, $msgs );
 
 			case 'get_ledger':
@@ -566,6 +572,34 @@ class MP_AI {
 			case 'save_daily_report':
 				$res = self::call( 'POST', 'daily-reports', array( 'date' => self::date( $g( 'date' ), MP_Util::today() ), 'done' => $g( 'done' ), 'progress' => (int) $g( 'progress', 0 ), 'problems' => $g( 'problems', '' ), 'decisions' => $g( 'decisions', '' ), 'tomorrow' => $g( 'tomorrow', '' ) ) );
 				return is_wp_error( $res ) ? $res : array( 'saved' => true );
+
+			case 'create_group':
+			case 'add_group_members':
+				$ids = array();
+				foreach ( (array) $g( 'members', array() ) as $n ) {
+					$u = self::user( $n );
+					if ( is_wp_error( $u ) ) {
+						return $u;
+					}
+					$ids[] = $u;
+				}
+				if ( 'create_group' === $name ) {
+					$res = self::call( 'POST', 'channels', array( 'type' => 'group', 'title' => $g( 'title', 'گروه جدید' ), 'members' => $ids ) );
+					return is_wp_error( $res ) ? $res : array( 'created' => true, 'channel_id' => $res['id'], 'members' => $res['members'] );
+				}
+				$ch = self::channel_for( $g( 'group', '' ) );
+				if ( is_wp_error( $ch ) ) {
+					return $ch;
+				}
+				$list = self::call( 'GET', 'channels' );
+				$cur  = array();
+				foreach ( is_wp_error( $list ) ? array() : $list as $c ) {
+					if ( (int) $c['id'] === $ch ) {
+						$cur = $c['member_ids'];
+					}
+				}
+				$res = self::call( 'POST', 'channels/' . $ch . '/members', array( 'members' => array_values( array_unique( array_merge( $cur, $ids ) ) ) ) );
+				return is_wp_error( $res ) ? $res : array( 'added' => count( $ids ) );
 
 			case 'create_project':
 				$ids = array();
@@ -791,8 +825,9 @@ class MP_AI {
 	 * → {messages, reply, pending: [{id, name, summary}], client: [actions], changed: [tool names], done: [summaries]}
 	 */
 	public static function chat( WP_REST_Request $r ) {
-		if ( ! self::enabled() ) {
-			return self::err( 'دستیار هوشمند فعال نیست. مدیر سایت باید در «پنل مربع ← تنظیمات» کلید سرویس هوش مصنوعی را وارد کند.', 503 );
+		// The built-in engine (no outside service) unless a language model is configured.
+		if ( ! self::enabled() || 'local' === $r['mode'] ) {
+			return MP_Brain::handle( $r );
 		}
 		$key = 'mp_ai_' . get_current_user_id();
 		$n   = (int) get_transient( $key );

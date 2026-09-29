@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       پنل کارمندان مربع
  * Description:       پنل کاری کارمندان مربع استودیو: میز کار، پروژه‌ها، تسک‌ها، تقویم شمسی با تسک‌های تعیین‌شده توسط ناظر، پیام‌ها، جلسات و یادآوری‌ها. نمایش با آدرس /panel یا شورت‌کد [moraba_panel].
- * Version:           3.6.0
+ * Version:           3.7.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            Moraba Studio
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MP_VERSION', '3.6.0' );
+define( 'MP_VERSION', '3.7.0' );
 define( 'MP_DB_VERSION', '10' );
 define( 'MP_FILE', __FILE__ );
 define( 'MP_DIR', plugin_dir_path( __FILE__ ) );
@@ -37,6 +37,7 @@ require_once MP_DIR . 'includes/class-mp-invoices.php';
 require_once MP_DIR . 'includes/class-mp-portal.php';
 require_once MP_DIR . 'includes/class-mp-digest.php';
 require_once MP_DIR . 'includes/class-mp-ai.php';
+require_once MP_DIR . 'includes/class-mp-brain.php';
 require_once MP_DIR . 'includes/class-mp-costs.php';
 require_once MP_DIR . 'includes/class-mp-payroll.php';
 require_once MP_DIR . 'includes/class-mp-frontend.php';
