@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>کوچ | انتقال و همگام‌سازی محصولات ووکامرس</title>
+<style>
+@font-face{font-family:Dana;src:url(DanaVF.ttf);font-weight:100 1000}
+:root{--o:#ff5a1f;--o2:#ff8a3d;--bg:#0b0b0d;--card:#151518;--card2:#1c1c20;--line:#2a2a30;--tx:#f4f4f5;--mu:#9a9aa3;--ok:#2ecc71;--wn:#f5b942}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:Dana,Tahoma,sans-serif;overflow-x:hidden}
+.poster{width:1080px;margin:0 auto;position:relative;background:
+ repeating-linear-gradient(115deg,rgba(255,255,255,.025) 0 2px,transparent 2px 38px),
+ radial-gradient(900px 500px at 50% 0,#2a1408 0,transparent 70%),var(--bg);padding-bottom:80px;overflow:hidden}
+@media(max-width:1080px){.poster{zoom:.36}}
+
+/* hero */
+.hero{text-align:center;padding:90px 40px 40px}
+.hero img.logo{height:84px;display:block;margin:0 auto 18px}
+.hero h1{font-size:112px;font-weight:900;line-height:1.1;margin-top:10px;letter-spacing:-2px}
+.hero h1 span{background:linear-gradient(135deg,var(--o2),var(--o));-webkit-background-clip:text;color:transparent}
+.badge{display:inline-block;background:var(--o);color:#fff;font-weight:800;font-size:26px;padding:6px 26px;border-radius:14px;transform:rotate(-6deg);box-shadow:0 10px 40px rgba(255,90,31,.5);margin-bottom:10px}
+.hero p{font-size:34px;color:#ddd;margin-top:16px;font-weight:600}
+.hero small{display:block;color:var(--mu);font-size:22px;margin-top:10px}
+
+/* feature row */
+.row{display:flex;align-items:center;gap:40px;padding:0 70px;margin-top:110px;position:relative;min-height:520px}
+.row.alt{flex-direction:row-reverse}
+.txt{flex:0 0 330px}
+.ico{width:96px;height:96px;border-radius:28px;background:linear-gradient(145deg,#2a2a2f,#131316);border:1px solid var(--line);display:grid;place-items:center;font-size:48px;margin-bottom:22px;box-shadow:0 0 50px rgba(255,90,31,.25)}
+.ico.o{background:linear-gradient(145deg,var(--o2),var(--o));border:0}
+.txt h2{font-size:40px;font-weight:800;line-height:1.35}
+.txt p{font-size:23px;color:var(--mu);line-height:1.9;margin-top:12px}
+.stage{flex:1;position:relative;height:520px}
+.shape{position:absolute;border-radius:60px;background:linear-gradient(135deg,var(--o2),#e8420f);box-shadow:0 0 120px rgba(255,90,31,.55)}
+.shape.a{width:330px;height:330px;top:20px;right:40px;transform:rotate(-16deg)}
+.shape.b{width:250px;height:330px;bottom:0;left:20px;transform:rotate(12deg);background:linear-gradient(135deg,#e8e8ea,#8a8a92);box-shadow:none;opacity:.9}
+.alt .shape.a{right:auto;left:40px;transform:rotate(16deg)}
+.alt .shape.b{left:auto;right:20px;transform:rotate(-12deg)}
+.dots{position:absolute;bottom:-70px;left:0;right:0;height:14px;opacity:.5;background:radial-gradient(circle,var(--o) 2px,transparent 3px) 0 0/22px 14px;-webkit-mask:linear-gradient(90deg,transparent,#000,transparent);mask:linear-gradient(90deg,transparent,#000,transparent)}
+
+/* window mock */
+.win{position:absolute;inset:40px 30px 30px;background:var(--card);border:1px solid #33333a;border-radius:26px;box-shadow:0 40px 90px rgba(0,0,0,.75);overflow:hidden;z-index:2;display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:8px;padding:14px 18px;background:#101012;border-bottom:1px solid var(--line);font-size:14px;color:var(--mu)}
+.bar i{width:11px;height:11px;border-radius:50%;background:#3a3a40}
+.bar i:first-child{background:var(--o)}
+.bar b{margin-inline-start:auto;font-weight:600}
+.body{padding:24px;flex:1;display:flex;flex-direction:column;gap:14px;font-size:16px}
+.steps{display:flex;gap:8px;margin-bottom:6px}
+.steps div{flex:1;text-align:center;font-size:14px;padding:9px 0;border-radius:10px;background:var(--card2);color:var(--mu);border:1px solid var(--line)}
+.steps div.on{background:rgba(255,90,31,.15);color:var(--o2);border-color:var(--o)}
+.steps div.done{color:var(--ok)}
+.input{background:#0e0e10;border:1px solid var(--line);border-radius:12px;padding:14px 16px;color:var(--mu);font-size:15px;direction:ltr;text-align:left}
+.btn{background:linear-gradient(135deg,var(--o2),var(--o));color:#fff;font-weight:800;text-align:center;padding:13px;border-radius:12px;font-size:16px}
+.btn.g{background:var(--card2);border:1px solid var(--line);color:var(--tx)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:14px}
+.chip.ok{color:var(--ok);border-color:rgba(46,204,113,.4)}
+.chip.o{color:var(--o2);border-color:rgba(255,90,31,.5)}
+.fld{display:flex;align-items:center;gap:12px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
+.fld span.l{color:var(--mu);font-size:13px;width:64px}
+.fld span.v{flex:1;font-size:15px;font-weight:600}
+.conf{font-size:12px;font-weight:800;padding:3px 9px;border-radius:8px}
+.conf.h{background:rgba(46,204,113,.15);color:var(--ok)}
+.conf.m{background:rgba(245,185,66,.15);color:var(--wn)}
+.prod{display:flex;gap:14px;background:var(--card2);border-radius:14px;padding:14px;border:1px solid var(--line)}
+.prod .im{width:86px;height:86px;border-radius:12px;background:linear-gradient(135deg,#3a3a42,#222);flex:none;display:grid;place-items:center;font-size:36px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tile{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center}
+.tile b{display:block;font-size:26px;color:var(--o2)}
+.tile span{font-size:13px;color:var(--mu)}
+.tgl{width:44px;height:24px;border-radius:99px;background:var(--o);position:relative;flex:none}
+.tgl::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}
+.tgl.off{background:#3a3a40}.tgl.off::after{left:23px}
+.line{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px dashed var(--line);font-size:15px}
+.ltr{direction:ltr;unicode-bidi:isolate}
+.sell{position:absolute;z-index:3;background:linear-gradient(135deg,var(--o2),var(--o));color:#fff;font-weight:900;padding:8px 22px;border-radius:16px;font-size:26px;transform:rotate(-8deg);box-shadow:0 10px 40px rgba(255,90,31,.5)}
+
+/* footer */
+.cta{text-align:center;margin-top:150px;padding:0 70px}
+.cta img{height:90px}
+.cta h3{font-size:54px;font-weight:900;margin-top:22px}
+.cta p{font-size:26px;color:var(--mu);margin-top:12px;line-height:1.9}
+.cta .btn{display:inline-block;margin-top:30px;padding:18px 60px;font-size:28px;border-radius:18px}
+.note{font-size:18px;color:#6c6c74;margin-top:30px}
+</style>
+</head>
+<body>
+<div class="poster">
+
+<header class="hero">
+  <img class="logo" src="kooch-icon.png" alt="کوچ">
+  <div><span class="badge">افزونه ووکامرس</span></div>
+  <h1><span>کوچ</span></h1>
+  <p>محصول را ببین، تأیید کن، منتقل شد</p>
+  <small>انتقال و همگام‌سازی محصول، قیمت و موجودی — فارسی‌محور و برگشت‌پذیر</small>
+</header>
+
+<!-- 1 wizard -->
+<section class="row">
+  <div class="txt">
+    <div class="ico o">🔗</div>
+    <h2>فقط آدرس را بچسبانید</h2>
+    <p>آدرس محصول یا دسته را وارد کنید؛ کوچ پلتفرم و ارز را خودکار تشخیص می‌دهد و ویزارد سه‌مرحله‌ای شما را تا انتقال همراهی می‌کند.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>افزودن کوچ جدید</b></div>
+      <div class="body">
+        <div class="steps"><div class="on">۱ · آدرس</div><div>۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
+        <div class="input">https://shop.example.com/product/sneaker-x</div>
+        <div class="btn">تشخیص و ادامه</div>
+        <div class="chips"><span class="chip ok">✓ ووکامرس تشخیص داده شد</span><span class="chip o">ارز: تومان</span><span class="chip">Store API</span></div>
+        <div class="fld"><span class="l">robots.txt</span><span class="v">گزارش شد و رعایت می‌شود</span><span class="conf h">امن</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 2 preview -->
+<section class="row alt">
+  <div class="txt">
+    <div class="ico">👁️</div>
+    <h2>اول پیش‌نمایش، بعد انتقال</h2>
+    <p>محصول دقیقاً همان‌طور که ذخیره می‌شود نمایش داده می‌شود، با درجه‌ی اطمینان برای هر فیلد. «تست‌ران» بدون نوشتن چیزی تغییرات را نشان می‌دهد.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>پیش‌نمایش نهایی</b></div>
+      <div class="body">
+        <div class="steps"><div class="done">✓ آدرس</div><div class="on">۲ · پیش‌نمایش</div><div>۳ · قیمت و زمان</div></div>
+        <div class="prod"><div class="im">👟</div><div style="flex:1"><b style="font-size:18px">کفش ورزشی مدل X</b><div style="color:var(--mu);font-size:14px;margin-top:6px">۴ متغیر · ۱۲ تصویر</div></div></div>
+        <div class="fld"><span class="l">عنوان</span><span class="v">کفش ورزشی مدل X</span><span class="conf h">۹۸٪</span></div>
+        <div class="fld"><span class="l">قیمت</span><span class="v">۱٬۲۵۰٬۰۰۰ تومان</span><span class="conf h">۹۵٪</span></div>
+        <div class="fld"><span class="l">دسته</span><span class="v">کفش › مردانه</span><span class="conf m">۷۲٪</span></div>
+        <div class="grid2"><div class="btn g">تست‌ران</div><div class="btn">تأیید و شروع انتقال</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 3 sources -->
+<section class="row">
+  <div class="txt">
+    <div class="ico o">🌐</div>
+    <h2>از هر منبع مجاز</h2>
+    <p>ووکامرس، شاپیفای، دیجی‌کالا و هر سایتی با داده‌ی ساختاریافته. برای بقیه، انتخابگر بصری فیلد و سرویس رندر برای صفحه‌های جاوااسکریپتی.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>منابع پشتیبانی‌شده</b></div>
+      <div class="body">
+        <div class="grid2">
+          <div class="tile"><b>Woo</b><span>WooCommerce Store API</span></div>
+          <div class="tile"><b>Shopify</b><span>فروشگاه‌های شاپیفای</span></div>
+          <div class="tile"><b>دیجی‌کالا</b><span>محصول و دسته</span></div>
+          <div class="tile"><b>JSON-LD</b><span>داده‌ی ساختاریافته</span></div>
+        </div>
+        <div class="fld" style="margin-top:6px"><span class="l" style="width:auto">🎯</span><span class="v">انتخابگر بصری فیلد برای سایت‌های دیگر</span></div>
+        <div class="fld"><span class="l" style="width:auto">⚙️</span><span class="v">سرویس رندر اختیاری برای صفحه‌های JS</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 4 pricing -->
+<section class="row alt">
+  <div class="txt">
+    <div class="ico">💰</div>
+    <h2>قیمت‌گذاری هوشمند</h2>
+    <p>درصدی، مبلغ ثابت، پله‌ای یا بر اساس دسته؛ پایان جذاب (…۹۰۰)، نرخ ارز زنده و «نگهبان قیمت» که جهش‌های عجیب را برای تأیید شما نگه می‌دارد.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>قیمت و زمان‌بندی</b></div>
+      <div class="body">
+        <div class="steps"><div class="done">✓ آدرس</div><div class="done">✓ پیش‌نمایش</div><div class="on">۳ · قیمت و زمان</div></div>
+        <div class="line"><span>قیمت منبع</span><b>۱٬۰۰۰٬۰۰۰</b></div>
+        <div class="line"><span>حاشیه‌ی سود</span><b style="color:var(--o2)">+۲۵٪</b></div>
+        <div class="line"><span>پایان جذاب</span><span class="tgl"></span></div>
+        <div class="line"><span>نرخ ارز زنده</span><span class="tgl"></span></div>
+        <div class="line" style="border:0"><span>قیمت فروش</span><b style="font-size:24px;color:var(--ok)">۱٬۲۴۹٬۹۰۰ تومان</b></div>
+        <div class="chip o" style="align-self:flex-start">🛡️ نگهبان قیمت فعال</div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 5 sync -->
+<section class="row">
+  <div class="txt">
+    <div class="ico o">🔄</div>
+    <h2>همیشه به‌روز، بدون دردسر</h2>
+    <p>به‌روزرسانی کامل زمان‌بندی‌شده، تازه‌سازی سریع قیمت و موجودی، ساعات سکوت و مدیریت امن محصولاتی که از منبع حذف شده‌اند. قفل فیلدها ویرایش‌های خودتان را نگه می‌دارد.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>مدیریت کوچ</b></div>
+      <div class="body">
+        <div class="grid2"><div class="tile"><b>۱٬۲۴۸</b><span>محصول همگام</span></div><div class="tile"><b>۳ دقیقه</b><span>آخرین به‌روزرسانی</span></div></div>
+        <div class="line"><span>به‌روزرسانی کامل</span><span class="chip">هر شب ۰۳:۰۰</span></div>
+        <div class="line"><span>قیمت و موجودی سریع</span><span class="chip">هر ۳۰ دقیقه</span></div>
+        <div class="line"><span>ساعات سکوت</span><span class="chip">۰۰:۰۰ – ۰۶:۰۰</span></div>
+        <div class="line" style="border:0"><span>🔒 قفل فیلدها (عنوان، توضیحات)</span><span class="tgl"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 6 rollback -->
+<section class="row alt">
+  <div class="txt">
+    <div class="ico">↩️</div>
+    <h2>هر انتقال، یک‌بار برگشت‌پذیر</h2>
+    <p>اگر نتیجه را نپسندیدید، با یک کلیک به حالت قبل برگردید. لاگ ممیزی هم همه‌چیز را ثبت می‌کند.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>لاگ ممیزی</b></div>
+      <div class="body">
+        <div class="line"><span>✓ انتقال ۴۲ محصول</span><span class="chip ok">موفق</span></div>
+        <div class="line"><span>⚠ ۳ محصول در انتظار تأیید قیمت</span><span class="chip o">نگهبان</span></div>
+        <div class="line"><span>🔄 تازه‌سازی قیمت</span><span class="chip ok">موفق</span></div>
+        <div class="btn g" style="margin-top:10px">↩ بازگردانی این انتقال</div>
+        <div class="input" style="margin-top:6px">$ wp kooch run --id=12</div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 7 notify + ai -->
+<section class="row">
+  <div class="txt">
+    <div class="ico o">🔔</div>
+    <h2>اعلان و هوش مصنوعی اختیاری</h2>
+    <p>خبر بگیرید با ایمیل، تلگرام، بله و وب‌هوک امضاشده. با کلید Anthropic خودتان، بازنویسی، ترجمه، یکدست‌سازی ویژگی‌ها و پیشنهاد دسته انجام می‌شود.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>تنظیمات کوچ</b></div>
+      <div class="body">
+        <div class="line"><span>✉️ ایمیل</span><span class="tgl"></span></div>
+        <div class="line"><span>✈️ تلگرام</span><span class="tgl"></span></div>
+        <div class="line"><span>💬 بله</span><span class="tgl"></span></div>
+        <div class="line"><span>🪝 وب‌هوک امضاشده</span><span class="tgl off"></span></div>
+        <div class="chips" style="margin-top:8px"><span class="chip o">✨ بازنویسی</span><span class="chip o">ترجمه</span><span class="chip o">یکدست‌سازی ویژگی‌ها</span><span class="chip o">پیشنهاد دسته</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="dots"></div>
+</section>
+
+<!-- 8 persian -->
+<section class="row alt">
+  <div class="txt">
+    <div class="ico">🇮🇷</div>
+    <h2>فارسی‌محور از پایه</h2>
+    <p>ترجمه‌ی کامل فارسی، راست‌چین، تاریخ جلالی و محافظت در برابر اشتباه ریال و تومان.</p>
+  </div>
+  <div class="stage">
+    <div class="shape a"></div><div class="shape b"></div>
+    <div class="sell" style="top:0;left:30px">RTL</div>
+    <div class="win">
+      <div class="bar"><i></i><i></i><i></i><b>ریال / تومان</b></div>
+      <div class="body">
+        <div class="line"><span>تاریخ آخرین همگام‌سازی</span><b>۱۴۰۵/۰۷/۰۷</b></div>
+        <div class="line"><span>قیمت منبع</span><b>۱۲٬۵۰۰٬۰۰۰ ریال</b></div>
+        <div class="line"><span>تبدیل خودکار</span><b style="color:var(--ok)">۱٬۲۵۰٬۰۰۰ تومان</b></div>
+        <div class="chip ok" style="align-self:flex-start;margin-top:8px">✓ محافظ ریال/تومان فعال</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="cta">
+  <img src="kooch-icon.png" alt="">
+  <h3>کوچ را امتحان کنید</h3>
+  <p>محصول مربع استودیو · نیازمند ووکامرس و PHP 8.1+</p>
+  <div class="btn">دریافت افزونه</div>
+  <div class="note">کوچ با احترام به robots.txt و هرگز دور زدن ورود یا کپچا. مسئولیت مجوز استفاده از داده و تصاویر منبع با شماست.</div>
+</footer>
+
+</div>
+</body>
+</html>
