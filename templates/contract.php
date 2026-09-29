@@ -72,7 +72,15 @@ h1.title{margin:2px 0 6px;font-size:25px;line-height:1.5}
 .stamp.signed{color:var(--ok)}.stamp.draft,.stamp.cancelled{color:#b33}.stamp.sent{color:var(--a)}
 .water{position:absolute;inset:0;display:grid;place-items:center;font-size:110px;font-weight:900;color:rgba(0,0,0,.035);transform:rotate(-25deg);pointer-events:none}
 /* signing panel */
-.signbox{max-width:820px;margin:0 auto 40px;padding:0 14px}
+.signbox{position:fixed;inset:auto 0 0 0;z-index:20;max-width:820px;margin:0 auto;padding:0 10px calc(10px + env(safe-area-inset-bottom))}
+.dock{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:20px;background:#161616;color:#fff;box-shadow:0 14px 40px rgba(0,0,0,.25)}
+.dock div{flex:1;min-width:0;line-height:1.6}.dock b{display:block;font-size:14px}.dock small{font-size:11px;opacity:.7}
+.dock .btn{padding:12px 22px}
+.signbox .panel{display:none;max-height:calc(100dvh - 40px);overflow:auto;border-radius:22px 22px 18px 18px}
+.signbox.open .panel{display:block;animation:up .25s ease}.signbox.open .dock{display:none}
+.signbox .x{float:left;background:#f1efec;border:0;border-radius:10px;width:34px;height:34px;font-size:18px;cursor:pointer}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+body.has-dock .page{padding-bottom:110px}
 .panel{background:#fff;border-radius:22px;box-shadow:0 18px 60px rgba(0,0,0,.08);padding:24px}
 .panel h2{margin:0 0 4px;font-size:18px}.panel .sub{color:var(--muted);font-size:13px;margin:0 0 16px}
 .field{display:block;margin-bottom:14px}.field span{display:block;font-size:12px;font-weight:800;margin-bottom:4px}
@@ -90,13 +98,13 @@ h1.title{margin:2px 0 6px;font-size:25px;line-height:1.5}
 .msg{margin-top:12px;font-size:13px;font-weight:700}.msg.bad{color:#b33}.msg.ok{color:var(--ok)}
 .done{text-align:center;padding:30px}
 .done .ico{width:64px;height:64px;border-radius:50%;background:#e7f6ed;color:var(--ok);display:grid;place-items:center;margin:0 auto 10px;font-size:32px}
-@media (max-width:640px){.sheet{padding:34px 20px 30px}.s-classic .sheet{padding:44px 26px 34px;outline-offset:-10px}.parties,.signs{grid-template-columns:1fr}.stamp{top:14px;left:14px;font-size:12px}h1.title{font-size:20px}.bar .t{display:none}}
+@media (max-width:640px){.sheet{padding:34px 20px 30px}.s-classic .sheet{padding:44px 26px 34px;outline-offset:-10px}.parties,.signs{grid-template-columns:1fr}.stamp{position:static;display:inline-block;transform:none;font-size:12px;margin:0 0 8px}h1.title{font-size:20px}.bar .t{display:none}}
 @page{size:A4;margin:14mm 14mm 16mm}
 @media print{body{background:#fff}.bar,.signbox,.noprint{display:none!important}.page{margin:0;max-width:none;padding:0}.sheet{box-shadow:none;padding:0}.s-classic .sheet{border:0;outline:0;padding:0}.s-modern .sheet:before{display:none}.doc h2{page-break-after:avoid}}
 </style></head>
 <body class="s-<?php echo esc_attr( $s['style'] ); ?>">
 <div class="bar noprint"><b><?php echo esc_html( $s['studio'] . ' · قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" ); ?></b>
-<?php if ( 'sent' === $c->status ) : ?><a class="btn btn-a" href="#sign">امضای قرارداد</a><?php endif; ?>
+<?php if ( 'sent' === $c->status ) : ?><button class="btn btn-a" type="button" onclick="document.getElementById('k-open').click()">امضای قرارداد</button><?php endif; ?>
 <button class="btn btn-g" type="button" onclick="window.print()">چاپ / PDF</button></div>
 
 <div class="page"><article class="sheet">
@@ -134,7 +142,9 @@ h1.title{margin:2px 0 6px;font-size:25px;line-height:1.5}
 </article></div>
 
 <?php if ( 'sent' === $c->status ) : ?>
-<div class="signbox noprint" id="sign"><div class="panel" id="panel">
+<div class="signbox noprint" id="sign">
+<div class="dock"><div><b>این قرارداد منتظر امضای شماست</b><small>بعد از مطالعه، همین‌جا امضا کنید<?php echo $otp ? ' و با کد پیامکی تأیید کنید' : ''; ?></small></div><button class="btn btn-a" type="button" id="k-open">امضای قرارداد</button></div>
+<div class="panel" id="panel"><button class="x" type="button" id="k-close" aria-label="بستن">×</button>
 <h2>امضای قرارداد</h2>
 <p class="sub">متن قرارداد را کامل بخوانید، نام خود را بنویسید، امضا کنید<?php echo $otp ? ' و با کد پیامکی تأیید کنید' : ''; ?>.</p>
 <label class="field"><span>نام و نام خانوادگی امضاکننده</span><input id="k-name" autocomplete="name" maxlength="120" value="<?php echo esc_attr( $client ); ?>"></label>
@@ -148,6 +158,10 @@ h1.title{margin:2px 0 6px;font-size:25px;line-height:1.5}
 </div></div>
 <script>
 (function(){
+document.body.classList.add('has-dock');
+var box=document.getElementById('sign');
+document.getElementById('k-open').onclick=function(){box.classList.add('open');setTimeout(size,30);};
+document.getElementById('k-close').onclick=function(){box.classList.remove('open');};
 var API=<?php echo wp_json_encode( esc_url_raw( rest_url( MP_Rest::NS . '/contract/' . $token ) ) ); ?>,OTP=<?php echo $otp ? 'true' : 'false'; ?>;
 var cv=document.getElementById('k-pad'),ctx=cv.getContext('2d'),drawn=false,down=false,last=null;
 function size(){var r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1,img=drawn?cv.toDataURL():null;cv.width=r.width*d;cv.height=r.height*d;ctx.scale(d,d);ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#1a2a6c';if(img){var i=new Image();i.onload=function(){ctx.drawImage(i,0,0,r.width,r.height)};i.src=img;}}
