@@ -10,6 +10,7 @@ $mp_nav = array(
 	'projects'   => array( 'folder', 'پروژه‌ها', '' ),
 	'messages'   => array( 'chat', 'پیام‌ها', 'messages' ),
 	'clients'    => array( 'user', 'مشتریان', '' ),
+	'contracts'  => array( 'edit', 'قراردادها', '', true ),
 	'attendance' => array( 'clock', 'حضور و مرخصی', 'leaves' ),
 	'reminders'  => array( 'alarm', 'یادآوری', 'reminders' ),
 	'accounting' => array( 'wallet', 'حسابداری', '' ),
@@ -43,7 +44,7 @@ $mp_nav = array(
 		</div>
 		<nav class="nav" aria-label="بخش‌ها">
 			<?php foreach ( $mp_nav as $view => $item ) : ?>
-				<button type="button" class="nav-item" data-view="<?php echo esc_attr( $view ); ?>" title="<?php echo esc_attr( $item[1] ); ?>">
+				<button type="button" class="nav-item<?php echo ! empty( $item[3] ) ? ' manager-only' : ''; ?>" data-view="<?php echo esc_attr( $view ); ?>" title="<?php echo esc_attr( $item[1] ); ?>">
 					<?php echo $mp_i( $item[0] ); // phpcs:ignore ?><span class="nav-label"><?php echo esc_html( $item[1] ); ?></span>
 					<?php if ( $item[2] ) : ?><span class="badge" data-count="<?php echo esc_attr( $item[2] ); ?>" hidden></span><?php endif; ?>
 				</button>
@@ -256,6 +257,19 @@ $mp_nav = array(
 			</div>
 			<div class="tabs" role="tablist" id="cl-tabs" aria-label="فیلتر مشتریان"></div>
 			<div id="cl-body"></div>
+		</section>
+
+		<!-- ================= Contracts ================= -->
+		<section class="view" id="view-contracts" data-view="contracts" hidden aria-label="قراردادها">
+			<div class="page-head">
+				<div><h1>قراردادها</h1><p>قرارداد پروژه‌ها از روی قالب، با امضای آنلاین مشتری و خروجی چاپ و PDF</p></div>
+				<div class="page-actions">
+					<button type="button" class="btn btn-secondary" id="ct-settings"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?>قالب‌ها و ظاهر</button>
+					<button type="button" class="btn btn-primary" id="ct-new"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>قرارداد جدید</button>
+				</div>
+			</div>
+			<div class="tabs" role="tablist" id="ct-tabs" aria-label="فیلتر قراردادها"></div>
+			<div id="ct-body"></div>
 		</section>
 
 		<!-- ================= Messages ================= -->

@@ -219,6 +219,46 @@ class MP_Install {
 			KEY client_id (client_id)
 		) $c;";
 
+		$t[] = 'CREATE TABLE ' . self::table( 'contracts' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			number varchar(30) NOT NULL DEFAULT '',
+			title varchar(200) NOT NULL DEFAULT '',
+			project_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			client_name varchar(160) NOT NULL DEFAULT '',
+			template_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			body longtext NOT NULL,
+			vars longtext NULL,
+			status varchar(12) NOT NULL DEFAULT 'draft',
+			token varchar(40) NOT NULL DEFAULT '',
+			studio_signer bigint(20) unsigned NOT NULL DEFAULT 0,
+			sent_at datetime DEFAULT NULL,
+			signed_at datetime DEFAULT NULL,
+			signer_name varchar(120) NOT NULL DEFAULT '',
+			signer_mobile varchar(20) NOT NULL DEFAULT '',
+			signer_ip varchar(64) NOT NULL DEFAULT '',
+			signer_ua varchar(255) NOT NULL DEFAULT '',
+			sign_method varchar(10) NOT NULL DEFAULT '',
+			client_sig longtext NULL,
+			doc_hash varchar(64) NOT NULL DEFAULT '',
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			archived_at datetime DEFAULT NULL,
+			PRIMARY KEY  (id),
+			KEY token (token),
+			KEY project_id (project_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'contract_templates' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			title varchar(160) NOT NULL DEFAULT '',
+			body longtext NOT NULL,
+			created_at datetime NOT NULL,
+			updated_at datetime NOT NULL,
+			PRIMARY KEY  (id)
+		) $c;";
+
 		// Customers: one record per client company/person, linked to any number of projects.
 		$t[] = 'CREATE TABLE ' . self::table( 'clients' ) . " (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,

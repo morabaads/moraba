@@ -278,7 +278,7 @@ class MP_Portal {
 			return $gate;
 		}
 		$pid = (int) $ch->project_id;
-		$out = array( 'project' => null, 'designs' => array(), 'files' => array(), 'invoices' => array() );
+		$out = array( 'project' => null, 'designs' => array(), 'files' => array(), 'invoices' => array(), 'contracts' => array() );
 		if ( ! $pid ) {
 			return $out;
 		}
@@ -313,6 +313,7 @@ class MP_Portal {
 				$out['invoices'][] = array( 'kind' => $pay['kind'], 'number' => $pay['number'], 'title' => $pay['title'], 'total' => $pay['total'], 'status' => $pay['status'], 'date' => $pay['issue_date'], 'url' => $pay['url'] );
 			}
 		}
+		$out['contracts'] = MP_Contracts::for_portal( $pid );
 		return $out;
 	}
 

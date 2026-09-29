@@ -419,7 +419,7 @@
    * Optimistic send: the bubble appears immediately (local preview for images and voice) and is
    * swapped for the real message once the upload and post finish; a failed one can be retried.
    */
-  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user' };
+  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit' };
   var seq = 0, queue = Promise.resolve();
   function nowStamp() { var d = new Date(); return S.today + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':00'; }
   function sendNow(o) {

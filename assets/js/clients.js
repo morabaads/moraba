@@ -61,7 +61,7 @@
       el('footer', { class: 'cl-actions' },
         c.groups.length ? el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('chat') + 'گفت‌وگو', onclick: function () { pickGroup(c, chat); } })
           : el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('plus') + 'گروه و پرتال', onclick: function () { MP.newClientGroup({ client_id: c.id, project_id: c.project_list[0] ? c.project_list[0].id : 0 }); } }),
-        manager ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('file') + 'فاکتور', onclick: function () { invoiceMenu(c); } }) : null,
+        manager ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('file') + 'فاکتور / قرارداد', onclick: function () { invoiceMenu(c); } }) : null,
         c.groups.length ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('clip') + 'لینک', onclick: function () { pickGroup(c, function (g) { copy(g.url); }); } }) : null,
         c.groups.length ? el('button', { type: 'button', class: 'icon-btn sm', title: 'افراد، لوگو و ورود پرتال', 'aria-label': 'تنظیمات گروه', html: icon('settings'), onclick: function () { pickGroup(c, function (g) { MP.clientSettings(g); }); } }) : null));
   }
@@ -82,8 +82,10 @@
     var pid = c.project_list.length === 1 ? c.project_list[0].id : 0;
     var box = el('div', { class: 'pt-actions two' },
       el('button', { type: 'button', class: 'pt-tile', onclick: function () { MP.newInvoice({ kind: 'proforma', client_id: c.id, project_id: pid }); } }, el('span', { class: 'pt-tile-ico', html: icon('file') }), el('strong', { text: 'پیش‌فاکتور' }), el('small', { text: 'برای تأیید مشتری' })),
-      el('button', { type: 'button', class: 'pt-tile primary', onclick: function () { MP.newInvoice({ kind: 'invoice', client_id: c.id, project_id: pid }); } }, el('span', { class: 'pt-tile-ico', html: icon('wallet') }), el('strong', { text: 'فاکتور' }), el('small', { text: 'با لینک و پرداخت آنلاین' })));
+      el('button', { type: 'button', class: 'pt-tile primary', onclick: function () { MP.newInvoice({ kind: 'invoice', client_id: c.id, project_id: pid }); } }, el('span', { class: 'pt-tile-ico', html: icon('wallet') }), el('strong', { text: 'فاکتور' }), el('small', { text: 'با لینک و پرداخت آنلاین' })),
+      el('button', { type: 'button', class: 'pt-tile', onclick: function () { MP.dialog.close(); MP.newContract({ client_id: c.id, project_id: pid }); } }, el('span', { class: 'pt-tile-ico', html: icon('edit') }), el('strong', { text: 'قرارداد' }), el('small', { text: 'با امضای آنلاین مشتری' })));
     MP.dialog.open('صدور برای ' + c.name, box);
+    box.classList.add('three');
   }
 
   /** Customer form: name, phone, info and their projects (any number). */

@@ -49,6 +49,7 @@
         tile('eye', 'طرح برای تأیید', 'مشتری روی طرح نظر می‌دهد و تأیید می‌کند', 'primary', function () { uploadForm(p, 'design'); }),
         tile('download', 'فایل تحویلی', 'فایل نهایی برای دانلود مشتری', '', function () { uploadForm(p, 'file'); }),
         S.manager ? tile('file', 'پیش‌فاکتور', 'برای تأیید مشتری' + (cust ? ' · ' + cust.name : ''), '', function () { MP.newInvoice({ kind: 'proforma', project_id: p.id, client_id: cust ? cust.id : 0 }); }) : null,
+        S.manager ? tile('edit', 'قرارداد', 'از روی قالب، با امضای آنلاین' + (cust ? ' · ' + cust.name : ''), '', function () { MP.dialog.close(); MP.newContract({ project_id: p.id, client_id: cust ? cust.id : 0 }); }) : null,
         S.manager ? tile('wallet', 'فاکتور', 'با لینک و پرداخت آنلاین' + (cust ? ' · ' + cust.name : ''), '', function () { MP.newInvoice({ kind: 'invoice', project_id: p.id, client_id: cust ? cust.id : 0 }); }) : null);
 
       var parts = [hero, tiles,

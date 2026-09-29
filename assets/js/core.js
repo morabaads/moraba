@@ -546,7 +546,7 @@
   /* ------------------------------------------------------------ Navigation */
 
   var views = {}, app = $('.app');
-  var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'clients', 'attendance', 'reminders', 'accounting', 'reports'];
+  var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'clients', 'contracts', 'attendance', 'reminders', 'accounting', 'reports'];
   MP.view = function (name, def) { views[name] = def; };
   MP.showView = function (name, opts) {
     if (!views[name]) name = 'dashboard';
@@ -737,6 +737,7 @@
       reports: function () { MP.showView('reports'); },
       daily: function () { MP.dailyReport(); },
       invoices: function () { MP.invoices(n.ref_id); },
+      contracts: function () { MP.showView('contracts', { open: n.ref_id }); },
       portal: function () { MP.portal(n.ref_id); },
       weekly: function () { MP.weeklyReport(); }
     }[n.target];

@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'contracts.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -27,6 +27,7 @@ class MP_Frontend {
 		// Short public links for clients: /c/{token} (portal) and /i/{token} (invoice).
 		add_rewrite_rule( '^c/([A-Za-z0-9]{32})/?$', 'index.php?mp_client=$matches[1]', 'top' );
 		add_rewrite_rule( '^i/([A-Za-z0-9]{32})/?$', 'index.php?mp_invoice=$matches[1]', 'top' );
+		add_rewrite_rule( '^k/([A-Za-z0-9]{32})/?$', 'index.php?mp_contract=$matches[1]', 'top' );
 		if ( did_action( 'init' ) && get_option( 'mp_flush_rewrite' ) ) {
 			delete_option( 'mp_flush_rewrite' );
 			flush_rewrite_rules( false );
@@ -36,6 +37,7 @@ class MP_Frontend {
 	public static function query_vars( $vars ) {
 		$vars[] = 'mp_panel';
 		$vars[] = 'mp_client';
+		$vars[] = 'mp_contract';
 		$vars[] = 'mp_file';
 		$vars[] = 'mp_manifest';
 		$vars[] = 'mp_sw';
@@ -84,16 +86,23 @@ class MP_Frontend {
 		// The address itself, too: works before rewrite rules are refreshed and when a cache or a
 		// messenger drops the query string.
 		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
-		if ( preg_match( '#/(c|i)/([A-Za-z0-9]{32})/?$#', $path, $pm ) ) {
+		if ( preg_match( '#/(c|i|k)/([A-Za-z0-9]{32})/?$#', $path, $pm ) ) {
 			status_header( 200 );
 			if ( 'c' === $pm[1] ) {
 				self::render_client( $pm[2] );
+			}
+			if ( 'k' === $pm[1] ) {
+				MP_Contracts::render_public( $pm[2] );
 			}
 			MP_Invoices::render_public( $pm[2] );
 		}
 		$inv = get_query_var( 'mp_invoice' );
 		if ( is_string( $inv ) && preg_match( '/^[A-Za-z0-9]{32}$/', $inv ) ) {
 			MP_Invoices::render_public( $inv );
+		}
+		$kt = get_query_var( 'mp_contract' );
+		if ( is_string( $kt ) && preg_match( '/^[A-Za-z0-9]{32}$/', $kt ) ) {
+			MP_Contracts::render_public( $kt );
 		}
 		$token = get_query_var( 'mp_client' );
 		if ( is_string( $token ) && preg_match( '/^[A-Za-z0-9]{32}$/', $token ) ) {

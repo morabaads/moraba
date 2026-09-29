@@ -7,7 +7,7 @@
   var PST = { waiting: 'در انتظار شروع', doing: 'در حال انجام', done: 'تمام‌شده' };
   var IST = { sent: 'منتظر پرداخت', accepted: 'تأیید شد', paid: 'پرداخت شد', cancelled: 'لغو شد' };
   var MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-  var TABS = [['progress', 'پیشرفت پروژه', 'pie'], ['designs', 'طرح‌ها', 'eye'], ['files', 'فایل‌های تحویلی', 'download'], ['invoices', 'فاکتورها', 'file'], ['chat', 'گفت‌وگو', 'chat']];
+  var TABS = [['progress', 'پیشرفت پروژه', 'pie'], ['designs', 'طرح‌ها', 'eye'], ['files', 'فایل‌های تحویلی', 'download'], ['invoices', 'فاکتورها', 'file'], ['contracts', 'قرارداد', 'edit'], ['chat', 'گفت‌وگو', 'chat']];
 
   /* ------------------------------------------------------------ helpers */
   function $(id) { return document.getElementById(id); }
@@ -88,10 +88,11 @@
     if (!data) return 0;
     if (k === 'designs') return data.designs.filter(function (d) { return d.status === 'pending'; }).length;
     if (k === 'invoices') return data.invoices.filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; }).length;
+    if (k === 'contracts') return (data.contracts || []).filter(function (x) { return x.status === 'sent'; }).length;
     return 0;
   }
   function tabs() {
-    var list = data && data.project ? TABS : TABS.filter(function (t) { return t[0] === 'chat'; });
+    var list = data && data.project ? TABS.filter(function (t) { return t[0] !== 'contracts' || (data.contracts || []).length; }) : TABS.filter(function (t) { return t[0] === 'chat'; });
     // Sidebar: the panel's own menu items; phones: a bottom tab bar.
     var side = $('cp-nav'); side.replaceChildren();
     list.forEach(function (t) {
@@ -111,6 +112,7 @@
     designs: function () { return 'روی هر قسمت طرح کلیک کنید و نظرتان را همان‌جا بنویسید؛ بعد تأیید کنید یا تغییر بخواهید.'; },
     files: function () { return 'فایل‌های نهایی که تیم تحویل داده است.'; },
     invoices: function () { return 'پیش‌فاکتورها و فاکتورهای این پروژه.'; },
+    contracts: function () { return 'قراردادهای این پروژه؛ مطالعه، امضای آنلاین با کد پیامکی و نسخه PDF.'; },
     chat: function () { return 'گفت‌وگو با تیم مربع؛ پاسخ‌ها همین‌جا می‌آید.'; }
   };
   var prevTab = 'progress';
@@ -231,14 +233,26 @@
     })) : empty('file', 'فاکتوری صادر نشده', null));
   }
 
+  function contracts() {
+    var pane = $('pane-contracts'), list = data.contracts || [];
+    pane.replaceChildren(list.length ? h('div', { class: 'cp-card cp-list' }, list.map(function (x) {
+      var signed = x.status === 'signed';
+      return h('a', { class: 'cp-row', href: x.url, target: '_blank', rel: 'noopener' }, [
+        h('span', { class: 'cp-row-ico', html: icon('edit') }),
+        h('div', { class: 'cp-row-copy' }, [h('strong', { text: 'قرارداد ' + fa(x.number) + (x.title ? ' — ' + x.title : '') }), h('small', { text: signed ? 'امضا شده توسط ' + x.signer + ' · ' + jal(x.signed_at) : 'ارسال شده ' + jal(x.sent_at) })]),
+        h('div', { class: 'cp-row-end' }, [signed ? h('span', { class: 'chip ok', text: 'امضاشده ✓' }) : h('span', { class: 'btn btn-primary btn-sm', text: 'مطالعه و امضا' })])]);
+    })) : empty('edit', 'قراردادی ارسال نشده', null));
+  }
+
   /* ------------------------------------------------------------ chat */
   var box = $('chat-messages'), form = $('client-form'), lastDay = '', sending = Promise.resolve(), chatBusy = null;
   function myName() { return me && me.name ? me.name : (form.elements.name.value.trim() || ''); }
   function hm(s) { return fa(String(s || '').slice(11, 16)); }
-  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user' };
+  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit' };
   function sysCard(m) {
     var t = m.meta && m.meta.t, act = null;
-    if (t === 'invoice' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: 'مشاهده ' + (m.meta.k === 'proforma' || /^پیش‌فاکتور/.test(m.body) ? 'پیش‌فاکتور' : 'فاکتور') });
+    if (t === 'contract' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: /امضا شد/.test(m.body) ? 'دیدن قرارداد' : 'مطالعه و امضا' });
+    else if (t === 'invoice' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: 'مشاهده ' + (m.meta.k === 'proforma' || /^پیش‌فاکتور/.test(m.body) ? 'پیش‌فاکتور' : 'فاکتور') });
     else if ((t === 'design' || t === 'file') && data && data.project) act = h('button', { type: 'button', class: 'sys-link', text: t === 'design' ? 'دیدن طرح' : 'دانلود فایل', onclick: function () {
       var d = t === 'design' && data.designs.filter(function (x) { return x.id === m.meta.id; })[0];
       go(t === 'design' ? 'designs' : 'files'); if (d) review(d);
@@ -297,7 +311,7 @@
   form.elements.message.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(140, this.scrollHeight) + 'px'; });
 
   function refresh() {
-    return api('/portal').then(function (d) { data = d; if (d.project) { progress(); if (!reviewing) designs(); files(); invoices(); } tabs(); }).catch(function () {});
+    return api('/portal').then(function (d) { data = d; if (d.project) { progress(); if (!reviewing) designs(); files(); invoices(); contracts(); } tabs(); }).catch(function () {});
   }
 
   /* ------------------------------------------------------------ start */
@@ -324,7 +338,7 @@
         var want = (location.hash || '').slice(1);
         if (!d.project) tab = 'chat';
         else {
-          progress(); designs(); files(); invoices();
+          progress(); designs(); files(); invoices(); contracts(); contracts();
           tab = TABS.some(function (t) { return t[0] === want; }) ? want : d.designs.some(function (x) { return x.status === 'pending'; }) ? 'designs' : 'progress';
         }
         go(tab);
