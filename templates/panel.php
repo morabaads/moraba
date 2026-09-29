@@ -26,7 +26,7 @@ $mp_nav = array(
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <link rel="preload" href="<?php echo esc_url( MP_URL . 'assets/fonts/dana.woff2' ); // same URL as app.css uses, so it's fetched once ?>" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
-<script>try{var p=JSON.parse(localStorage.getItem('mp-prefs')||'{}');if(p.dark)document.documentElement.classList.add('dark');if(p.motion)document.documentElement.classList.add('reduced-motion');}catch(e){}</script>
+<script>try{var p=JSON.parse(localStorage.getItem('mp-prefs')||'{}');if(p.dark!==false)document.documentElement.classList.add('dark');if(p.motion)document.documentElement.classList.add('reduced-motion');}catch(e){}</script>
 </head>
 <body class="is-loading">
 <?php include MP_DIR . 'templates/sprite.svg'; ?>

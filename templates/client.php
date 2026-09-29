@@ -8,12 +8,12 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#f6f5f3" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#111213" media="(prefers-color-scheme: dark)">
+
+<meta name="theme-color" content="#111213">
 <title><?php echo esc_html( $mp_t ); ?> | مربع استودیو</title>
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
-<script>try{if(matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark')}catch(e){}</script>
+<script>document.documentElement.classList.add('dark')</script>
 </head>
 <body class="cp-body">
 <?php include MP_DIR . 'templates/sprite.svg'; ?>

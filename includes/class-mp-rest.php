@@ -133,7 +133,7 @@ class MP_Rest {
 		return array(
 			'me'        => MP_Util::user_payload( $uid ),
 			'email'     => wp_get_current_user()->user_email,
-			'prefs'     => wp_parse_args( is_array( $prefs ) ? $prefs : array(), array( 'dark' => false, 'motion' => false, 'emails' => true, 'telegram' => true, 'bale' => true, 'sms' => true ) ),
+			'prefs'     => wp_parse_args( is_array( $prefs ) ? $prefs : array(), array( 'dark' => true, 'motion' => false, 'emails' => true, 'telegram' => true, 'bale' => true, 'sms' => true ) ),
 			'channels'  => array(
 				'telegram'      => (bool) get_option( 'mp_telegram_token', '' ),
 				'bale'          => (bool) get_option( 'mp_bale_token', '' ),
