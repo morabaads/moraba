@@ -2283,3 +2283,15 @@ button.tf-box .icon{width:12px;height:12px}
 .tf-day.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 8px 20px rgba(242,138,36,.28)}
 .tf-day.on small{color:rgba(255,255,255,.85)}
 @media (max-width:480px){.tf-days{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Task form on phones: compact people chips, stacked date/time, lower day cards */
+@media (max-width:640px){
+  .tf-people .people-picker{display:flex;flex-wrap:wrap;gap:6px;max-height:none}
+  .tf-people .person-opt{flex:0 0 auto;padding:4px 10px 4px 4px;min-height:0;border-radius:99px;gap:6px}
+  .tf-people .person-opt input{position:absolute;opacity:0;pointer-events:none}
+  .tf-people .person-opt .avatar,.tf-people .person-opt .initials{width:28px;height:28px;font-size:11px}
+  .tf-people .person-opt span{font-size:13px}
+  .tf-people .person-opt:has(input:checked){background:var(--brand);border-color:var(--brand);color:#fff}
+  .tf-when{grid-template-columns:1fr}
+  .tf-day{padding:8px 4px}.tf-day b{font-size:13px}
+  .tf-sec{padding:12px}
+}
