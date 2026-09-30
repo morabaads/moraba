@@ -171,7 +171,7 @@
       el('div', { class: 'row' },
         MP.field('تلفن مشتری', el('input', { name: 'client_phone', maxlength: 40, dir: 'ltr', value: x.client_phone || '' })),
         MP.field('عنوان', el('input', { name: 'title', maxlength: 200, value: x.title || '', placeholder: 'مثلاً طراحی و توسعه سایت' }))),
-      MP.field('اطلاعات خریدار (اختیاری)', el('textarea', { name: 'client_info', rows: 2, maxlength: 1000, placeholder: 'نشانی، کد اقتصادی، …' }, x.client_info || '')),
+      MP.field('اطلاعات کارفرما (اختیاری)', el('textarea', { name: 'client_info', rows: 2, maxlength: 1000, placeholder: 'نشانی، کد اقتصادی، …' }, x.client_info || '')),
       el('div', { class: 'field' }, el('span', { text: 'ردیف‌ها' }),
         el('div', { class: 'inv-row inv-row-head' }, el('small', { text: 'شرح' }), el('small', { text: 'تعداد' }), el('small', { text: 'مبلغ واحد (تومان)' }), el('small', { text: 'جمع' }), el('span')),
         rows,
@@ -218,8 +218,8 @@
   function settingsForm() {
     var s = settings || {};
     var f = el('form', { class: 'form' },
-      MP.field('نام فروشنده', el('input', { name: 'seller', maxlength: 160, value: s.seller || '' })),
-      MP.field('اطلاعات فروشنده', el('textarea', { name: 'seller_info', rows: 2, maxlength: 1000, placeholder: 'نشانی، تلفن، شناسه ملی، …' }, s.seller_info || '')),
+      MP.field('نام مجری', el('input', { name: 'seller', maxlength: 160, value: s.seller || '' })),
+      MP.field('اطلاعات مجری', el('textarea', { name: 'seller_info', rows: 2, maxlength: 1000, placeholder: 'نشانی، تلفن، شناسه ملی، …' }, s.seller_info || '')),
       MP.field('لینک پرداخت پیش‌فرض', el('input', { name: 'pay_url', dir: 'ltr', value: s.pay_url || '', placeholder: 'https://zarinp.al/moraba' }), 'مثلاً لینک پرداخت زرین‌پال/آیدی‌پی؛ روی دکمه «پرداخت» فاکتورها قرار می‌گیرد.'),
       el('fieldset', { class: 'inv-gw' }, el('legend', { text: 'پرداخت آنلاین' }),
         el('div', { class: 'row' },

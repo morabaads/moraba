@@ -605,8 +605,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px}
 <span class="badge <?php echo esc_attr( $x->status ); ?>"><?php echo esc_html( 'paid' === $x->status ? 'پرداخت شد' : self::STATUS[ $x->status ] ); ?></span></div>
 <img src="<?php echo esc_url( MP_URL . 'assets/img/logo.png' ); ?>" alt="<?php echo esc_attr( $s['seller'] ); ?>"></header>
 <div class="parties">
-<div class="box"><small>فروشنده</small><strong><?php echo esc_html( $s['seller'] ); ?></strong><?php echo $s['seller_info'] ? '<p>' . esc_html( $s['seller_info'] ) . '</p>' : ''; ?></div>
-<div class="box"><small>خریدار</small><strong><?php echo esc_html( $x->client_name ); ?></strong><?php echo ( $x->client_phone || $x->client_info ) ? '<p>' . esc_html( trim( MP_Jalali::digits( $x->client_phone ) . "\n" . $x->client_info ) ) . '</p>' : ''; ?><?php echo $p['project'] ? '<p>پروژه: ' . esc_html( $p['project'] ) . '</p>' : ''; ?></div>
+<div class="box"><small>مجری</small><strong><?php echo esc_html( $s['seller'] ); ?></strong><?php echo $s['seller_info'] ? '<p>' . esc_html( $s['seller_info'] ) . '</p>' : ''; ?></div>
+<div class="box"><small>کارفرما</small><strong><?php echo esc_html( $x->client_name ); ?></strong><?php echo ( $x->client_phone || $x->client_info ) ? '<p>' . esc_html( trim( MP_Jalali::digits( $x->client_phone ) . "\n" . $x->client_info ) ) . '</p>' : ''; ?><?php echo $p['project'] ? '<p>پروژه: ' . esc_html( $p['project'] ) . '</p>' : ''; ?></div>
 </div>
 <table><thead><tr><th>شرح</th><th class="n">تعداد</th><th class="n">مبلغ واحد</th><th class="n">مبلغ کل</th></tr></thead><tbody>
 <?php foreach ( $p['items'] as $it ) : ?>
