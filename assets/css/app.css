@@ -2273,3 +2273,6 @@ body.cp-chat-full .ios-install{display:none}
 .tf-more summary small{font-weight:500;color:var(--muted);font-size:11px}
 .tf-more>.row,.tf-more>.field{margin-top:10px}
 @media (max-width:640px){.tf-title{font-size:19px}.tf-when{grid-template-columns:1fr 1fr}.tf-more summary small{display:none}}
+button.tf-box{padding:0;background:transparent;cursor:pointer;display:grid;place-items:center;color:#fff}
+button.tf-box.done{background:var(--ok);border-color:var(--ok)}
+button.tf-box .icon{width:12px;height:12px}
