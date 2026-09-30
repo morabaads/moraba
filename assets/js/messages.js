@@ -506,8 +506,9 @@
     });
   }
   /* Client group: its client people (mobile login), the SMS-code requirement and the logo. */
+  function esc(t) { return String(t || '').replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
   function clientSettings(c) {
-    var body = MP.dialog.open('مشتریان و ظاهر · ' + c.title, MP.skeleton(3), { wide: true, focus: false });
+    var body = MP.dialog.open('مشتری و پرتال', MP.skeleton(3), { wide: true, focus: false });
     function draw(d) {
       var logoBox = el('div', { class: 'cs-logo' }, d.logo ? el('img', { src: d.logo, alt: '' }) : el('span', { text: (d.client || '؟').slice(0, 2) }));
       var file = el('input', { type: 'file', accept: 'image/*', hidden: true });
@@ -521,21 +522,24 @@
         MP.api('channels/' + c.id + '/client', { method: 'POST', body: { auth_required: auth.checked } }).then(function (n) { MP.toast(n.auth_required ? 'از این به بعد مشتری با کد پیامک وارد می‌شود' : 'ورود با کد خاموش شد'); draw(n); })
           .catch(function (err) { auth.checked = !auth.checked; MP.soft(err); });
       };
-      var name = el('input', { placeholder: 'نام (مثلاً آقای احمدی)', maxlength: 80 });
-      var mobile = el('input', { placeholder: '۰۹۱۲…', inputmode: 'tel', dir: 'ltr', maxlength: 20 });
+      var name = el('input', { placeholder: 'مثلاً آقای احمدی', maxlength: 80, required: true });
+      var mobile = el('input', { placeholder: '۰۹۱۲ ۱۲۳ ۴۵۶۷', inputmode: 'tel', dir: 'ltr', maxlength: 20, required: true });
+      mobile.addEventListener('input', function () { mobile.value = J.faDigits(J.latinDigits(mobile.value).replace(/[^\d ]/g, '')); });
       var sms = el('input', { type: 'checkbox', checked: d.sms });
-      var add = el('form', { class: 'cs-add' }, name, mobile, el('button', { type: 'submit', class: 'btn btn-primary', html: icon('plus') + 'افزودن' }));
+      var add = el('form', { class: 'cs-add' }, MP.field('نام', name), MP.field('شماره موبایل', mobile), el('button', { type: 'submit', class: 'btn btn-primary', html: icon('plus') + 'افزودن' }));
       add.onsubmit = function (e) {
         e.preventDefault();
-        MP.api('channels/' + c.id + '/contacts', { method: 'POST', body: { name: name.value, mobile: mobile.value, sms: sms.checked } })
+        MP.api('channels/' + c.id + '/contacts', { method: 'POST', body: { name: name.value, mobile: J.latinDigits(mobile.value), sms: sms.checked } })
           .then(function (n) { MP.toast(name.value + ' اضافه شد' + (sms.checked ? ' و لینک برایش پیامک شد' : '')); draw(n); if (c.id === current) fetchNew(true); }).catch(MP.soft);
       };
       var list = el('div', { class: 'tio-history' });
-      if (!d.contacts.length) list.append(el('p', { class: 'muted', text: 'هنوز کسی از طرف مشتری ثبت نشده. هر تعداد نفر را که بخواهید اضافه کنید؛ حتی وسط گفت‌وگو.' }));
+      list.classList.add('cs-people');
+      if (!d.contacts.length) list.append(el('div', { class: 'cs-empty' }, el('span', { html: icon('user') }), el('p', { text: 'هنوز کسی ثبت نشده' })));
       d.contacts.forEach(function (x) {
         list.append(el('article', { class: 'tpl-card' },
           el('span', { class: 'cs-av', text: (x.name || '؟').slice(0, 1) }),
-          el('div', { class: 'tpl-copy' }, el('strong', { text: x.name }), el('small', { text: J.faDigits(x.mobile) + (x.last_login ? ' · آخرین ورود ' + MP.relTime(x.last_login) : ' · هنوز وارد نشده') })),
+          el('div', { class: 'tpl-copy' }, el('strong', { text: x.name }), el('small', { dir: 'ltr', class: 'cs-mob', text: J.faDigits(x.mobile) })),
+          el('span', { class: 'chip ' + (x.last_login ? 'ok' : ''), text: x.last_login ? 'ورود ' + MP.relTime(x.last_login) : 'هنوز وارد نشده' }),
           el('div', { class: 'tpl-actions' },
             d.sms ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('send') + 'پیامک لینک', onclick: function () { MP.api('client-contacts/' + x.id + '/sms', { method: 'POST' }).then(function () { MP.toast('لینک پیامک شد'); }).catch(MP.soft); } }) : null,
             el('button', { type: 'button', class: 'icon-btn sm', title: 'حذف', 'aria-label': 'حذف', html: icon('close'), onclick: function () {
@@ -550,25 +554,49 @@
         }).catch(MP.soft);
       }
       proj.onchange = function () { save({ project_id: +proj.value }, +proj.value ? 'گروه به پروژه «' + proj.options[proj.selectedIndex].text + '» وصل شد' : 'اتصال به پروژه برداشته شد'); };
-      body.replaceChildren(
-        el('section', { class: 'tio-block' }, el('h3', { text: 'پروژه و نام' }),
-          el('div', { class: 'cs-proj' },
-            MP.field('پروژه این مشتری', proj, 'پیشرفت، طرح‌ها، فایل‌ها و فاکتورهای همین پروژه در پرتال مشتری نشان داده می‌شود و اعضای پروژه پیام‌ها را می‌گیرند.'),
-            MP.field('نام گروه', title), MP.field('نام مشتری', client)),
-          el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'ذخیره نام‌ها', onclick: function () { save({ title: title.value, client_name: client.value }, 'ذخیره شد'); } }))),
-        el('section', { class: 'tio-block' }, el('h3', { text: 'لوگو' }),
-          el('div', { class: 'cs-brand' }, logoBox,
-            el('div', { class: 'cs-brand-copy' }, el('strong', { text: d.client }), el('small', { class: 'muted', text: 'لوگوی مشتری کنار لوگوی مربع در پرتال و صفحه ورود نمایش داده می‌شود.' }),
-              el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('file') + (d.logo ? 'تغییر لوگو' : 'بارگذاری لوگو'), onclick: function () { file.click(); } }),
-                d.logo ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'حذف لوگو', onclick: function () { MP.api('channels/' + c.id + '/client', { method: 'POST', body: { logo_file_id: 0 } }).then(draw).catch(MP.soft); } }) : null, file)))),
-        el('section', { class: 'tio-block' }, el('h3', { text: 'افراد مشتری' }), list, add,
-          d.sms ? el('label', { class: 'check', style: { marginTop: '8px' } }, sms, el('span', { text: 'لینک پرتال برای نفر جدید پیامک شود' })) : el('p', { class: 'hint', text: 'برای ورود با کد و پیامک لینک، سرویس پیامک را در تنظیمات افزونه فعال کنید.' })),
-        el('section', { class: 'tio-block' }, el('h3', { text: 'امنیت' }),
-          d.sms ? el('p', { class: 'hint', text: '🔒 ورود به این لینک همیشه با شماره موبایل و کد یک‌بارمصرف پیامکی است؛ فقط شماره‌هایی که بالا ثبت کرده‌اید وارد می‌شوند (۳۰ روز وارد می‌مانند). بدون ثبت شماره، کسی نمی‌تواند وارد شود.' })
-            : el('div', null, el('label', { class: 'check' }, auth, el('span', { text: 'ورود با شماره موبایل و کد پیامک الزامی باشد' })), el('p', { class: 'hint', text: 'سرویس پیامک فعال نیست؛ تا فعال نشود ورود با کد ممکن نیست و لینک بدون ورود باز می‌شود.' }))),
-        el('section', { class: 'tio-block' }, el('h3', { text: 'لینک پرتال' }),
-          el('div', { class: 'cs-link' }, el('input', { class: 'input', value: d.url, readonly: true, dir: 'ltr', onfocus: function (e) { e.target.select(); } }),
-            el('button', { type: 'button', class: 'btn btn-primary', text: 'کپی', onclick: function () { (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject()).then(function () { MP.toast('لینک کپی شد'); }, function () { MP.toast('لینک را انتخاب و کپی کنید'); }); } }))));
+      var copyLink = function () { (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject()).then(function () { MP.toast('لینک پرتال کپی شد'); }, function () { MP.toast('لینک را انتخاب و کپی کنید'); }); };
+      var p = MP.project(+d.project_id);
+      var locked = d.sms || d.auth_required;
+      logoBox.classList.add('cs-hero-logo'); logoBox.title = d.logo ? 'تغییر لوگو' : 'بارگذاری لوگو'; logoBox.onclick = function () { file.click(); };
+      logoBox.append(el('i', { class: 'cs-logo-edit', html: icon('edit') }));
+      body.replaceChildren.apply(body, [
+        // Who this is, where it leads, and whether it is protected — at a glance.
+        el('section', { class: 'cs-hero' },
+          logoBox, file,
+          el('div', { class: 'cs-hero-copy' },
+            el('small', { text: 'گروه مشتری' }),
+            el('h2', { text: d.client || d.title }),
+            el('div', { class: 'cs-hero-chips' },
+              el('span', { class: 'chip', html: icon('chat') + ' ' + esc(d.title) }),
+              p ? el('span', { class: 'chip brand', html: icon('folder') + ' ' + esc(p.name) }) : el('span', { class: 'chip danger', text: 'بدون پروژه' }),
+              el('span', { class: 'chip ' + (locked ? 'ok' : 'danger'), html: icon('lock') + (locked ? ' ورود با کد پیامکی' : ' بدون ورود') }),
+              el('span', { class: 'chip', html: icon('user') + ' ' + fa(d.contacts.length) + ' نفر' })),
+            d.logo ? el('button', { type: 'button', class: 'cs-mini-link', text: 'حذف لوگو', onclick: function () { MP.api('channels/' + c.id + '/client', { method: 'POST', body: { logo_file_id: 0 } }).then(draw).catch(MP.soft); } }) : el('small', { class: 'cs-hint', text: 'روی مربع بزنید تا لوگوی مشتری بارگذاری شود؛ کنار لوگوی مربع در پرتال و صفحه ورود نمایش داده می‌شود.' })),
+          el('div', { class: 'cs-linkbox' },
+            el('small', { text: 'لینک پرتال' }),
+            el('input', { value: d.url, readonly: true, dir: 'ltr', onfocus: function (e) { e.target.select(); } }),
+            el('div', { class: 'cs-link-actions' },
+              el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('clip') + 'کپی لینک', onclick: copyLink }),
+              el('a', { class: 'btn btn-secondary btn-sm', href: d.url, target: '_blank', rel: 'noopener', html: icon('eye') + 'باز کردن' })))),
+        d.sms && !d.contacts.length ? el('div', { class: 'cs-alert' }, el('span', { html: icon('alarm') }), el('div', null, el('b', { text: 'هنوز هیچ شماره‌ای ثبت نشده' }), el('small', { text: 'ورود پرتال فقط با کد پیامکی است؛ تا شماره مشتری را اضافه نکنید، کسی نمی‌تواند وارد لینک شود.' }))) : null,
+        el('div', { class: 'cs-grid' },
+          el('section', { class: 'cs-card' },
+            el('header', null, el('span', { class: 'cs-ico', html: icon('user') }), el('div', null, el('h3', { text: 'افراد مشتری' }), el('small', { text: 'هر تعداد نفر، حتی وسط گفت‌وگو؛ هر کدام با شماره خودش وارد می‌شود.' }))),
+            list,
+            el('div', { class: 'cs-addbox' },
+              el('strong', { text: 'افزودن نفر جدید' }),
+              add,
+              d.sms ? el('label', { class: 'check' }, sms, el('span', { text: 'لینک پرتال برایش پیامک شود' })) : el('p', { class: 'hint', text: 'برای ورود با کد و پیامک لینک، سرویس پیامک را در تنظیمات افزونه فعال کنید.' }))),
+          el('div', { class: 'cs-side' },
+            el('section', { class: 'cs-card' },
+              el('header', null, el('span', { class: 'cs-ico', html: icon('folder') }), el('div', null, el('h3', { text: 'پروژه و نام‌ها' }), el('small', { text: 'پرتال، پیشرفت و طرح‌ها و فاکتورهای همین پروژه را نشان می‌دهد.' }))),
+              MP.field('پروژه', proj), MP.field('نام مشتری', client), MP.field('نام گروه', title),
+              el('button', { type: 'button', class: 'btn btn-secondary btn-sm cs-save', text: 'ذخیره نام‌ها', onclick: function () { save({ title: title.value, client_name: client.value }, 'ذخیره شد'); } })),
+            el('section', { class: 'cs-card' },
+              el('header', null, el('span', { class: 'cs-ico', html: icon('lock') }), el('div', null, el('h3', { text: 'امنیت ورود' }))),
+              d.sms ? el('p', { class: 'cs-note', text: 'ورود همیشه با شماره موبایل و کد یک‌بارمصرف است؛ فقط شماره‌های ثبت‌شده وارد می‌شوند و ۳۰ روز وارد می‌مانند.' })
+                : el('div', null, el('label', { class: 'check' }, auth, el('span', { text: 'ورود با شماره موبایل و کد پیامک الزامی باشد' })), el('p', { class: 'hint', text: 'سرویس پیامک فعال نیست؛ تا فعال نشود ورود با کد ممکن نیست.' })))))].filter(Boolean));
+      var dlg = body.closest('.dialog'); if (dlg) dlg.classList.add('cs-dialog');
     }
     MP.api('channels/' + c.id + '/client').then(draw).catch(MP.soft);
   }
