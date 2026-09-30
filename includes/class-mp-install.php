@@ -35,6 +35,10 @@ class MP_Install {
 			MP_Templates::seed();
 			MP_Costs::migrate();
 			MP_Client::migrate_customers();
+			// files.context was 10 characters: «client_item» / «client_logo» got cut. Repair them.
+			global $wpdb;
+			$wpdb->query( 'UPDATE ' . self::table( 'files' ) . " SET context = 'client_item' WHERE context = 'client_ite'" ); // phpcs:ignore
+			$wpdb->query( 'UPDATE ' . self::table( 'files' ) . " SET context = 'client_logo' WHERE context = 'client_log'" ); // phpcs:ignore
 			// $wp_rewrite does not exist yet on plugins_loaded; flush on init instead.
 			update_option( 'mp_flush_rewrite', 1 );
 			update_option( 'mp_db_version', MP_DB_VERSION );
@@ -511,7 +515,7 @@ class MP_Install {
 		$t[] = 'CREATE TABLE ' . self::table( 'files' ) . " (
 			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 			user_id bigint(20) unsigned NOT NULL,
-			context varchar(10) NOT NULL,
+			context varchar(20) NOT NULL,
 			context_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			name varchar(200) NOT NULL,
 			mime varchar(100) NOT NULL,
