@@ -2239,3 +2239,37 @@ body.cp-chat-full .ios-install{display:none}
 .ct-where-l{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .ct-where{height:34px;border-radius:10px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);font:inherit;font-size:12px;max-width:260px}
 .ct-clauses .chip-btn.on{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+
+/* New task: essentials first */
+.form.tf{gap:14px}
+.tf-title{width:100%;border:0;border-bottom:2px solid var(--line-strong);background:transparent;color:var(--ink);font:inherit;font-size:22px;font-weight:800;padding:10px 2px 12px;outline:0;transition:border-color var(--t-fast)}
+.tf-title:focus{border-bottom-color:var(--brand)}
+.tf-title::placeholder{color:var(--faint);font-weight:600}
+.tf-sec{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:18px;background:var(--surface-2)}
+.tf-row{display:flex;align-items:center;gap:10px}.tf-row select{flex:1}
+.tf-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:var(--ink-2)}
+.tf-label .icon{width:16px;height:16px;color:var(--brand)}
+.tf-note{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}.tf-note .icon{width:13px;height:13px}
+.tf-people .people-picker,.tf-people>*{gap:6px}
+.tf-chips{display:flex;flex-wrap:wrap;gap:6px}
+.tf-chip{height:34px;padding:0 14px;border-radius:99px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink-2);font:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all var(--t-fast)}
+.tf-chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.tf-chip.pri-high.on{background:var(--danger);border-color:var(--danger)}
+.tf-chip.pri-low.on{background:var(--surface-3);border-color:var(--surface-3);color:var(--ink)}
+.tf-when{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:8px}
+.tf-when .field{margin:0}
+.tf-time input{width:100%;min-height:46px;padding:0 14px;border-radius:var(--r-sm);border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);font:inherit}
+.tf-items{display:flex;flex-direction:column;gap:4px}
+.tf-item{display:flex;align-items:center;gap:8px;padding:2px 4px;border-radius:10px}
+.tf-item:focus-within{background:var(--surface)}
+.tf-box{width:18px;height:18px;border-radius:6px;border:2px solid var(--line-strong);flex-shrink:0}
+.tf-item input{flex:1;min-width:0;height:38px;border:0;background:transparent;color:var(--ink);font:inherit;outline:0}
+.tf-item .icon-btn{opacity:0;transition:opacity var(--t-fast)}.tf-item:hover .icon-btn,.tf-item:focus-within .icon-btn{opacity:1}
+.tf-more{border:1.5px dashed var(--line-strong);border-radius:18px;padding:0 14px}
+.tf-more[open]{padding-bottom:14px;border-style:solid}
+.tf-more summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;cursor:pointer;list-style:none;font-weight:800;font-size:13px}
+.tf-more summary::-webkit-details-marker{display:none}
+.tf-more summary span{display:flex;align-items:center;gap:6px}.tf-more summary .icon{width:16px;height:16px;color:var(--brand)}
+.tf-more summary small{font-weight:500;color:var(--muted);font-size:11px}
+.tf-more>.row,.tf-more>.field{margin-top:10px}
+@media (max-width:640px){.tf-title{font-size:19px}.tf-when{grid-template-columns:1fr 1fr}.tf-more summary small{display:none}}

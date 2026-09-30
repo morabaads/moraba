@@ -173,7 +173,7 @@
         if (many && S.manager) { var txt = $('.smart-input', form).value; setTimeout(function () { MP.voiceTasks(txt); }, 50); return; }
         var f = form.elements;
         function put(input, v) { if (v === undefined || v === null || v === '') return; input.value = v; input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); var w = input.closest('.field') || input; w.classList.remove('filled'); void w.offsetWidth; w.classList.add('filled'); }
-        put(f.title, g.tasks[0]); put(f.time, g.time); put(f.priority, g.priority);
+        put(f.title, g.tasks[0]); put(f.time, g.time); put(f.priority, g.priority); if (g.priority === 'high') { var m = $('.tf-more', form); if (m) m.open = true; }
         if (g.project_id) { put(f.project_id, String(g.project_id)); ss.fill(g.project_id); }
         if (g.dates[0]) MP.setDate(f.date, g.dates[0]);
         if (S.manager && g.user_ids.length) $$('input[name=assignees]', form).forEach(function (c) { c.checked = g.user_ids.indexOf(+c.value) >= 0; });
@@ -190,31 +190,68 @@
         return out;
       }
     }));
-    form.append(MP.field('عنوان تسک', el('input', { name: 'title', required: true, maxlength: 200, value: t ? t.title : '', placeholder: 'مثلاً طراحی صفحه ورود', autocomplete: 'off' })));
+    /* ---- The essentials: what, who, when, checklist. Everything else sits under «تنظیمات بیشتر». */
+    form.classList.add('tf');
+    form.append(el('input', { name: 'title', class: 'tf-title', required: true, maxlength: 200, value: t ? t.title : (opts.taskTitle || ''), placeholder: 'چه کاری باید انجام شود؟', autocomplete: 'off', 'aria-label': 'عنوان تسک' }));
     if (S.manager) {
-      if (t) form.append(MP.field('مسئول انجام', MP.userSelect('user_id', t.user_id)));
-      else form.append(el('div', { class: 'field' }, el('span', { text: 'مسئول انجام (یک یا چند نفر)' }), MP.peoplePicker('assignees', [opts.userId || S.me.id])));
-      form.append(el('div', { class: 'banner lock' }, MP.iconEl('lock'), el('div', null, el('strong', { text: 'تسک برای دیگران قفل است' }), el('span', { text: 'عنوان، تاریخ و ساعت را فقط ناظر تغییر می‌دهد؛ کارمند وضعیت، چک‌لیست و زمان کار را گزارش می‌کند.' }))));
+      if (t) form.append(el('div', { class: 'tf-row' }, el('span', { class: 'tf-label', html: icon('user') + 'مسئول' }), MP.userSelect('user_id', t.user_id)));
+      else form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('user') + 'مسئول انجام' }), el('div', { class: 'tf-people' }, MP.peoplePicker('assignees', [opts.userId || S.me.id])),
+        el('small', { class: 'tf-note', html: icon('lock') + ' برای دیگران قفل است: عنوان و موعد را فقط ناظر تغییر می‌دهد.' })));
     }
-    form.append(el('div', { class: 'row' },
-      MP.dateField('date', t ? t.date : (opts.date || S.today), 'موعد'),
-      MP.field('ساعت (اختیاری)', el('input', { name: 'time', type: 'time', value: t ? t.time : (opts.time || '') }))));
+    // When: quick picks + exact date and time.
+    var dateF = MP.dateField('date', t ? t.date : (opts.date || S.today), 'تاریخ');
+    var timeI = el('input', { name: 'time', type: 'time', value: t ? t.time : (opts.time || ''), 'aria-label': 'ساعت' });
+    var quickDays = [['امروز', S.today], ['فردا', J.addDays(S.today, 1)], ['پس‌فردا', J.addDays(S.today, 2)], ['هفته بعد', J.addDays(S.today, 7)]];
+    var dayChips = el('div', { class: 'tf-chips' }), timeChips = el('div', { class: 'tf-chips' });
+    function markDays() { var v = form.elements.date.value; $$('button', dayChips).forEach(function (b) { b.classList.toggle('on', b.dataset.d === v); }); }
+    function markTimes() { $$('button', timeChips).forEach(function (b) { b.classList.toggle('on', b.dataset.t === timeI.value); }); }
+    quickDays.forEach(function (q) { dayChips.append(el('button', { type: 'button', class: 'tf-chip', 'data-d': q[1], text: q[0], onclick: function () { MP.setDate(form.elements.date, q[1]); markDays(); } })); });
+    [['بدون ساعت', ''], ['۹:۰۰', '09:00'], ['۱۲:۰۰', '12:00'], ['۱۷:۰۰', '17:00']].forEach(function (q) { timeChips.append(el('button', { type: 'button', class: 'tf-chip', 'data-t': q[1], text: q[0], onclick: function () { timeI.value = q[1]; timeI.dispatchEvent(new Event('input', { bubbles: true })); timeI.dispatchEvent(new Event('change', { bubbles: true })); markTimes(); } })); });
+    timeI.addEventListener('input', markTimes);
+    form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('calendar') + 'موعد' }),
+      dayChips, el('div', { class: 'tf-when' }, dateF, el('label', { class: 'field tf-time' }, el('span', { text: 'ساعت' }), timeI)), timeChips));
+    setTimeout(function () { markDays(); markTimes(); var h = form.elements.date; h.addEventListener('change', markDays); }, 0);
+    // Checklist: one line each, Enter adds the next.
+    var cl = el('textarea', { name: 'checklist', hidden: true });
+    var items = el('div', { class: 'tf-items' });
+    function itemRow(v) {
+      var inp = el('input', { value: v || '', placeholder: 'مورد چک‌لیست…', maxlength: 200 });
+      var row = el('div', { class: 'tf-item' }, el('span', { class: 'tf-box' }), inp, el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'حذف', html: icon('close'), onclick: function () { row.remove(); } }));
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); var n = itemRow(''); row.after(n); $('input', n).focus(); }
+        if (e.key === 'Backspace' && !inp.value && items.children.length > 1) { e.preventDefault(); var prev = row.previousElementSibling; row.remove(); if (prev) $('input', prev).focus(); }
+      });
+      return row;
+    }
+    if (!t) {
+      form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('checks') + 'چک‌لیست' }), items,
+        el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' مورد', onclick: function () { var n = itemRow(''); items.append(n); $('input', n).focus(); } }), cl));
+    }
+    // Everything optional.
+    var ps = MP.projectSelect('project_id', t ? t.project_id : (opts.projectId || 0));
+    var ss = MP.sectionSelect('section_id', t ? t.project_id : (opts.projectId || 0), t ? t.section_id : (opts.sectionId || 0));
+    ps.onchange = function () { ss.fill(ps.value); };
+    var pri = el('input', { type: 'hidden', name: 'priority', value: t ? t.priority : 'medium' });
+    var priSeg = el('div', { class: 'tf-chips' }, [['high', 'فوری'], ['medium', 'متوسط'], ['low', 'کم']].map(function (q) {
+      return el('button', { type: 'button', class: 'tf-chip pri-' + q[0] + (pri.value === q[0] ? ' on' : ''), text: q[1], onclick: function () { pri.value = q[0]; $$('button', priSeg).forEach(function (b) { b.classList.toggle('on', b === this); }, this); } });
+    }));
+    pri.addEventListener('input', function () { $$('button', priSeg).forEach(function (b, i) { b.classList.toggle('on', ['high', 'medium', 'low'][i] === pri.value); }); });
+    var adv = el('details', { class: 'tf-more', open: !!(t && (t.project_id || t.description)) || !!opts.projectId },
+      el('summary', null, el('span', { html: icon('settings') + ' تنظیمات بیشتر' }), el('small', { text: 'پروژه، اولویت، تکرار، توضیحات' + (t ? '، وضعیت' : '') })));
+    adv.append(el('div', { class: 'row' }, MP.field('پروژه', ps), MP.field('بخش', ss)));
+    adv.append(el('div', { class: 'field' }, el('span', { text: 'اولویت' }), priSeg, pri));
     if (!t) {
       var until = MP.dateField('recur_until', J.addDays(opts.date || S.today, 30), 'تکرار تا');
       until.hidden = true;
       var rec = MP.select('recurrence', Object.keys(MP.RECUR).map(function (k) { return [k, MP.RECUR[k]]; }), 'none');
       rec.onchange = function () { until.hidden = rec.value === 'none'; };
-      form.append(el('div', { class: 'row' }, MP.field('تکرار', rec), until));
+      adv.append(el('div', { class: 'row' }, MP.field('تکرار', rec), until));
     }
-    var ps = MP.projectSelect('project_id', t ? t.project_id : (opts.projectId || 0));
-    var ss = MP.sectionSelect('section_id', t ? t.project_id : (opts.projectId || 0), t ? t.section_id : (opts.sectionId || 0));
-    ps.onchange = function () { ss.fill(ps.value); };
-    form.append(el('div', { class: 'row' }, MP.field('پروژه', ps), MP.field('بخش', ss)));
-    form.append(el('div', { class: 'row' },
-      MP.field('اولویت', MP.select('priority', [['high', 'زیاد'], ['medium', 'متوسط'], ['low', 'کم']], t ? t.priority : 'medium')),
-      MP.field('وضعیت', MP.select('status', [['todo', 'انجام نشده'], ['doing', 'در حال انجام'], ['done', 'انجام شده']], t ? t.status : 'todo'))));
-    form.append(MP.field('توضیحات', el('textarea', { name: 'description', maxlength: 4000, placeholder: 'جزئیات، لینک‌ها یا معیار انجام…' }, t ? t.description : '')));
-    if (!t) form.append(MP.field('چک‌لیست (هر خط یک مورد)', el('textarea', { name: 'checklist', rows: 3, placeholder: 'اختیاری' })));
+    var st = MP.select('status', [['todo', 'انجام نشده'], ['doing', 'در حال انجام'], ['done', 'انجام شده']], t ? t.status : 'todo');
+    if (t) adv.append(MP.field('وضعیت', st)); else { st.hidden = true; adv.append(st); }
+    adv.append(MP.field('توضیحات', el('textarea', { name: 'description', maxlength: 4000, rows: 3, placeholder: 'جزئیات، لینک‌ها یا معیار انجام…' }, t ? t.description : '')));
+    form.append(adv);
+    if (!t) items.append(itemRow(''));
     form.append(MP.actions(t ? 'ذخیره تغییرات' : 'ثبت تسک', t ? el('button', { type: 'button', class: 'btn btn-danger', text: 'آرشیو', onclick: function () { MP.deleteTask(t); } }) : null));
     form.onsubmit = function (e) {
       e.preventDefault();
@@ -223,7 +260,7 @@
       if (!body.title) { f.title.setCustomValidity('عنوان تسک را وارد کنید'); f.title.reportValidity(); return; }
       if (!t) {
         body.recurrence = f.recurrence.value; body.recur_until = f.recur_until.value;
-        body.checklist = f.checklist.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+        body.checklist = $$('.tf-item input', form).map(function (x) { return x.value.trim(); }).filter(Boolean);
         if (S.manager) { body.user_ids = MP.checked(form, 'assignees'); if (!body.user_ids.length) { MP.toast('حداقل یک نفر را انتخاب کنید', { error: true }); return; } }
       } else if (S.manager) body.user_id = +f.user_id.value;
       MP.busy(form, true);
@@ -242,6 +279,7 @@
     };
     form.elements.title.oninput = function () { form.elements.title.setCustomValidity(''); };
     MP.dialog.open(t ? 'ویرایش تسک' : (opts.title || 'تسک جدید'), form, { wide: true });
+    setTimeout(function () { if (!t) form.elements.title.focus(); }, 60);
   };
 
   /* ------------------------------------------------------------ Batch tasks by voice (supervisors) */
