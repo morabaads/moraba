@@ -304,6 +304,11 @@ class MP_Invoices {
 		return is_array( $d ) ? $d : null;
 	}
 
+	/** A pro-forma already paid online (it points at the invoice made from it). */
+	private static function converted( $x ) {
+		return 0 === strpos( (string) $x->pay_ref, 'INV:' );
+	}
+
 	/** Sends the client to the gateway; returns an error message when it could not start. */
 	private static function start_payment( $x ) {
 		global $wpdb;
@@ -362,6 +367,16 @@ class MP_Invoices {
 				$ok  = $d && isset( $d['data']['code'] ) && in_array( (int) $d['data']['code'], array( 100, 101 ), true );
 				$ref = $ok && isset( $d['data']['ref_id'] ) ? (string) $d['data']['ref_id'] : '';
 			}
+		}
+		if ( $ok && 'proforma' === $x->kind && ! self::converted( $x ) ) {
+			global $wpdb;
+			$row = (array) $x;
+			unset( $row['id'], $row['ledger_id'], $row['paid_at'], $row['archived_at'] );
+			$row = array_merge( $row, array( 'kind' => 'invoice', 'number' => self::next_number( 'invoice' ), 'status' => 'sent', 'issue_date' => MP_Util::today(), 'token' => wp_generate_password( 32, false, false ), 'created_at' => MP_Util::now(), 'updated_at' => MP_Util::now(), 'note' => trim( $x->note . "\nبر اساس پیش‌فاکتور " . $x->number ) ) );
+			$wpdb->insert( self::t(), $row );
+			$inv = self::get( (int) $wpdb->insert_id );
+			$wpdb->update( self::t(), array( 'status' => 'accepted', 'pay_ref' => 'INV:' . $inv->id ), array( 'id' => $x->id ) );
+			$x = $inv; // the paid document is the new invoice
 		}
 		if ( $ok && 'paid' !== $x->status ) {
 			self::mark_paid( $x, $gw, $ref );
@@ -532,7 +547,8 @@ class MP_Invoices {
 			wp_safe_redirect( self::url( $token ) );
 			exit;
 		}
-		$payable = 'invoice' === $x->kind && ! in_array( $x->status, array( 'paid', 'cancelled' ), true );
+		// Invoices, and pro-formas too (paying one accepts it and turns it into a paid invoice).
+		$payable = ! in_array( $x->status, array( 'paid', 'cancelled' ), true ) && ( 'invoice' === $x->kind || ! self::converted( $x ) );
 		$gw      = self::gateway();
 		$pay_err = '';
 		if ( isset( $_GET['mp_cb'] ) && isset( self::GATEWAYS[ $_GET['mp_cb'] ] ) ) { // phpcs:ignore
@@ -608,7 +624,8 @@ footer{text-align:center;color:var(--muted);font-size:12px;margin-top:22px}
 <div class="pay">
 <?php if ( 'proforma' === $x->kind && in_array( $x->status, array( 'draft', 'sent' ), true ) ) : ?>
 <form method="post"><input type="hidden" name="mp_accept" value="1"><button class="btn btn-ok" type="submit">تأیید پیش‌فاکتور</button></form>
-<?php elseif ( $payable && $gw ) : ?>
+<?php endif; ?>
+<?php if ( $payable && $gw ) : ?>
 <form method="post"><input type="hidden" name="mp_pay" value="1"><button class="btn btn-pay" type="submit">پرداخت آنلاین <?php echo esc_html( $fa( $p['total'] ) ); ?> تومان<small class="gw">درگاه امن <?php echo esc_html( self::GATEWAYS[ $gw ] ); ?></small></button></form>
 <?php elseif ( 'invoice' === $x->kind && $pay ) : ?>
 <a class="btn btn-pay" href="<?php echo esc_url( $pay ); ?>" target="_blank" rel="noopener">پرداخت <?php echo esc_html( $fa( $p['total'] ) ); ?> تومان</a>

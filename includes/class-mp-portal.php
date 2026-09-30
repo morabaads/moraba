@@ -310,7 +310,7 @@ class MP_Portal {
 		if ( class_exists( 'MP_Invoices' ) ) {
 			foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'invoices' ) . " WHERE project_id = %d AND archived_at IS NULL AND status <> 'draft' ORDER BY id DESC", $pid ) ) as $inv ) {
 				$pay               = MP_Invoices::payload( $inv );
-				$out['invoices'][] = array( 'kind' => $pay['kind'], 'number' => $pay['number'], 'title' => $pay['title'], 'total' => $pay['total'], 'status' => $pay['status'], 'date' => $pay['issue_date'], 'url' => $pay['url'] );
+				$out['invoices'][] = array( 'kind' => $pay['kind'], 'number' => $pay['number'], 'title' => $pay['title'], 'total' => $pay['total'], 'status' => $pay['status'], 'date' => $pay['issue_date'], 'url' => $pay['url'], 'pay' => MP_Invoices::gateway() && ! in_array( $pay['status'], array( 'paid', 'cancelled' ), true ) && ( 'invoice' === $pay['kind'] || 0 !== strpos( $pay['pay_ref'], 'INV:' ) ) );
 			}
 		}
 		$out['contracts'] = MP_Contracts::for_portal( $pid );

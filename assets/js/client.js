@@ -223,13 +223,19 @@
         h('span', { class: 'btn btn-secondary btn-sm', html: icon('download') + ' دانلود' })]);
     })) : empty('download', 'هنوز فایلی تحویل نشده', null));
   }
+  /** Straight to Zibal / ZarinPal: the invoice page starts the payment and brings the client back to it. */
+  function payNow(x) {
+    var f = h('form', { method: 'post', action: x.url }, [h('input', { type: 'hidden', name: 'mp_pay', value: '1' })]);
+    document.body.append(f); f.submit();
+  }
   function invoices() {
     var pane = $('pane-invoices');
     pane.replaceChildren(data.invoices.length ? h('div', { class: 'cp-card cp-list' }, data.invoices.map(function (x) {
       return h('a', { class: 'cp-row', href: x.url, target: '_blank', rel: 'noopener' }, [
         h('span', { class: 'cp-row-ico', html: icon('file') }),
         h('div', { class: 'cp-row-copy' }, [h('strong', { text: (x.kind === 'proforma' ? 'پیش‌فاکتور ' : 'فاکتور ') + fa(x.number) + (x.title ? ' — ' + x.title : '') }), h('small', { text: jal(x.date) })]),
-        h('div', { class: 'cp-row-end' }, [h('b', { text: money(x.total) }), h('span', { class: 'chip ' + (x.status === 'paid' ? 'ok' : x.status === 'cancelled' ? 'danger' : 'brand'), text: x.kind === 'proforma' && x.status === 'sent' ? 'منتظر تأیید' : IST[x.status] || '' })])]);
+        h('div', { class: 'cp-row-end' }, [h('b', { text: money(x.total) }), h('span', { class: 'chip ' + (x.status === 'paid' ? 'ok' : x.status === 'cancelled' ? 'danger' : 'brand'), text: x.kind === 'proforma' && x.status === 'sent' ? 'منتظر تأیید' : IST[x.status] || '' }),
+          x.pay ? h('button', { type: 'button', class: 'btn btn-primary btn-sm', text: 'پرداخت آنلاین', onclick: function (e) { e.preventDefault(); e.stopPropagation(); payNow(x); } }) : null])]);
     })) : empty('file', 'فاکتوری صادر نشده', null));
   }
 
@@ -252,7 +258,7 @@
   function sysCard(m) {
     var t = m.meta && m.meta.t, act = null;
     if (t === 'contract' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: /امضا شد/.test(m.body) ? 'دیدن قرارداد' : 'مطالعه و امضا' });
-    else if (t === 'invoice' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: 'مشاهده ' + (m.meta.k === 'proforma' || /^پیش‌فاکتور/.test(m.body) ? 'پیش‌فاکتور' : 'فاکتور') });
+    else if (t === 'invoice' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: (/صادر شد/.test(m.body) ? 'مشاهده و پرداخت ' : 'مشاهده ') + (m.meta.k === 'proforma' || /^پیش‌فاکتور/.test(m.body) ? 'پیش‌فاکتور' : 'فاکتور') });
     else if ((t === 'design' || t === 'file') && data && data.project) act = h('button', { type: 'button', class: 'sys-link', text: t === 'design' ? 'دیدن طرح' : 'دانلود فایل', onclick: function () {
       var d = t === 'design' && data.designs.filter(function (x) { return x.id === m.meta.id; })[0];
       go(t === 'design' ? 'designs' : 'files'); if (d) review(d);
