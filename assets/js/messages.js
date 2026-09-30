@@ -14,6 +14,7 @@
 
   function channelIcon(c) {
     if (c.type === 'direct') return MP.avatar(MP.user(c.other));
+    if (c.logo) return el('span', { class: 'ci-ico ci-logo' }, el('img', { src: c.logo, alt: '' }));
     return el('span', { class: 'ci-ico' + (c.type === 'client' ? ' client' : c.type === 'group' ? ' group' : ''), html: icon(c.type === 'client' ? 'user' : c.type === 'group' ? 'chat' : 'folder') });
   }
   /*
@@ -97,6 +98,7 @@
       if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
     }
     if (c.type === 'group' && c.can_manage) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'اعضا', onclick: function () { groupForm(c); } }));
+    if (c.can_logo && c.type !== 'client') tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('image') + 'لوگو', onclick: function () { groupLogo(c); } }));
     if (c.can_delete) tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'آرشیو گروه', title: 'آرشیو گروه', html: icon('folder'), onclick: function () { deleteClient(c); } }));
     if (c.type === 'direct') tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'پروفایل', html: icon('user'), onclick: function () { MP.openProfile(c.other); } }));
     $('#composer').hidden = false;
@@ -505,6 +507,23 @@
       MP.api('channels/' + c.id, { method: 'DELETE' }).then(function () { current = 0; layout.classList.remove('open'); MP.toast('گروه آرشیو شد'); return MP.loadChannels(); }).then(function () { open({}); }).catch(MP.soft);
     });
   }
+  /* Project / team group logo: shown in the chat list instead of the generic icon. */
+  function groupLogo(c) {
+    var file = el('input', { type: 'file', accept: 'image/*', hidden: true });
+    var prev = el('div', { class: 'cs-logo cs-hero-logo gl-prev' }, c.logo ? el('img', { src: c.logo, alt: '' }) : el('span', { text: (c.title || '؟').slice(0, 2) }));
+    prev.onclick = function () { file.click(); };
+    function save(fid) { return MP.api('channels/' + c.id + '/logo', { method: 'POST', body: { logo_file_id: fid } }).then(function () { MP.toast(fid ? 'لوگو ذخیره شد' : 'لوگو حذف شد'); MP.dialog.close(); return MP.loadChannels(); }).catch(MP.soft); }
+    file.onchange = function () {
+      var f = file.files[0]; if (!f) return;
+      prev.classList.add('loading');
+      MP.upload('files', f, { context: 'client_logo', context_id: c.id }).then(function (up) { return save(up.id); }).catch(function (e) { prev.classList.remove('loading'); MP.soft(e); });
+    };
+    MP.dialog.open('لوگوی گروه «' + c.title + '»', el('div', { class: 'gl-box' }, prev, file,
+      el('small', { class: 'cs-hint', text: 'روی مربع بزنید و یک تصویر (ترجیحاً مربعی) انتخاب کنید؛ در فهرست گفت‌وگوها به‌جای آیکون نمایش داده می‌شود.' }),
+      el('div', { class: 'gl-actions' }, el('button', { type: 'button', class: 'btn btn-primary', html: icon('image') + 'انتخاب تصویر', onclick: function () { file.click(); } }),
+        c.logo ? el('button', { type: 'button', class: 'btn btn-secondary', text: 'حذف لوگو', onclick: function () { save(0); } }) : null)));
+  }
+
   /* Client group: its client people (mobile login), the SMS-code requirement and the logo. */
   function esc(t) { return String(t || '').replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
   function clientSettings(c) {

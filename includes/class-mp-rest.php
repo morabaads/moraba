@@ -29,6 +29,7 @@ class MP_Rest {
 			array( "tasks/$id/restore", 'POST', 'restore_task', $auth ),
 			array( "channels/$id/restore", 'POST', 'restore_channel', $auth ),
 			array( "channels/$id/members", 'POST', 'set_channel_members', $auth ),
+			array( "channels/$id/logo", 'POST', 'set_channel_logo', $auth ),
 
 			array( 'goals', 'GET', 'get_goal', $auth ),
 			array( 'goals', 'POST', 'save_goal', $auth ),
@@ -1130,6 +1131,8 @@ class MP_Rest {
 			'can_manage'  => 'group' === $ch->type && ( (int) $ch->created_by === $uid || MP_Util::is_manager() ),
 			'member_ids'  => 'group' === $ch->type ? self::channel_members( $ch ) : array(),
 			'archived'    => ! empty( $ch->archived_at ),
+			'logo'        => MP_Client::logo_url( $ch ),
+			'can_logo'    => 'direct' !== $ch->type && ( MP_Util::is_manager() || (int) $ch->created_by === $uid ),
 		);
 	}
 
@@ -1311,6 +1314,24 @@ class MP_Rest {
 			$wpdb->update( self::t( 'channels' ), array( 'title' => $title ), array( 'id' => $ch->id ) );
 		}
 		self::write_members( (int) $ch->id, is_array( $r['members'] ) ? $r['members'] : array(), $title );
+		return self::channel_payload( self::channel_for( $ch->id, self::uid() ), self::uid() );
+	}
+
+	/** POST channels/{id}/logo {logo_file_id} — a logo for a project, team or client group (0 removes it). */
+	public static function set_channel_logo( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch = self::channel_for( (int) $r['id'], self::uid() );
+		if ( ! $ch || 'direct' === $ch->type || ( (int) $ch->created_by !== self::uid() && ! MP_Util::is_manager() ) ) {
+			return self::err( 'اجازه تغییر لوگوی این گروه را ندارید.', 403 );
+		}
+		$fid = (int) $r['logo_file_id'];
+		if ( $fid ) {
+			$file = MP_Files::get( $fid );
+			if ( ! $file || 'client_logo' !== $file->context || 0 !== strpos( $file->mime, 'image/' ) ) {
+				return self::err( 'فقط تصویر مجاز است.' );
+			}
+		}
+		$wpdb->update( self::t( 'channels' ), array( 'logo_file_id' => $fid ), array( 'id' => $ch->id ) );
 		return self::channel_payload( self::channel_for( $ch->id, self::uid() ), self::uid() );
 	}
 
