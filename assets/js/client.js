@@ -71,6 +71,8 @@
       countdown(r.wait || 60);
     }).catch(function (e) { busy(f, false, 'x'); loginError(e.message); });
   }
+  // Digits shown in Persian as they are typed (sent in Latin).
+  $('cp-step-mobile').elements.mobile.addEventListener('input', function () { this.value = fa(latin(this.value).replace(/[^\d ]/g, '')); });
   $('cp-step-mobile').onsubmit = function (e) { e.preventDefault(); requestCode(this.elements.mobile.value); };
   $('cp-step-code').onsubmit = function (e) {
     e.preventDefault(); loginError('');

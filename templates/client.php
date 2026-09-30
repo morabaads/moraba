@@ -30,7 +30,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 		<h1 id="cp-login-title">ورود به پرتال پروژه</h1>
 		<p id="cp-login-sub">شماره موبایلی را که به تیم مربع داده‌اید وارد کنید تا کد ورود پیامک شود.</p>
 		<form id="cp-step-mobile" class="cp-form">
-			<label class="cp-field"><span>شماره موبایل</span><input name="mobile" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="0912 123 4567" required></label>
+			<label class="cp-field"><span>شماره موبایل</span><input name="mobile" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="۰۹۱۲ ۱۲۳ ۴۵۶۷" required></label>
 			<button class="btn btn-primary btn-block" type="submit">دریافت کد ورود</button>
 		</form>
 		<form id="cp-step-code" class="cp-form" hidden>
