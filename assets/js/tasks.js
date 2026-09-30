@@ -192,7 +192,7 @@
     }));
     /* ---- The essentials: what, who, when, checklist. Everything else sits under «تنظیمات بیشتر». */
     form.classList.add('tf');
-    form.append(el('input', { name: 'title', class: 'tf-title', required: true, maxlength: 200, value: t ? t.title : (opts.taskTitle || ''), placeholder: 'چه کاری باید انجام شود؟', autocomplete: 'off', 'aria-label': 'عنوان تسک' }));
+    form.append(el('label', { class: 'tf-titlebox' }, el('span', { class: 'tf-label', html: icon('tasks') + 'عنوان تسک' + '<em>ضروری</em>' }), el('input', { name: 'title', class: 'tf-title', required: true, maxlength: 200, value: t ? t.title : (opts.taskTitle || ''), placeholder: 'چه کاری باید انجام شود؟', autocomplete: 'off', 'aria-label': 'عنوان تسک' })));
     if (S.manager) {
       if (t) form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('user') + 'مسئول انجام' }), el('div', { class: 'tf-people' }, MP.peoplePicker('assignees', [t.user_id])),
         el('small', { class: 'tf-note', html: icon('plus') + ' با انتخاب نفرات بیشتر، یک نسخه از همین تسک برای هر کدام ساخته می‌شود.' })));
