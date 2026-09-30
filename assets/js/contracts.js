@@ -239,14 +239,43 @@
     function extras() {
       var wrap = el('div', { class: 'ct-extras' });
       if (settings.f_clauses && !locked && (settings.clauses || []).length) {
-        wrap.append(el('div', { class: 'ct-block' }, el('strong', { text: 'بندهای آماده' }), el('small', { class: 'muted', text: 'با یک کلیک به انتهای متن اضافه می‌شود.' }),
-          el('div', { class: 'ct-clauses' }, settings.clauses.map(function (cl) {
-            return el('button', { type: 'button', class: 'chip-btn', html: icon('plus') + ' ' + esc(cl.title), onclick: function () {
-              var n = (body.match(/^## /gm) || []).length + 1;
-              body = body.replace(/\s+$/, '') + '\n\n## ماده ' + J.faDigits(n) + ': ' + cl.title + '\n' + cl.body + '\n';
-              text.value = body; fields(); paint(); MP.toast('بند «' + cl.title + '» اضافه شد');
-            } });
-          }))));
+        /* Ready-made clauses: tap to add (at a chosen place) or to take out again; articles renumber. */
+        var clauseBox = el('div', { class: 'ct-block' });
+        var split = function () { // [intro, article, article, …] — each article starts with «## »
+          var parts = body.split(/\n(?=## )/); return parts;
+        };
+        var titleOf = function (part) { var m = /^## (?:ماده\s*[\d۰-۹]+\s*[:：-]\s*)?(.+)/.exec(part); return m ? m[1].trim() : ''; };
+        var renumber = function (parts) {
+          var n = 0;
+          return parts.map(function (part) {
+            if (!/^## /.test(part)) return part;
+            n++;
+            return /^## ماده\s*[\d۰-۹]+/.test(part) ? part.replace(/^## ماده\s*[\d۰-۹]+/, '## ماده ' + J.faDigits(n)) : part;
+          });
+        };
+        var apply = function (parts, msg) { body = renumber(parts).join('\n').replace(/\n{3,}/g, '\n\n'); text.value = body; fields(); paint(); drawClauses(); MP.toast(msg); };
+        var drawClauses = function () {
+          var parts = split(), heads = parts.map(titleOf);
+          var where = el('select', { class: 'ct-where' }, el('option', { value: 'end', text: 'انتهای قرارداد' }),
+            parts.map(function (part, i) { return /^## /.test(part) ? el('option', { value: i, text: 'بعد از «' + part.split('\n')[0].replace(/^## /, '').slice(0, 40) + '»' }) : null; }));
+          clauseBox.replaceChildren(
+            el('div', { class: 'ct-clause-head' }, el('strong', { text: 'بندهای آماده' }), el('label', { class: 'ct-where-l' }, el('span', { text: 'محل افزودن:' }), where)),
+            el('small', { class: 'muted', text: 'بند اضافه‌شده با تیک مشخص است؛ دوباره بزنید تا حذف شود. شماره مواد خودکار مرتب می‌شود.' }),
+            el('div', { class: 'ct-clauses' }, settings.clauses.map(function (cl) {
+              var at = heads.indexOf(cl.title), on = at >= 0;
+              return el('button', { type: 'button', class: 'chip-btn' + (on ? ' on' : ''), html: icon(on ? 'check' : 'plus') + ' ' + esc(cl.title), title: on ? 'حذف از قرارداد' : 'افزودن', onclick: function () {
+                var ps = split();
+                if (on) { ps.splice(at, 1); apply(ps, 'بند «' + cl.title + '» حذف شد'); return; }
+                var block = '## ماده ۰: ' + cl.title + '\n' + cl.body.replace(/\s+$/, '') + '\n';
+                if (where.value === 'end') { ps[ps.length - 1] = ps[ps.length - 1].replace(/\s+$/, '') + '\n'; ps.push(block); }
+                else ps.splice(+where.value + 1, 0, block);
+                apply(ps, 'بند «' + cl.title + '» اضافه شد');
+              } });
+            })));
+        };
+        drawClauses();
+        text.addEventListener('input', function () { clearTimeout(drawClauses.t); drawClauses.t = setTimeout(drawClauses, 400); });
+        wrap.append(clauseBox);
       }
       if (settings.f_expiry && c.status !== 'signed') {
         var dateF = MP.dateField('ct_exp', expires, 'مهلت امضای مشتری', function () { expires = dateF.querySelector('input').value; });

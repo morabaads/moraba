@@ -2235,3 +2235,7 @@ body.cp-chat-full .ios-install{display:none}
 .cs-save{align-self:flex-start}
 .cs-note{margin:0;font-size:12px;line-height:1.9;color:var(--ink-2)}
 @media (max-width:820px){.cs-hero{grid-template-columns:auto minmax(0,1fr)}.cs-linkbox{grid-column:1/-1}.cs-grid{grid-template-columns:1fr}.cs-add{grid-template-columns:1fr 1fr}.cs-add .btn{grid-column:1/-1}}
+.ct-clause-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ct-where-l{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.ct-where{height:34px;border-radius:10px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);font:inherit;font-size:12px;max-width:260px}
+.ct-clauses .chip-btn.on{background:var(--ok-soft);color:var(--ok);border-color:transparent}
