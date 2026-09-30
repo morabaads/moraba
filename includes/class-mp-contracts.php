@@ -19,7 +19,7 @@ class MP_Contracts {
 	const SETTINGS = 'mp_contract_settings';
 	/** Filled by the system from the settings and the contract itself; never asked for. */
 	const SYSTEM_VARS = array( 'نام استودیو', 'نشانی استودیو', 'شماره قرارداد', 'تاریخ قرارداد', 'نام پروژه', 'شماره قرارداد اصلی' );
-	const STATUS   = array( 'draft' => 'پیش‌نویس', 'sent' => 'منتظر امضای مشتری', 'signed' => 'امضاشده', 'cancelled' => 'لغوشده' );
+	const STATUS   = array( 'draft' => 'پیش‌نویس', 'sent' => 'منتظر امضای مشتری', 'client_signed' => 'منتظر امضای مجری', 'signed' => 'امضاشده', 'cancelled' => 'لغوشده' );
 
 	public static function register() {
 		$m  = array( 'MP_Rest', 'can_manage' );
@@ -35,6 +35,7 @@ class MP_Contracts {
 			array( "contracts/$id/amend", 'POST', 'amend', $m ),
 			array( "contracts/$id/stage", 'POST', 'issue_stage', $m ),
 			array( "contracts/$id/extend", 'POST', 'extend', $m ),
+			array( "contracts/$id/studio-sign", 'POST', 'studio_sign', $m ),
 			array( 'contracts/settings', 'POST', 'save_settings', $m ),
 			array( 'contract-templates', 'POST', 'save_template', $m ),
 			array( "contract-templates/$id", 'POST', 'save_template', $m ),
@@ -498,6 +499,8 @@ class MP_Contracts {
 			'signer_name'     => $c->signer_name,
 			'signer_mobile'   => $c->signer_mobile,
 			'signers'         => $signers,
+			'studio_signed'   => (bool) $c->studio_sig,
+			'studio_signed_at'=> $c->studio_signed_at,
 			'stages'          => $stages,
 			'views'           => (int) $c->views,
 			'first_viewed_at' => $c->first_viewed_at,
@@ -546,7 +549,7 @@ class MP_Contracts {
 		if ( $id && ! $old ) {
 			return self::err( 'قرارداد پیدا نشد.', 404 );
 		}
-		if ( $old && 'signed' === $old->status ) {
+		if ( $old && in_array( $old->status, array( 'signed', 'client_signed' ), true ) ) {
 			return self::err( 'قرارداد امضاشده قابل ویرایش نیست؛ برای تغییر، یک نسخه تازه بسازید.' );
 		}
 		$body = MP_Util::long_text( $r['body'], 60000 );
@@ -667,7 +670,7 @@ class MP_Contracts {
 			return self::err( 'این موارد هنوز خالی است: ' . implode( '، ', array_slice( $missing, 0, 5 ) ) );
 		}
 		if ( 'draft' === $c->status ) {
-			$wpdb->update( self::t(), array( 'status' => 'sent', 'sent_at' => MP_Util::now(), 'studio_signer' => get_current_user_id() ), array( 'id' => $c->id ) );
+			$wpdb->update( self::t(), array( 'status' => 'sent', 'sent_at' => MP_Util::now() ), array( 'id' => $c->id ) );
 			$c = self::get( $c->id );
 		}
 		$cid = (int) $r['channel_id'];
@@ -693,7 +696,7 @@ class MP_Contracts {
 		if ( ! $c || ! $status ) {
 			return self::err( 'وضعیت معتبر نیست.' );
 		}
-		if ( 'signed' === $c->status ) {
+		if ( in_array( $c->status, array( 'signed', 'client_signed' ), true ) ) {
 			return self::err( 'قرارداد امضاشده را نمی‌توان تغییر داد؛ می‌توانید آرشیوش کنید.' );
 		}
 		$wpdb->update( self::t(), array( 'status' => $status, 'updated_at' => MP_Util::now() ), array( 'id' => $c->id ) );
@@ -1015,7 +1018,7 @@ class MP_Contracts {
 		if ( $done ) {
 			$names = implode( '، ', wp_list_pluck( $list, 'name' ) );
 			$f    += array(
-				'status'        => 'signed',
+				'status'        => $c->studio_sig ? 'signed' : 'client_signed', // both sides must sign
 				'signed_at'     => MP_Util::now(),
 				'signer_name'   => $names,
 				'signer_mobile' => $mobile,
@@ -1037,22 +1040,68 @@ class MP_Contracts {
 			MP_Client::system( 0, (int) $c->project_id, $name . ' قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' را امضا کرد؛ نوبت ' . $n['name'] . ' است.', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
 			return array( 'signed' => true, 'complete' => false );
 		}
-		MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط ' . $f['signer_name'] . ' امضا شد ✓', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
+		MP_Audit::log( 'update', 'contract', $c->id, $c->number . ' امضای مشتری (' . $method . ')' );
+		if ( 'client_signed' === $f['status'] ) {
+			MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط ' . $f['signer_name'] . ' امضا شد؛ منتظر امضای مجری.', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
+			foreach ( MP_Util::panel_users() as $m ) {
+				if ( MP_Util::is_manager( $m ) ) {
+					MP_Notify::send( $m, 'contract', $f['signer_name'] . ' قرارداد ' . $c->number . ' را امضا کرد؛ نوبت امضای مجری است', $c->title, 'contracts', $c->id, true );
+				}
+			}
+			return array( 'signed' => true, 'complete' => false, 'waiting_studio' => true );
+		}
+		self::completed( self::get( $c->id ) );
+		return array( 'signed' => true, 'complete' => true, 'pdf' => (bool) $set['f_pdf'] );
+	}
+
+	/** Both sides have signed: announce, notify, and issue the stages due at signing. */
+	private static function completed( $c ) {
+		MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط هر دو طرف امضا شد ✓', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
 		foreach ( MP_Util::panel_users() as $m ) {
 			if ( MP_Util::is_manager( $m ) ) {
-				MP_Notify::send( $m, 'contract', $f['signer_name'] . ' قرارداد ' . $c->number . ' را امضا کرد', $c->title, 'contracts', $c->id, true );
+				MP_Notify::send( $m, 'contract', 'قرارداد ' . $c->number . ' کامل امضا شد', $c->title, 'contracts', $c->id, true );
 			}
 		}
-		MP_Audit::log( 'update', 'contract', $c->id, $c->number . ' امضای مشتری (' . $method . ')' );
-		// Payment stages due at signing get their invoice right away.
-		if ( $set['f_invoice'] ) {
+		if ( self::settings()['f_invoice'] ) {
 			foreach ( self::stages_of( $c ) as $k => $st ) {
 				if ( 'sign' === $st['on'] ) {
 					self::stage_invoice( self::get( $c->id ), $k );
 				}
 			}
 		}
-		return array( 'signed' => true, 'complete' => true, 'pdf' => (bool) $set['f_pdf'] );
+	}
+
+	/**
+	 * POST contracts/{id}/studio-sign {signature} — the contractor signs (a manager, in the panel or on
+	 * the contract page). Before or after the client; the contract is complete once both have.
+	 */
+	public static function studio_sign( WP_REST_Request $r ) {
+		global $wpdb;
+		$c = self::get( (int) $r['id'] );
+		if ( ! $c || ! in_array( $c->status, array( 'sent', 'client_signed', 'signed' ), true ) ) {
+			return self::err( 'این قرارداد هنوز ارسال نشده یا لغو شده است.' );
+		}
+		if ( $c->studio_sig ) {
+			return self::err( 'مجری قبلاً امضا کرده است.' );
+		}
+		$sig = (string) $r['signature'];
+		if ( 'saved' === $sig ) {
+			$sig = self::settings()['signature'];
+		}
+		if ( ! self::valid_png( $sig ) ) {
+			return self::err( 'امضا را در کادر بکشید.' );
+		}
+		$f = array( 'studio_sig' => $sig, 'studio_signed_at' => MP_Util::now(), 'studio_signer' => get_current_user_id(), 'updated_at' => MP_Util::now() );
+		$complete = 'client_signed' === $c->status;
+		if ( $complete ) {
+			$f['status'] = 'signed';
+		}
+		$wpdb->update( self::t(), $f, array( 'id' => $c->id ) );
+		MP_Audit::log( 'update', 'contract', $c->id, $c->number . ' امضای مجری' );
+		if ( $complete ) {
+			self::completed( self::get( $c->id ) );
+		}
+		return self::payload( self::get( $c->id ) ) + array( 'complete' => $complete, 'pdf' => $complete && self::settings()['f_pdf'] );
 	}
 
 	/** POST contract/{token}/seen {pct} — opened / read this far (not counted for the team). */
@@ -1133,7 +1182,7 @@ class MP_Contracts {
 	public static function for_portal( $pid ) {
 		global $wpdb;
 		$out = array();
-		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t() . " WHERE project_id = %d AND status IN ('sent','signed') AND archived_at IS NULL ORDER BY id DESC", $pid ) ) as $c ) {
+		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t() . " WHERE project_id = %d AND status IN ('sent','client_signed','signed') AND archived_at IS NULL ORDER BY id DESC", $pid ) ) as $c ) {
 			$out[] = array( 'number' => $c->number, 'title' => $c->title, 'status' => $c->status, 'url' => self::url( $c->token ), 'sent_at' => $c->sent_at, 'signed_at' => $c->signed_at, 'signer' => $c->signer_name );
 		}
 		return $out;

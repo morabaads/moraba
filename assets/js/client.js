@@ -244,11 +244,11 @@
   function contracts() {
     var pane = $('pane-contracts'), list = data.contracts || [];
     pane.replaceChildren(list.length ? h('div', { class: 'cp-card cp-list' }, list.map(function (x) {
-      var signed = x.status === 'signed';
+      var signed = x.status === 'signed', waiting = x.status === 'client_signed';
       return h('a', { class: 'cp-row', href: x.url, target: '_blank', rel: 'noopener' }, [
         h('span', { class: 'cp-row-ico', html: icon('edit') }),
         h('div', { class: 'cp-row-copy' }, [h('strong', { text: 'قرارداد ' + fa(x.number) + (x.title ? ' — ' + x.title : '') }), h('small', { text: signed ? 'امضا شده توسط ' + x.signer + ' · ' + jal(x.signed_at) : 'ارسال شده ' + jal(x.sent_at) })]),
-        h('div', { class: 'cp-row-end' }, [signed ? h('span', { class: 'chip ok', text: 'امضاشده ✓' }) : h('span', { class: 'btn btn-primary btn-sm', text: 'مطالعه و امضا' })])]);
+        h('div', { class: 'cp-row-end' }, [signed ? h('span', { class: 'chip ok', text: 'امضاشده ✓' }) : waiting ? h('span', { class: 'chip brand', text: 'منتظر امضای مجری' }) : h('span', { class: 'btn btn-primary btn-sm', text: 'مطالعه و امضا' })])]);
     })) : empty('edit', 'قراردادی ارسال نشده', null));
   }
 

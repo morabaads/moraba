@@ -2,8 +2,8 @@
 (function () {
   'use strict';
   var MP = window.MP, S = MP.S, J = MP.J, el = MP.el, $ = MP.$, fa = MP.fa, icon = MP.icon;
-  var STATUS = { draft: 'پیش‌نویس', sent: 'منتظر امضای مشتری', signed: 'امضاشده', cancelled: 'لغوشده' };
-  var TONE = { draft: '', sent: 'brand', signed: 'ok', cancelled: 'danger' };
+  var STATUS = { draft: 'پیش‌نویس', sent: 'منتظر امضای مشتری', client_signed: 'منتظر امضای مجری', signed: 'امضاشده', cancelled: 'لغوشده' };
+  var TONE = { draft: '', sent: 'brand', client_signed: 'warn', signed: 'ok', cancelled: 'danger' };
   var SYSTEM = ['نام استودیو', 'نشانی استودیو', 'شماره قرارداد', 'تاریخ قرارداد', 'نام پروژه'];
   var list = [], templates = [], settings = {}, tab = 'all', q = '';
 
@@ -111,6 +111,7 @@
       el('footer', { class: 'ct-actions' },
         el('a', { class: 'btn btn-ghost btn-sm', href: c.url, target: '_blank', rel: 'noopener', html: icon('eye') + 'نمایش' }),
         el('a', { class: 'btn btn-ghost btn-sm', href: c.url + (c.url.indexOf('?') < 0 ? '?' : '&') + 'print=1', target: '_blank', rel: 'noopener', html: icon('print') + 'چاپ / PDF' }),
+        !c.studio_signed && ['sent', 'client_signed', 'signed'].indexOf(c.status) >= 0 ? el('a', { class: 'btn btn-primary btn-sm', href: c.url + '#ssign', target: '_blank', rel: 'noopener', html: icon('edit') + 'امضای مجری' }) : null,
         c.status === 'draft' || c.status === 'sent' ? el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('send') + (c.status === 'sent' ? 'ارسال دوباره' : 'ارسال برای امضا'), onclick: function () { sendDialog(c); } }) : null));
   }
 
@@ -118,7 +119,7 @@
 
   function editor(c) {
     c = c || {};
-    var isNew = !c.id, locked = c.status === 'signed' || c.status === 'cancelled';
+    var isNew = !c.id, locked = c.status === 'signed' || c.status === 'client_signed' || c.status === 'cancelled';
     var tpl = templates.filter(function (t) { return t.id === (c.template_id || 0); })[0] || templates[0];
     var body = c.body || tpl.body, values = Object.assign({}, c.vars || {});
     var preview = el('div', { class: 'ct-doc' }), fieldsBox = el('div', { class: 'ct-fields' });

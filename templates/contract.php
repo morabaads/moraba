@@ -4,7 +4,7 @@
  * Variables available: $c, $s, $vars, $studio, $intact, $client, $agent, $otp, $token.
  */
 defined( 'ABSPATH' ) || exit;
-$mp_status = array( 'draft' => 'پیش‌نویس', 'sent' => 'منتظر امضا', 'signed' => 'امضاشده', 'cancelled' => 'لغوشده' );
+$mp_status = array( 'draft' => 'پیش‌نویس', 'sent' => 'منتظر امضا', 'client_signed' => 'منتظر امضای مجری', 'signed' => 'امضاشده', 'cancelled' => 'لغوشده' );
 $mp_date   = function ( $dt ) {
 	return $dt ? MP_Jalali::format( substr( $dt, 0, 10 ) ) . ' ساعت ' . MP_Jalali::digits( substr( $dt, 11, 5 ) ) : '';
 };
@@ -145,8 +145,8 @@ body.has-dock .page{padding-bottom:110px}
 
 <section class="signs">
 <div class="sign"><small>امضای مجری</small><strong><?php echo esc_html( $agent ); ?></strong><span class="role"><?php echo esc_html( $s['studio'] ); ?></span>
-<div class="img"><?php if ( 'draft' !== $c->status && $s['signature'] ) : ?><img src="<?php echo esc_attr( $s['signature'] ); ?>" alt="امضای مجری"><?php else : ?><div class="wait"><?php echo 'draft' === $c->status ? 'پس از ارسال قرارداد' : 'امضای مجری'; ?></div><?php endif; ?></div>
-<div class="when"><?php echo $c->sent_at ? 'تاریخ: ' . esc_html( $mp_date( $c->sent_at ) ) : ''; ?></div></div>
+<div class="img"><?php if ( $c->studio_sig ) : ?><img src="<?php echo esc_attr( $c->studio_sig ); ?>" alt="امضای مجری"><?php else : ?><div class="wait"><?php echo 'draft' === $c->status ? 'پس از ارسال قرارداد' : 'منتظر امضای مجری'; ?></div><?php endif; ?></div>
+<div class="when"><?php echo $c->studio_signed_at ? 'تاریخ: ' . esc_html( $mp_date( $c->studio_signed_at ) ) : ''; ?></div></div>
 <?php foreach ( $signers as $i => $sg ) : ?>
 <div class="sign<?php echo 'sent' === $c->status && $i === $next ? ' next' : ''; ?>"><small>امضای <?php echo esc_html( ! empty( $sg['role'] ) ? $sg['role'] : 'کارفرما' ); ?></small><strong><?php echo esc_html( $sg['name'] ); ?></strong>
 <div class="img"><?php if ( ! empty( $sg['sig'] ) ) : ?><img src="<?php echo esc_attr( $sg['sig'] ); ?>" alt="امضا"><?php else : ?><div class="wait"><?php echo 'sent' === $c->status && $i === $next ? 'نوبت امضا' : 'منتظر امضا'; ?></div><?php endif; ?></div>
@@ -156,8 +156,9 @@ body.has-dock .page{padding-bottom:110px}
 <?php if ( 'signed' === $c->status ) : ?>
 <div class="cert<?php echo $intact ? '' : ' bad'; ?>">
 <b><?php echo $intact ? '✓ امضای الکترونیکی معتبر' : '⚠ متن قرارداد پس از امضا تغییر کرده است'; ?></b><br>
+<?php if ( $c->studio_signed_at ) : ?>مجری: <?php echo esc_html( $agent . ' (' . $s['studio'] . ')' ); ?> · <?php echo esc_html( $mp_date( $c->studio_signed_at ) ); ?><br><?php endif; ?>
 <?php foreach ( $signers as $sg ) : ?>
-<?php echo esc_html( $sg['name'] ); ?><?php echo ! empty( $sg['mobile'] ) && 'otp' === ( isset( $sg['method'] ) ? $sg['method'] : '' ) ? ' · تأیید با کد پیامکی به ' . esc_html( MP_Jalali::digits( substr( $sg['mobile'], 0, 4 ) . '•••' . substr( $sg['mobile'], -4 ) ) ) : ' · امضای دستی'; ?><?php echo ! empty( $sg['signed_at'] ) ? ' · ' . esc_html( $mp_date( $sg['signed_at'] ) ) : ''; ?><?php echo ! empty( $sg['ip'] ) ? ' · IP ' . esc_html( $sg['ip'] ) : ''; ?><br>
+کارفرما: <?php echo esc_html( $sg['name'] ); ?><?php echo ! empty( $sg['mobile'] ) && 'otp' === ( isset( $sg['method'] ) ? $sg['method'] : '' ) ? ' · تأیید با کد پیامکی به ' . esc_html( MP_Jalali::digits( substr( $sg['mobile'], 0, 4 ) . '•••' . substr( $sg['mobile'], -4 ) ) ) : ' · امضای دستی'; ?><?php echo ! empty( $sg['signed_at'] ) ? ' · ' . esc_html( $mp_date( $sg['signed_at'] ) ) : ''; ?><?php echo ! empty( $sg['ip'] ) ? ' · IP ' . esc_html( $sg['ip'] ) : ''; ?><br>
 <?php endforeach; ?>
 اثر انگشت سند (SHA-256): <code><?php echo esc_html( strtoupper( implode( ' ', str_split( substr( $c->doc_hash, 0, 32 ), 4 ) ) ) ); ?></code>
 </div>
@@ -166,7 +167,21 @@ body.has-dock .page{padding-bottom:110px}
 </article></div>
 
 <?php $mp_sg = $next >= 0 ? $signers[ $next ] : null; ?>
-<?php if ( 'sent' === $c->status ) : ?>
+<?php if ( 'client_signed' === $c->status && ! $team ) : ?>
+<div class="signbox noprint"><div class="dock"><div><b>امضای شما ثبت شد ✓</b><small>قرارداد پس از امضای <?php echo esc_html( $s['studio'] ); ?> نهایی می‌شود؛ خبرش همین‌جا و در گفت‌وگو می‌آید.</small></div></div></div>
+<?php endif; ?>
+<?php if ( $team && ! $c->studio_sig && in_array( $c->status, array( 'sent', 'client_signed', 'signed' ), true ) ) : ?>
+<div class="signbox noprint" id="ssign">
+<div class="dock"><div><b><?php echo 'client_signed' === $c->status ? 'کارفرما امضا کرد؛ نوبت امضای مجری است' : 'امضای مجری'; ?></b><small>امضای شما به‌عنوان <?php echo esc_html( $agent ); ?>؛ قرارداد وقتی نهایی می‌شود که هر دو طرف امضا کرده باشند.</small></div><button class="btn btn-a" type="button" id="s-open">امضای مجری</button></div>
+<div class="panel" id="s-panel"><button class="x" type="button" id="s-close" aria-label="بستن">×</button>
+<h2>امضای مجری</h2><p class="sub"><?php echo esc_html( $agent . ' · ' . $s['studio'] ); ?></p>
+<div class="field"><span>امضا</span><div class="pad"><canvas id="s-pad"></canvas><div class="hint" id="s-hint">امضای خود را اینجا بکشید</div><button class="btn btn-l" type="button" id="s-clear">پاک کردن</button></div></div>
+<?php if ( $s['signature'] ) : ?><button class="btn btn-l" type="button" id="s-saved" style="width:100%;margin-bottom:8px">امضا با امضای ذخیره‌شده مجری</button><?php endif; ?>
+<button class="btn btn-a" type="button" id="s-submit" style="width:100%;padding:14px">ثبت امضای مجری</button>
+<div class="msg" id="s-msg" role="alert"></div>
+</div></div>
+<?php endif; ?>
+<?php if ( 'sent' === $c->status && ! $team ) : ?>
 <div class="signbox noprint" id="sign">
 <?php if ( $expired ) : ?>
 <div class="expired">مهلت امضای این قرارداد در <?php echo esc_html( MP_Jalali::format( $c->expires_at ) ); ?> تمام شده است؛ برای تمدید با <?php echo esc_html( $s['studio'] ); ?> تماس بگیرید.</div>
@@ -232,6 +247,32 @@ function archive(){return makePdf().then(function(p){return post('/pdf',{pdf:p.o
 var ab=document.getElementById('k-archive');
 if(ab)ab.onclick=function(){ab.disabled=true;archive().then(function(){location.reload();}).catch(function(e){ab.disabled=false;alert(e.message);});};
 
+/* ---- the contractor's signature (managers only) */
+var sbox=document.getElementById('ssign');
+if(sbox){
+  document.body.classList.add('has-dock');
+  var scv=document.getElementById('s-pad'),sctx=scv.getContext('2d'),sdrawn=false,sdown=false,slast=null;
+  function ssize(){var r=scv.getBoundingClientRect(),d=window.devicePixelRatio||1;scv.width=r.width*d;scv.height=r.height*d;sctx.scale(d,d);sctx.lineWidth=2.4;sctx.lineCap='round';sctx.lineJoin='round';sctx.strokeStyle='#1a2a6c';}
+  document.getElementById('s-open').onclick=function(){sbox.classList.add('open');setTimeout(ssize,30);};
+  document.getElementById('s-close').onclick=function(){sbox.classList.remove('open');};
+  function spos(e){var r=scv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
+  scv.addEventListener('pointerdown',function(e){sdown=true;slast=spos(e);scv.setPointerCapture(e.pointerId);document.getElementById('s-hint').hidden=true;});
+  scv.addEventListener('pointermove',function(e){if(!sdown)return;var q=spos(e);sctx.beginPath();sctx.moveTo(slast.x,slast.y);sctx.lineTo(q.x,q.y);sctx.stroke();slast=q;sdrawn=true;});
+  ['pointerup','pointercancel','pointerleave'].forEach(function(t){scv.addEventListener(t,function(){sdown=false;});});
+  document.getElementById('s-clear').onclick=function(){sctx.clearRect(0,0,scv.width,scv.height);sdrawn=false;document.getElementById('s-hint').hidden=false;};
+  var smsg=document.getElementById('s-msg');
+  function studio(sig){
+    var h={'Content-Type':'application/json','X-WP-Nonce':NONCE};
+    return fetch(<?php echo wp_json_encode( esc_url_raw( rest_url( MP_Rest::NS . '/contracts/' . (int) $c->id . '/studio-sign' ) ) ); ?>,{method:'POST',credentials:'same-origin',headers:h,body:JSON.stringify({signature:sig})}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.message||'خطا');return d;});})
+      .then(function(d){smsg.textContent=d.complete?'قرارداد نهایی شد ✓':'امضای مجری ثبت شد ✓';smsg.className='msg ok';
+        var after=d.pdf?fetch(location.href,{credentials:'same-origin'}).then(function(r){return r.text();}).then(function(h2){var doc=new DOMParser().parseFromString(h2,'text/html');document.getElementById('sheet').replaceWith(doc.getElementById('sheet'));return archive();}).catch(function(){}):Promise.resolve();
+        after.then(function(){setTimeout(function(){location.reload();},700);});})
+      .catch(function(e){smsg.textContent=e.message;smsg.className='msg bad';});
+  }
+  document.getElementById('s-submit').onclick=function(){if(!sdrawn){smsg.textContent='امضا را در کادر بکشید.';smsg.className='msg bad';return;}studio(scv.toDataURL('image/png'));};
+  var ss=document.getElementById('s-saved');if(ss)ss.onclick=function(){studio('saved');};
+}
+
 <?php if ( $s['f_track'] && 'draft' !== $c->status ) : ?>
 /* ---- how far it was read */
 var seenMax=0,sentAt=0;
@@ -265,7 +306,7 @@ document.getElementById('k-submit').onclick=function(){
   if(!name)return say('نام خود را بنویسید.');if(!drawn)return say('امضای خود را در کادر بکشید.');if(ci&&!card)return say('تصویر کارت ملی را بارگذاری کنید.');if(!agree)return say('پذیرش مفاد قرارداد را تأیید کنید.');if(OTP&&code.length<5)return say('کد تأیید پیامکی را وارد کنید.');
   var b=this;b.disabled=true;b.textContent='در حال ثبت…';
   post('/sign',{name:name,agree:true,code:code,signature:cv.toDataURL('image/png'),id_card:card}).then(function(d){
-    document.getElementById('panel').innerHTML='<div class="done"><div class="ico">✓</div><h2>'+(d.complete?'قرارداد امضا شد':'امضای شما ثبت شد')+'</h2><p class="sub">'+(d.complete?'نسخه نهایی با همه امضاها آماده است.':'امضاکننده بعدی با پیامک خبردار شد.')+'</p></div>';
+    document.getElementById('panel').innerHTML='<div class="done"><div class="ico">✓</div><h2>'+(d.complete?'قرارداد امضا شد':'امضای شما ثبت شد')+'</h2><p class="sub">'+(d.complete?'نسخه نهایی با همه امضاها آماده است.':d.waiting_studio?'قرارداد پس از امضای مجری نهایی می‌شود.':'امضاکننده بعدی با پیامک خبردار شد.')+'</p></div>';
     // The signed PDF is made here, once, and kept in the project.
     var after=d.complete&&d.pdf?new Promise(function(r){setTimeout(r,300);}).then(function(){location.hash='';return fetch(location.href,{credentials:'same-origin'}).then(function(r){return r.text();}).then(function(h){var doc=new DOMParser().parseFromString(h,'text/html');document.getElementById('sheet').replaceWith(doc.getElementById('sheet'));return archive();});}).catch(function(){}):Promise.resolve();
     after.then(function(){setTimeout(function(){location.reload()},800);});
