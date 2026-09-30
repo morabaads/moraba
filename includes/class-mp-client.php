@@ -136,12 +136,21 @@ class MP_Client {
 		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'client_contacts' ) . ' WHERE id = %d AND channel_id = %d', (int) $p[0], $ch->id ) );
 	}
 
+	/**
+	 * Every client link needs a mobile + one-time code login whenever the SMS service works; only
+	 * numbers saved for that group get in. Without SMS nobody could log in, so the old per-group
+	 * switch decides then.
+	 */
+	public static function login_required( $ch ) {
+		return MP_Auth::otp_enabled() || ! empty( $ch->auth_required );
+	}
+
 	/** WP_Error when the group needs a login and there is none; null when the client may continue. */
 	public static function gate( $ch ) {
 		if ( ! $ch ) {
 			return self::err( 'این لینک معتبر نیست.', 404 );
 		}
-		if ( ! empty( $ch->auth_required ) && ! self::session( $ch ) ) {
+		if ( self::login_required( $ch ) && ! self::session( $ch ) ) {
 			return self::err( 'برای دیدن این صفحه وارد شوید.', 401, 'mp_login_required' );
 		}
 		return null;
@@ -166,7 +175,7 @@ class MP_Client {
 			'title'         => $ch->title,
 			'client'        => $ch->client_name,
 			'logo'          => self::logo_url( $ch ),
-			'auth_required' => ! empty( $ch->auth_required ),
+			'auth_required' => self::login_required( $ch ),
 			'logged_in'     => (bool) $s,
 			'name'          => $s ? $s->name : '',
 			'sms'           => MP_Auth::otp_enabled(),
@@ -272,7 +281,7 @@ class MP_Client {
 			'logo_file_id'  => (int) $ch->logo_file_id,
 			'project_id'    => (int) $ch->project_id,
 			'project'       => $ch->project_id ? (string) $GLOBALS['wpdb']->get_var( $GLOBALS['wpdb']->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $ch->project_id ) ) : '',
-			'auth_required' => ! empty( $ch->auth_required ),
+			'auth_required' => self::login_required( $ch ),
 			'sms'           => MP_Auth::otp_enabled(),
 			'contacts'      => self::contacts( $ch->id ),
 		);
@@ -413,7 +422,7 @@ class MP_Client {
 			'logo'       => self::logo_url( $ch ),
 			'url'        => self::url( $ch->token ),
 			'token'      => $ch->token,
-			'auth'       => ! empty( $ch->auth_required ),
+			'auth'       => self::login_required( $ch ),
 			'contacts'   => self::contacts( $ch->id ),
 			'unread'     => $unread,
 			'waiting'    => (bool) ( $last && ! $last->user_id && '' === (string) $last->kind ), // last word is the client's

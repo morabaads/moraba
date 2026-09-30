@@ -564,8 +564,8 @@
         el('section', { class: 'tio-block' }, el('h3', { text: 'افراد مشتری' }), list, add,
           d.sms ? el('label', { class: 'check', style: { marginTop: '8px' } }, sms, el('span', { text: 'لینک پرتال برای نفر جدید پیامک شود' })) : el('p', { class: 'hint', text: 'برای ورود با کد و پیامک لینک، سرویس پیامک را در تنظیمات افزونه فعال کنید.' })),
         el('section', { class: 'tio-block' }, el('h3', { text: 'امنیت' }),
-          el('label', { class: 'check' }, auth, el('span', { text: 'ورود با شماره موبایل و کد پیامک الزامی باشد' })),
-          el('p', { class: 'hint', text: 'روشن باشد، فقط شماره‌های بالا با کد ۵ رقمی وارد پرتال می‌شوند (۳۰ روز وارد می‌مانند) و نام هر پیام خودکار ثبت می‌شود. خاموش باشد، هر کس لینک را داشته باشد می‌بیند.' })),
+          d.sms ? el('p', { class: 'hint', text: '🔒 ورود به این لینک همیشه با شماره موبایل و کد یک‌بارمصرف پیامکی است؛ فقط شماره‌هایی که بالا ثبت کرده‌اید وارد می‌شوند (۳۰ روز وارد می‌مانند). بدون ثبت شماره، کسی نمی‌تواند وارد شود.' })
+            : el('div', null, el('label', { class: 'check' }, auth, el('span', { text: 'ورود با شماره موبایل و کد پیامک الزامی باشد' })), el('p', { class: 'hint', text: 'سرویس پیامک فعال نیست؛ تا فعال نشود ورود با کد ممکن نیست و لینک بدون ورود باز می‌شود.' }))),
         el('section', { class: 'tio-block' }, el('h3', { text: 'لینک پرتال' }),
           el('div', { class: 'cs-link' }, el('input', { class: 'input', value: d.url, readonly: true, dir: 'ltr', onfocus: function (e) { e.target.select(); } }),
             el('button', { type: 'button', class: 'btn btn-primary', text: 'کپی', onclick: function () { (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject()).then(function () { MP.toast('لینک کپی شد'); }, function () { MP.toast('لینک را انتخاب و کپی کنید'); }); } }))));
