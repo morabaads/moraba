@@ -220,12 +220,11 @@ class MP_Rest {
 
 	/** True when the current user may change everything on the task, not only its status. */
 	public static function can_edit_task( $task ) {
-		$mine = (int) $task->user_id === self::uid();
-		// A supervisor who is also an employee gets their own assigned tasks locked, like everyone else.
-		if ( MP_Util::is_manager() && ! ( $mine && 'manager' === $task->source && (int) $task->assigned_by !== self::uid() && MP_Util::is_employee() ) ) {
+		// Every supervisor may edit every task, including ones another supervisor assigned to them.
+		if ( MP_Util::is_manager() ) {
 			return true;
 		}
-		return $mine && 'self' === $task->source;
+		return (int) $task->user_id === self::uid() && 'self' === $task->source;
 	}
 
 	public static function can_view_task( $task ) {
