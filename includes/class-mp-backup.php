@@ -14,8 +14,44 @@ class MP_Backup {
 	const FORMAT  = 'moraba-panel-backup';
 	const KEEP    = 10;
 	const TABLES  = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates' );
-	const OPTIONS = array( 'mp_slug', 'mp_page_id', 'mp_support', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_daily_report', 'mp_invoice_settings', 'mp_digest', 'mp_ai_url', 'mp_ai_model' );
+	const OPTIONS = array( 'mp_slug', 'mp_page_id', 'mp_support', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_daily_report', 'mp_invoice_settings', 'mp_digest', 'mp_ai_url', 'mp_ai_model', 'mp_contract_settings' );
 	const META    = array( 'mp_prefs', 'mp_job_title', 'mp_phone', 'mp_avatar_public', 'mp_avatar_file', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs', 'mp_last_seen', 'mp_hourly_rate', 'mp_pay' );
+	/**
+	 * Sections that can be exported, imported or wiped on their own: key => [label, tables].
+	 * «settings» and «staff» are not tables: panel options, and staff roles/meta.
+	 */
+	const GROUPS = array(
+		'projects'  => array( 'پروژه‌ها (فولدر، بخش، مرحله، هدف، یادداشت)', array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'goals', 'notes' ) ),
+		'tasks'     => array( 'تسک‌ها (چک‌لیست، نظر، زمان‌سنج، قالب، گزارش روزانه)', array( 'tasks', 'task_items', 'task_comments', 'timelog', 'templates', 'daily_reports' ) ),
+		'groups'    => array( 'گروه‌ها و گفت‌وگوها (تیم، خصوصی، مشتری)', array( 'channels', 'channel_members' ) ),
+		'messages'  => array( 'پیام‌ها', array( 'messages', 'reads' ) ),
+		'clients'   => array( 'مشتریان (افراد، پرتال، طرح‌ها و نظرها)', array( 'clients', 'client_projects', 'client_contacts', 'client_items', 'design_pins' ) ),
+		'invoices'  => array( 'فاکتورها و پیش‌فاکتورها', array( 'invoices' ) ),
+		'contracts' => array( 'قراردادها و قالب‌ها', array( 'contracts', 'contract_templates' ) ),
+		'ledger'    => array( 'حسابداری (دخل و خرج)', array( 'ledger' ) ),
+		'attendance'=> array( 'حضور و مرخصی', array( 'attendance', 'leaves' ) ),
+		'calendar'  => array( 'جلسات و یادآوری‌ها', array( 'meetings', 'meeting_people', 'reminders' ) ),
+		'activity'  => array( 'اعلان‌ها و گزارش فعالیت', array( 'notifications', 'audit' ) ),
+		'files'     => array( 'فایل‌ها و پیوست‌ها', array( 'files' ) ),
+		'settings'  => array( 'تنظیمات پنل (پیامک، ربات‌ها، حقوق، فاکتور…)', array() ),
+		'staff'     => array( 'کارمندان (نقش، شماره، عکس، تنظیمات شخصی)', array() ),
+	);
+
+	/** Selected sections from a request (all when none is given). */
+	public static function pick_groups( $in ) {
+		$keys = array_keys( self::GROUPS );
+		$in   = is_array( $in ) ? array_values( array_intersect( array_map( 'sanitize_key', $in ), $keys ) ) : array();
+		return $in ? $in : $keys;
+	}
+
+	private static function tables_of( $groups ) {
+		$t = array();
+		foreach ( $groups as $g ) {
+			$t = array_merge( $t, self::GROUPS[ $g ][1] );
+		}
+		return array_values( array_intersect( self::TABLES, $t ) );
+	}
+
 	/** Columns holding WordPress user IDs, remapped when users get different IDs on import. */
 	const USER_COLUMNS = array( 'user_id', 'created_by', 'assigned_by', 'reviewed_by', 'user_a', 'user_b' );
 
@@ -48,8 +84,9 @@ class MP_Backup {
 
 	/* ------------------------------------------------------------------ Export */
 
-	public static function data() {
+	public static function data( $groups = null ) {
 		global $wpdb;
+		$groups = $groups ? $groups : array_keys( self::GROUPS );
 		$data = array(
 			'format'  => self::FORMAT,
 			'version' => MP_VERSION,
@@ -59,8 +96,9 @@ class MP_Backup {
 			'options' => array(),
 			'users'   => array(),
 			'tables'  => array(),
+			'groups'  => $groups,
 		);
-		foreach ( self::OPTIONS as $o ) {
+		foreach ( in_array( 'settings', $groups, true ) ? self::OPTIONS : array() as $o ) {
 			$v = get_option( $o, null );
 			if ( null !== $v ) {
 				$data['options'][ $o ] = $v;
@@ -88,15 +126,16 @@ class MP_Backup {
 				'meta'  => $meta,
 			);
 		}
-		foreach ( self::TABLES as $t ) {
+		foreach ( self::tables_of( $groups ) as $t ) {
 			$data['tables'][ $t ] = $wpdb->get_results( 'SELECT * FROM ' . MP_Install::table( $t ), ARRAY_A ); // phpcs:ignore
 		}
 		return $data;
 	}
 
 	/** Writes a backup into the protected folder and returns its path (or WP_Error). */
-	public static function write( $label = 'backup', $protect = '' ) {
-		$data = self::data();
+	public static function write( $label = 'backup', $protect = '', $groups = null ) {
+		$data = self::data( $groups );
+		$all  = ! $groups || count( $groups ) === count( self::GROUPS );
 		$base = self::dir() . '/' . gmdate( 'Y-m-d-His' ) . '-' . sanitize_file_name( $label ) . '-' . strtolower( wp_generate_password( 6, false ) );
 		$json = wp_json_encode( $data, JSON_UNESCAPED_UNICODE );
 		if ( ! class_exists( 'ZipArchive' ) ) {
@@ -108,8 +147,12 @@ class MP_Backup {
 				return new WP_Error( 'mp_backup', 'ساخت فایل پشتیبان انجام نشد.' );
 			}
 			$zip->addFromString( 'data.json', $json );
-			self::zip_dir( $zip, MP_Files::dir(), 'files', array( 'index.php', '.htaccess' ) );
-			self::zip_dir( $zip, MP_Util::avatar_dir(), 'avatars', array( 'index.php' ) );
+			if ( $all || in_array( 'files', $groups, true ) ) {
+				self::zip_dir( $zip, MP_Files::dir(), 'files', array( 'index.php', '.htaccess' ) );
+			}
+			if ( $all || in_array( 'staff', $groups, true ) ) {
+				self::zip_dir( $zip, MP_Util::avatar_dir(), 'avatars', array( 'index.php' ) );
+			}
 			$zip->close();
 			$path = $base . '.zip';
 		}
@@ -139,7 +182,7 @@ class MP_Backup {
 	/* ------------------------------------------------------------------ Import */
 
 	/** @return array{users:int,created:int,rows:int}|WP_Error */
-	public static function import( $path ) {
+	public static function import( $path, $groups = null ) {
 		global $wpdb;
 		$zip  = null;
 		$json = '';
@@ -158,6 +201,13 @@ class MP_Backup {
 			return new WP_Error( 'mp_backup', 'این فایل، پشتیبان پنل مربع نیست یا خراب است.' );
 		}
 
+		// Only sections both chosen and present in the file (older/partial backups have fewer).
+		$has    = isset( $data['groups'] ) && is_array( $data['groups'] ) ? $data['groups'] : array_keys( self::GROUPS );
+		$groups = array_values( array_intersect( $groups ? $groups : array_keys( self::GROUPS ), $has ) );
+		if ( ! $groups ) {
+			return new WP_Error( 'mp_backup', 'بخش‌های انتخاب‌شده در این فایل نیست.' );
+		}
+		$staff  = in_array( 'staff', $groups, true );
 		$safety = self::write( 'before-import', $path );
 		if ( is_wp_error( $safety ) ) {
 			return $safety;
@@ -186,6 +236,9 @@ class MP_Backup {
 				++$created;
 			}
 			$map[ (int) $u['id'] ] = (int) $new;
+			if ( ! $staff ) {
+				continue; // only matched, so rows keep pointing at the right people
+			}
 			$user                  = new WP_User( $new );
 			foreach ( array( 'moraba_employee', 'moraba_manager' ) as $r ) {
 				if ( in_array( $r, (array) $u['roles'], true ) ) {
@@ -204,9 +257,10 @@ class MP_Backup {
 		}
 
 		// 2. Tables: replace everything, keeping row IDs so links between tables stay intact.
-		self::wipe_tables();
+		$tables = self::tables_of( $groups );
+		self::wipe_tables( $tables );
 		$rows = 0;
-		foreach ( self::TABLES as $t ) {
+		foreach ( $tables as $t ) {
 			foreach ( isset( $data['tables'][ $t ] ) ? (array) $data['tables'][ $t ] : array() as $row ) {
 				foreach ( self::USER_COLUMNS as $c ) {
 					if ( isset( $row[ $c ] ) && (int) $row[ $c ] && isset( $map[ (int) $row[ $c ] ] ) ) {
@@ -220,7 +274,7 @@ class MP_Backup {
 		}
 
 		// 3. Settings (the slug may change, so rewrite rules are rebuilt).
-		foreach ( self::OPTIONS as $o ) {
+		foreach ( in_array( 'settings', $groups, true ) ? self::OPTIONS : array() as $o ) {
 			if ( array_key_exists( $o, (array) $data['options'] ) ) {
 				update_option( $o, $data['options'][ $o ], false );
 			} else {
@@ -229,12 +283,17 @@ class MP_Backup {
 		}
 
 		// 4. Files.
-		if ( $zip ) {
-			self::empty_dir( MP_Files::dir(), array( 'index.php', '.htaccess' ) );
-			self::empty_dir( MP_Util::avatar_dir(), array( 'index.php' ) );
+		$files = in_array( 'files', $groups, true );
+		if ( $zip && ( $files || $staff ) ) {
+			if ( $files ) {
+				self::empty_dir( MP_Files::dir(), array( 'index.php', '.htaccess' ) );
+			}
+			if ( $staff ) {
+				self::empty_dir( MP_Util::avatar_dir(), array( 'index.php' ) );
+			}
 			for ( $i = 0; $i < $zip->numFiles; $i++ ) {
 				$name = $zip->getNameIndex( $i );
-				if ( false !== strpos( $name, '..' ) || ! preg_match( '#^(files|avatars)/(.+)$#', $name, $m ) ) {
+				if ( false !== strpos( $name, '..' ) || ! preg_match( '#^(files|avatars)/(.+)$#', $name, $m ) || ( 'files' === $m[1] && ! $files ) || ( 'avatars' === $m[1] && ! $staff ) ) {
 					continue;
 				}
 				$target = ( 'files' === $m[1] ? MP_Files::dir() : MP_Util::avatar_dir() ) . '/' . $m[2];
@@ -251,7 +310,7 @@ class MP_Backup {
 		MP_Frontend::add_rewrite();
 		flush_rewrite_rules();
 		MP_Audit::log( 'import', 'panel', 0, 'بازگردانی پشتیبان (' . count( $map ) . ' نفر، ' . $rows . ' ردیف)' );
-		return array( 'users' => count( $map ), 'created' => $created, 'rows' => $rows );
+		return array( 'users' => count( $map ), 'created' => $created, 'rows' => $rows, 'groups' => $groups );
 	}
 
 	private static function match_user( $u ) {
@@ -304,9 +363,41 @@ class MP_Backup {
 		return $safety;
 	}
 
-	private static function wipe_tables() {
+	/** Empties only the chosen sections (a safety backup first). Everything chosen = full reset. */
+	public static function reset_groups( $groups, $people = false ) {
+		if ( count( $groups ) === count( self::GROUPS ) ) {
+			return self::reset( $people );
+		}
+		$safety = self::write( 'before-reset' );
+		if ( is_wp_error( $safety ) ) {
+			return $safety;
+		}
+		self::wipe_tables( self::tables_of( $groups ) );
+		if ( in_array( 'files', $groups, true ) ) {
+			self::empty_dir( MP_Files::dir(), array( 'index.php', '.htaccess' ) );
+		}
+		if ( in_array( 'settings', $groups, true ) ) {
+			foreach ( array_diff( self::OPTIONS, self::STAFF_OPTIONS ) as $o ) {
+				delete_option( $o );
+			}
+		}
+		if ( in_array( 'staff', $groups, true ) ) {
+			foreach ( self::META as $k ) {
+				delete_metadata( 'user', 0, $k, '', true );
+			}
+			self::empty_dir( MP_Util::avatar_dir(), array( 'index.php' ) );
+		}
+		if ( in_array( 'tasks', $groups, true ) ) {
+			delete_option( 'mp_templates_seeded' );
+			MP_Templates::seed();
+		}
+		MP_Audit::log( 'reset', 'panel', 0, 'پاک کردن: ' . implode( '، ', array_map( function ( $g ) { return self::GROUPS[ $g ][0]; }, $groups ) ) );
+		return $safety;
+	}
+
+	private static function wipe_tables( $tables = null ) {
 		global $wpdb;
-		foreach ( self::TABLES as $t ) {
+		foreach ( $tables ? $tables : self::TABLES as $t ) {
 			$wpdb->query( 'DELETE FROM ' . MP_Install::table( $t ) ); // phpcs:ignore
 		}
 	}
@@ -363,7 +454,7 @@ class MP_Backup {
 
 	public static function handle_export() {
 		self::guard( 'mp_backup_export' );
-		$path = self::write( 'export' );
+		$path = self::write( 'export', '', self::pick_groups( isset( $_POST['groups'] ) ? wp_unslash( $_POST['groups'] ) : null ) ); // phpcs:ignore
 		if ( is_wp_error( $path ) ) {
 			self::back( 'error', $path->get_error_message() );
 		}
@@ -388,7 +479,7 @@ class MP_Backup {
 		if ( empty( $_FILES['backup']['tmp_name'] ) || ! is_uploaded_file( $_FILES['backup']['tmp_name'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 			self::back( 'error', 'فایل پشتیبان انتخاب نشده است.' );
 		}
-		self::finish_import( self::import( $_FILES['backup']['tmp_name'] ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		self::finish_import( self::import( $_FILES['backup']['tmp_name'], self::pick_groups( isset( $_POST['groups'] ) ? wp_unslash( $_POST['groups'] ) : null ) ) ); // phpcs:ignore
 	}
 
 	public static function handle_restore() {
@@ -398,14 +489,14 @@ class MP_Backup {
 		if ( ! $name || ! is_file( $path ) ) {
 			self::back( 'error', 'فایل پشتیبان پیدا نشد.' );
 		}
-		self::finish_import( self::import( $path ) );
+		self::finish_import( self::import( $path, self::pick_groups( isset( $_POST['groups'] ) ? wp_unslash( $_POST['groups'] ) : null ) ) ); // phpcs:ignore
 	}
 
 	private static function finish_import( $r ) {
 		if ( is_wp_error( $r ) ) {
 			self::back( 'error', $r->get_error_message() );
 		}
-		self::back( 'success', 'پشتیبان بازگردانی شد: ' . $r['users'] . ' نفر (' . $r['created'] . ' حساب جدید ساخته شد)، ' . $r['rows'] . ' ردیف اطلاعات. نسخه قبلی هم در فهرست پشتیبان‌ها ذخیره شد.' );
+		self::back( 'success', 'بازگردانی شد (' . implode( '، ', array_map( function ( $g ) { return self::GROUPS[ $g ][0]; }, $r['groups'] ) ) . '): ' . $r['users'] . ' نفر (' . $r['created'] . ' حساب جدید ساخته شد)، ' . $r['rows'] . ' ردیف اطلاعات. نسخه قبلی هم در فهرست پشتیبان‌ها ذخیره شد.' );
 	}
 
 	public static function handle_reset() {
@@ -414,11 +505,25 @@ class MP_Backup {
 		if ( 'ریست' !== $word && 'RESET' !== strtoupper( $word ) ) {
 			self::back( 'error', 'برای بازنشانی، کلمه «ریست» را در کادر بنویسید.' );
 		}
-		$r = self::reset( ! empty( $_POST['people'] ) );
+		if ( empty( $_POST['groups'] ) ) {
+			self::back( 'error', 'بخش‌هایی را که باید پاک شوند تیک بزنید.' );
+		}
+		$r = self::reset_groups( self::pick_groups( wp_unslash( $_POST['groups'] ) ), ! empty( $_POST['people'] ) ); // phpcs:ignore
 		if ( is_wp_error( $r ) ) {
 			self::back( 'error', $r->get_error_message() );
 		}
-		self::back( 'success', 'پنل به حالت اولیه برگشت. یک پشتیبان از وضعیت قبل در فهرست زیر ذخیره شد و با «بازگردانی» برمی‌گردد.' );
+		self::back( 'success', 'بخش‌های انتخاب‌شده پاک شد. یک پشتیبان از وضعیت قبل در فهرست زیر ذخیره شد و با «بازگردانی» برمی‌گردد.' );
+	}
+
+	/** Checkboxes for the sections, with «همه». $checked: tick all by default. */
+	private static function boxes( $checked, $danger = false ) {
+		$id = 'mpg' . wp_rand( 1000, 9999 );
+		echo '<fieldset class="mp-groups" id="' . esc_attr( $id ) . '" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px 16px;max-width:760px;margin:8px 0;padding:10px 14px;border:1px solid ' . ( $danger ? '#d63638' : '#c3c4c7' ) . ';border-radius:6px;background:#fff">';
+		echo '<label style="grid-column:1/-1;font-weight:700"><input type="checkbox" onclick="var c=this.checked;this.closest(\'fieldset\').querySelectorAll(\'input[name^=groups]\').forEach(function(i){i.checked=c})"' . ( $checked ? ' checked' : '' ) . '> همه بخش‌ها</label>';
+		foreach ( self::GROUPS as $k => $g ) {
+			echo '<label><input type="checkbox" name="groups[]" value="' . esc_attr( $k ) . '"' . ( $checked ? ' checked' : '' ) . '> ' . esc_html( $g[0] ) . '</label>';
+		}
+		echo '</fieldset>';
 	}
 
 	/** Settings page section. */
@@ -433,6 +538,8 @@ class MP_Backup {
 		<form method="post" action="<?php echo $post; // phpcs:ignore ?>">
 			<?php wp_nonce_field( 'mp_backup_export' ); ?>
 			<input type="hidden" name="action" value="mp_backup_export">
+			<p class="description">تیک بزنید از چه بخش‌هایی خروجی گرفته شود.</p>
+			<?php self::boxes( true ); ?>
 			<?php submit_button( 'دانلود فایل پشتیبان', 'primary', 'submit', false ); ?>
 		</form>
 
@@ -441,6 +548,8 @@ class MP_Backup {
 			<?php wp_nonce_field( 'mp_backup_import' ); ?>
 			<input type="hidden" name="action" value="mp_backup_import">
 			<p><input type="file" name="backup" accept=".zip,.json" required></p>
+			<p class="description">فقط بخش‌های تیک‌خورده جایگزین می‌شوند؛ بقیه دست نمی‌خورند.</p>
+			<?php self::boxes( true ); ?>
 			<p><label><input type="checkbox" name="confirm" value="1" required> می‌دانم اطلاعات فعلی پنل با این فایل جایگزین می‌شود (قبلش خودکار پشتیبان گرفته می‌شود).</label></p>
 			<p class="description">کارمندان با نام کاربری، ایمیل یا شماره موبایل پیدا می‌شوند؛ اگر در این سایت نباشند، حسابشان ساخته می‌شود. پس می‌توانید پنل را به سایت دیگری منتقل کنید.</p>
 			<?php submit_button( 'بازگردانی', 'secondary', 'submit', false ); ?>
@@ -465,7 +574,7 @@ class MP_Backup {
 								<input type="hidden" name="action" value="mp_backup_download"><input type="hidden" name="file" value="<?php echo esc_attr( $b['name'] ); ?>">
 								<button class="button button-small">دانلود</button>
 							</form>
-							<form method="post" action="<?php echo $post; // phpcs:ignore ?>" style="display:inline" onsubmit="return confirm('اطلاعات فعلی پنل با این نسخه جایگزین شود؟');">
+							<form method="post" action="<?php echo $post; // phpcs:ignore ?>" style="display:inline" onsubmit="return confirm('اطلاعات فعلی پنل با این نسخه جایگزین شود؟ (همه بخش‌های موجود در فایل)');">
 								<?php wp_nonce_field( 'mp_backup_restore' ); ?>
 								<input type="hidden" name="action" value="mp_backup_restore"><input type="hidden" name="file" value="<?php echo esc_attr( $b['name'] ); ?>">
 								<button class="button button-small">بازگردانی</button>
@@ -477,16 +586,17 @@ class MP_Backup {
 			</table>
 		<?php endif; ?>
 
-		<h3 style="color:#b32d2e">بازنشانی کارخانه (ریست)</h3>
-		<form method="post" action="<?php echo $post; // phpcs:ignore ?>" onsubmit="return confirm('همه اطلاعات و تنظیمات پنل پاک شود؟ (یک پشتیبان خودکار گرفته می‌شود)');" style="border:1px solid #d63638;border-radius:6px;padding:12px 16px;max-width:760px;background:#fcf0f1">
+		<h3 style="color:#b32d2e">پاک کردن بخش‌ها / بازنشانی کارخانه (ریست)</h3>
+		<form method="post" action="<?php echo $post; // phpcs:ignore ?>" onsubmit="var n=[].slice.call(this.querySelectorAll('input[name^=groups]:checked')).map(function(i){return i.parentNode.textContent.trim()});if(!n.length){alert('بخشی انتخاب نشده');return false;}return confirm('این بخش‌ها کلاً پاک شوند؟\n\n'+n.join('\n')+'\n\n(یک پشتیبان خودکار گرفته می‌شود)');" style="border:1px solid #d63638;border-radius:6px;padding:12px 16px;max-width:760px;background:#fcf0f1">
 			<?php wp_nonce_field( 'mp_backup_reset' ); ?>
 			<input type="hidden" name="action" value="mp_backup_reset">
-			<p>همه تسک‌ها، پروژه‌ها، پیام‌ها، حسابداری، حضور، مرخصی، یادآوری‌ها، پیوست‌ها و تنظیمات پنل پاک می‌شود و افزونه مثل روز اول نصب می‌شود.</p>
-			<p><strong>کارمندان:</strong><br>
+			<p>تیک بزنید چه چیزهایی کلاً پاک شود (مثلاً فقط «مشتریان»). اگر همه تیک بخورد، افزونه مثل روز اول نصب می‌شود. قبل از پاک کردن خودکار پشتیبان گرفته می‌شود.</p>
+			<?php self::boxes( false, true ); ?>
+			<p><strong>فقط وقتی همه بخش‌ها انتخاب شده — کارمندان:</strong><br>
 			<label><input type="radio" name="people" value="" checked> کارمندان شامل ریست نشوند — نقش، شماره موبایل، سمت، عکس پروفایل و تنظیمات شخصی‌شان می‌ماند و بلافاصله می‌توانند وارد شوند</label><br>
 			<label><input type="radio" name="people" value="1"> کارمندان هم ریست شوند — نقش‌های پنل، شماره‌ها و عکس‌ها پاک می‌شود (خود حساب‌های کاربری وردپرس حذف نمی‌شوند)</label></p>
 			<p><label>برای تأیید بنویسید «ریست»: <input name="confirm_word" autocomplete="off" required style="width:90px"></label>
-			<?php submit_button( 'بازنشانی کامل پنل', 'delete', 'submit', false ); ?></p>
+			<?php submit_button( 'پاک کردن بخش‌های انتخاب‌شده', 'delete', 'submit', false ); ?></p>
 		</form>
 		<?php
 	}
