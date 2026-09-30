@@ -194,7 +194,8 @@
     form.classList.add('tf');
     form.append(el('input', { name: 'title', class: 'tf-title', required: true, maxlength: 200, value: t ? t.title : (opts.taskTitle || ''), placeholder: 'چه کاری باید انجام شود؟', autocomplete: 'off', 'aria-label': 'عنوان تسک' }));
     if (S.manager) {
-      if (t) { var us = MP.userSelect('user_id', t.user_id); us.classList.add('select'); form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('user') + 'مسئول انجام' }), us)); }
+      if (t) form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('user') + 'مسئول انجام' }), el('div', { class: 'tf-people' }, MP.peoplePicker('assignees', [t.user_id])),
+        el('small', { class: 'tf-note', html: icon('plus') + ' با انتخاب نفرات بیشتر، یک نسخه از همین تسک برای هر کدام ساخته می‌شود.' })));
       else form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('user') + 'مسئول انجام' }), el('div', { class: 'tf-people' }, MP.peoplePicker('assignees', [opts.userId || S.me.id])),
         el('small', { class: 'tf-note', html: icon('lock') + ' برای دیگران قفل است: عنوان و موعد را فقط ناظر تغییر می‌دهد.' })));
     }
@@ -202,10 +203,13 @@
     var dateF = MP.dateField('date', t ? t.date : (opts.date || S.today), 'تاریخ');
     var timeI = el('input', { name: 'time', type: 'time', value: t ? t.time : (opts.time || ''), 'aria-label': 'ساعت' });
     var quickDays = [['امروز', S.today], ['فردا', J.addDays(S.today, 1)], ['پس‌فردا', J.addDays(S.today, 2)], ['هفته بعد', J.addDays(S.today, 7)]];
-    var dayChips = el('div', { class: 'tf-chips' }), timeChips = el('div', { class: 'tf-chips' });
-    function markDays() { var v = form.elements.date.value; $$('button', dayChips).forEach(function (b) { b.classList.toggle('on', b.dataset.d === v); }); }
+    var dayChips = el('div', { class: 'tf-days' }), timeChips = el('div', { class: 'tf-chips' });
+    function markDays() { var v = form.elements.date.value; $$(".tf-day", dayChips).forEach(function (b) { b.classList.toggle('on', b.dataset.d === v); }); }
     function markTimes() { $$('button', timeChips).forEach(function (b) { b.classList.toggle('on', b.dataset.t === timeI.value); }); }
-    quickDays.forEach(function (q) { dayChips.append(el('button', { type: 'button', class: 'tf-chip', 'data-d': q[1], text: q[0], onclick: function () { MP.setDate(form.elements.date, q[1]); markDays(); } })); });
+    quickDays.forEach(function (q) {
+      dayChips.append(el('button', { type: 'button', class: 'tf-day', 'data-d': q[1], onclick: function () { MP.setDate(form.elements.date, q[1]); markDays(); } },
+        el('b', { text: q[0] }), el('small', { text: J.weekdays[J.weekday(q[1])] + ' ' + J.format(q[1], false) })));
+    });
     timeI.addEventListener('input', markTimes);
     form.append(el('div', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('calendar') + 'موعد' }),
       dayChips, el('div', { class: 'tf-when' }, dateF, el('label', { class: 'field tf-time' }, el('span', { text: 'ساعت (اختیاری)' }), timeI))));
@@ -265,7 +269,12 @@
         body.recurrence = f.recurrence.value; body.recur_until = f.recur_until.value;
         body.checklist = $$('.tf-item input', form).map(function (x) { return x.value.trim(); }).filter(Boolean);
         if (S.manager) { body.user_ids = MP.checked(form, 'assignees'); if (!body.user_ids.length) { MP.toast('حداقل یک نفر را انتخاب کنید', { error: true }); return; } }
-      } else if (S.manager) body.user_id = +f.user_id.value;
+      } else if (S.manager) {
+        var who = MP.checked(form, 'assignees');
+        if (!who.length) { MP.toast('حداقل یک نفر را انتخاب کنید', { error: true }); return; }
+        body.user_id = who.indexOf(t.user_id) >= 0 ? t.user_id : who[0];
+        var extra = who.filter(function (u) { return u !== body.user_id; });
+      }
       MP.busy(form, true);
       var syncItems = function (saved) {
         if (!t) return saved;
@@ -278,7 +287,14 @@
         });
         return jobs.reduce(function (p, j) { return p.then(j); }, Promise.resolve()).then(function () { return saved; });
       };
-      (t ? MP.api('tasks/' + t.id, { method: 'POST', body: body }).then(syncItems) : MP.api('tasks', { method: 'POST', body: body }))
+      // Extra people on edit get their own copy (with the same checklist).
+      var copies = function (saved) {
+        if (!t || !extra || !extra.length) return saved;
+        var c = Object.assign({}, body, { user_ids: extra, recurrence: 'none', checklist: $$('.tf-item input', form).map(function (x) { return x.value.trim(); }).filter(Boolean) });
+        delete c.user_id;
+        return MP.api('tasks', { method: 'POST', body: c }).then(function () { MP.toast('برای ' + extra.map(function (u) { return MP.user(u).name; }).join('، ') + ' هم ساخته شد'); return saved; });
+      };
+      (t ? MP.api('tasks/' + t.id, { method: 'POST', body: body }).then(syncItems).then(copies) : MP.api('tasks', { method: 'POST', body: body }))
         .then(function (saved) {
           MP.dialog.close();
           var many = saved.created > 1, others = body.user_ids && body.user_ids.filter(function (u) { return u !== S.me.id; });
