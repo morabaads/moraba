@@ -260,15 +260,21 @@ class MP_Relay {
 			// Video: only the newest frame.
 			$vf = "$d/v$o.bin";
 			if ( is_file( $vf ) ) {
-				$raw = (string) file_get_contents( $vf ); // phpcs:ignore
-				if ( strlen( $raw ) > 4 ) {
-					$vs = unpack( 'N', substr( $raw, 0, 4 ) );
+				// Only the 4-byte frame number is read unless the frame is new for this reader.
+				$fh  = fopen( $vf, 'rb' ); // phpcs:ignore
+				$raw = $fh ? (string) fread( $fh, 4 ) : ''; // phpcs:ignore
+				if ( 4 === strlen( $raw ) ) {
+					$vs = unpack( 'N', $raw );
 					$vs = $vs[1];
 					if ( $vs > ( isset( $vk[ $o ] ) ? (int) $vk[ $o ] : 0 ) ) {
-						$items[] = array( $o, 'v', $vs, strlen( $raw ) - 4 );
-						$data   .= substr( $raw, 4 );
+						$jpg = (string) stream_get_contents( $fh );
+						$items[] = array( $o, 'v', $vs, strlen( $jpg ) );
+						$data   .= $jpg;
 					}
 					$nvk[ $o ] = max( $vs, isset( $vk[ $o ] ) ? (int) $vk[ $o ] : 0 );
+				}
+				if ( $fh ) {
+					fclose( $fh ); // phpcs:ignore
 				}
 			}
 		}

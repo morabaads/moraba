@@ -41,22 +41,34 @@
 
   /* ------------------------------------------------------------ Local media */
   var mediaErr = '';
+  var camErr = '';
+  /** Camera and microphone; if asking for both fails, each is asked for on its own so one problem does not cost the other. */
   function getMedia() {
     var md = navigator.mediaDevices;
-    mediaErr = '';
+    mediaErr = ''; camErr = '';
     if (!window.isSecureContext) { mediaErr = 'insecure'; return Promise.resolve(null); }
     if (!md || !md.getUserMedia) { mediaErr = 'unsupported'; return Promise.resolve(null); }
-    var keep = function (e) { if (!mediaErr || mediaErr === 'NotFoundError') mediaErr = e && e.name || 'error'; return null; };
-    return md.getUserMedia({ audio: true, video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } })
-      .catch(function (e) { keep(e); return md.getUserMedia({ audio: true, video: true }); })
-      .catch(function (e) { keep(e); return md.getUserMedia({ audio: true }); })
-      .catch(function (e) { keep(e); return md.getUserMedia({ video: true }); })
-      .then(function (st) { if (st) mediaErr = ''; return st; }, keep);
+    var cam = { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } };
+    return md.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: cam })
+      .catch(function (e1) {
+        mediaErr = e1 && e1.name || 'error';
+        var tracks = [];
+        return md.getUserMedia({ video: cam }).catch(function () { return md.getUserMedia({ video: true }); })
+          .then(function (v) { tracks = tracks.concat(v.getTracks()); }, function (e) { camErr = e && e.name || 'error'; })
+          .then(function () { return md.getUserMedia({ audio: true }); })
+          .then(function (a) { tracks = tracks.concat(a.getTracks()); }, function (e) { if (!mediaErr) mediaErr = e && e.name; })
+          .then(function () { if (tracks.length) { if (camErr || tracks.length === 2) mediaErr = ''; return new MediaStream(tracks); } return null; });
+      });
   }
   function mediaHint(s) {
     var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     var inApp = /Telegram|WhatsApp|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent) || (ios && !/Safari\//.test(navigator.userAgent));
-    if (s) return !vTrack ? 'دوربینی پیدا نشد؛ فقط صدا فرستاده می‌شود.' : !aTrack ? 'میکروفونی پیدا نشد؛ فقط تصویر فرستاده می‌شود.' : '';
+    if (s && !vTrack) {
+      if (camErr === 'NotAllowedError') return ios ? 'اجازه دوربین داده نشد. در Safari روی «aA» کنار آدرس ← تنظیمات وب‌سایت ← دوربین را «اجازه» کنید؛ یا تنظیمات آیفون ← Safari ← دوربین ← «اجازه». سپس دکمه زیر را بزنید.' : 'اجازه دوربین داده نشد. روی قفل کنار آدرس بزنید و دوربین را مجاز کنید، سپس دکمه زیر را بزنید.';
+      if (camErr === 'NotReadableError' || camErr === 'AbortError') return 'دوربین دست برنامه دیگری است (تماس تصویری، دوربین…). آن را ببندید و دکمه زیر را بزنید.';
+      return 'دوربین در دسترس نیست' + (camErr ? ' (' + camErr + ')' : '') + '؛ فقط صدا فرستاده می‌شود. دکمه زیر را بزنید تا دوباره امتحان شود.';
+    }
+    if (s) return !aTrack ? 'میکروفونی پیدا نشد؛ فقط تصویر فرستاده می‌شود.' : '';
     if (mediaErr === 'insecure') return 'برای دوربین و میکروفون، سایت باید با https باز شود.';
     if (mediaErr === 'unsupported' || mediaErr === 'NotSupportedError' || inApp) return ios ? 'این مرورگر به دوربین دسترسی ندارد. لینک را در Safari باز کنید (نه داخل تلگرام، واتساپ یا اینستاگرام).' : 'این مرورگر به دوربین دسترسی ندارد. لینک را در Chrome باز کنید (نه داخل تلگرام، واتساپ یا اینستاگرام).';
     if (mediaErr === 'NotAllowedError' || mediaErr === 'SecurityError') return ios ? 'اجازه دوربین و میکروفون داده نشد. در Safari روی «aA» کنار آدرس ← تنظیمات وب‌سایت ← دوربین و میکروفون را «اجازه» کنید و دوباره امتحان کنید.' : 'اجازه دوربین و میکروفون داده نشد. روی قفل کنار آدرس بزنید، دسترسی را مجاز کنید و دوباره امتحان کنید.';
@@ -70,7 +82,7 @@
       setLocal(st);
       var pv = $('#pv'); pv.srcObject = st || null; if (st) pv.play().catch(function () {});
       $('#pv-hint').textContent = mediaHint(st);
-      $('#pv-retry').hidden = !!st;
+      $('#pv-retry').hidden = !!(st && vTrack && aTrack);
       return st;
     });
   }
@@ -145,15 +157,15 @@
   }
 
   function makeTile(p, mine) {
-    var v = R.on && !mine ? el('canvas', { width: 16, height: 9 }) : el('video', { autoplay: '', playsinline: '', 'webkit-playsinline': '' });
+    var v = R.on && !mine ? el('img', { alt: '', decoding: 'async' }) : el('video', { autoplay: '', playsinline: '', 'webkit-playsinline': '' });
     if (mine) { v.muted = true; v.setAttribute('muted', ''); }
-    if (R.on && !mine) p.canvas = v;
-    var t = el('div', { class: 'tile' + (mine ? ' mine' : '') }, v,
+    if (R.on && !mine) p.img = v;
+    var t = el('div', { class: 'tile' + (mine ? ' mine' : R.on ? ' relay' : '') }, v,
       el('div', { class: 'ph' }, el('span', { class: 'av' })),
       el('span', { class: 'net' }),
       el('div', { class: 'tag' }, el('i', { class: 'm', html: ic('mic-off') }), el('b'), el('i', { class: 'h', html: ic('hand') })));
     p.tile = t; p.video = R.on && !mine ? null : v;
-    if (p.stream) v.srcObject = p.stream;
+    if (p.stream) { v.srcObject = p.stream; if (v.play) v.play().catch(function () {}); }
     t.ondblclick = function () { t.classList.toggle('pin'); layout(); };
     $('#mt-grid').append(t);
     layout();
@@ -180,7 +192,8 @@
      One POST every ~250 ms sends ours and brings everyone else's. */
   var R = { on: info.mode !== 'p2p', q: '', rest: false, busy: false, c: {}, vk: {}, aq: [], aseq: 1, vseq: 1, frame: null, frameAt: 0, fails: 0 };
   var actx = null, gainNode = null, proc = null, micSrc = null, pend = [], pendN = 0, hang = 0, remoteUntil = 0, remoteLvl = 0;
-  var VQ = { low: [240, 0.5, 400], normal: [360, 0.6, 300], high: [480, 0.65, 220] }[info.video] || [360, 0.6, 300];
+  // [width, JPEG quality, ms between frames]
+  var VQ = { low: [240, 0.45, 250], normal: [320, 0.5, 150], high: [480, 0.55, 120] }[info.video] || [320, 0.5, 150];
   var DEC = new Float32Array(256);
   (function () { for (var i = 0; i < 256; i++) { var u = ~i & 0xFF, sign = u & 0x80, e = (u >> 4) & 7, mt = u & 0x0F, x = ((mt << 3) + 0x84) << e; x -= 0x84; DEC[i] = (sign ? -x : x) / 32768; } })();
   function ulaw(v) {
@@ -242,29 +255,43 @@
     remoteUntil = Math.max(remoteUntil, o.next); remoteLvl = Math.max(rms, remoteLvl * 0.7);
     talking(o, true); clearTimeout(o.talkT); o.talkT = setTimeout(function () { talking(o, false); }, (o.next - now) * 1000 + 150);
   }
+  /** Frames go into an <img>: WebKit sometimes does not repaint a canvas until something else changes on the page. */
   function drawFrame(pid, bytes) {
-    var o = peers[pid]; if (!o || !o.canvas) return;
-    var blob = new Blob([bytes], { type: 'image/jpeg' });
-    var paint = function (img, w, h) { var c = o.canvas; if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } c.getContext('2d').drawImage(img, 0, 0, w, h); o.tile.classList.add('has-frame'); };
-    if (window.createImageBitmap) createImageBitmap(blob).then(function (bm) { paint(bm, bm.width, bm.height); if (bm.close) bm.close(); }).catch(function () {});
-    else { var u = URL.createObjectURL(blob), im = new Image(); im.onload = function () { paint(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(u); }; im.src = u; }
+    var o = peers[pid]; if (!o || !o.img) return;
+    if (o.loading) { o.queued = bytes; return; } // still decoding the previous one: keep only the newest
+    o.loading = true;
+    var u = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })), old = o.url;
+    o.img.onload = o.img.onerror = function () {
+      if (old) URL.revokeObjectURL(old);
+      o.tile.classList.add('has-frame'); o.loading = false;
+      if (o.queued) { var q = o.queued; o.queued = null; drawFrame(pid, q); }
+    };
+    o.url = u; o.img.src = u;
   }
   var grab = null;
+  var capturing = false;
   function captureFrame() {
-    var v = peers.me && peers.me.video, now = Date.now();
-    if (!v || (!want.cam && !sTrack) || !v.videoWidth || R.frame) return;
-    var share = !!sTrack, gap = share ? 1000 : VQ[2];
-    if (now - R.frameAt < gap) return;
-    R.frameAt = now;
+    var v = peers.me && peers.me.video;
+    if (capturing || me.state !== 'in' || !v || (!want.cam && !sTrack) || !v.videoWidth) return;
+    var share = !!sTrack;
     var w = share ? Math.min(1280, v.videoWidth) : Math.min(VQ[0], v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth);
-    grab = grab || document.createElement('canvas'); grab.width = w; grab.height = h;
+    grab = grab || document.createElement('canvas');
+    if (grab.width !== w || grab.height !== h) { grab.width = w; grab.height = h; }
     grab.getContext('2d').drawImage(v, 0, 0, w, h);
-    grab.toBlob(function (b) { if (b) b.arrayBuffer().then(function (ab) { R.frame = new Uint8Array(ab); }); }, 'image/jpeg', share ? 0.6 : VQ[1]);
+    capturing = true;
+    grab.toBlob(function (b) {
+      if (!b) { capturing = false; return; }
+      (b.arrayBuffer ? b.arrayBuffer() : new Response(b).arrayBuffer()).then(function (ab) { R.frame = new Uint8Array(ab); capturing = false; }, function () { capturing = false; });
+    }, 'image/jpeg', share ? 0.6 : VQ[1]);
+  }
+  function captureLoop() {
+    if (!R.on || me.state === 'gone') return;
+    captureFrame();
+    setTimeout(captureLoop, sTrack ? 800 : VQ[2]);
   }
   function relayTick() {
     if (!R.on || me.state !== 'in') return;
     if (R.busy || !R.q) { setTimeout(relayTick, 200); return; }
-    captureFrame();
     R.busy = true;
     var started = Date.now(), audio = R.aq.splice(0), frame = R.frame; R.frame = null;
     var head = { a: audio.map(function (x) { return x.length; }), as: R.aseq, v: frame ? frame.length : 0, vs: frame ? R.vseq : 0, c: R.c, vk: R.vk };
@@ -290,7 +317,7 @@
         if (!R.rest && (e.status === 404 || e.status === 503 || e.status === 500 || !e.status)) R.rest = true; // relay.php blocked → WordPress route
         if (e.status === 410) return;
       })
-      .then(function () { R.busy = false; setTimeout(relayTick, Math.max(40, 250 - (Date.now() - started)) + (R.fails > 3 ? 1000 : 0)); });
+      .then(function () { R.busy = false; setTimeout(relayTick, Math.max(20, VQ[2] - (Date.now() - started)) + (R.fails > 3 ? 1000 : 0)); });
   }
 
   /* --- connection state & playback */
@@ -416,7 +443,7 @@
       }
       me.state = d.me.state;
       remaining = d.remaining;
-      if (R.on && d.relay) { var first = !R.q; R.q = d.relay; if (first) { micStart(); relayTick(); } }
+      if (R.on && d.relay) { var first = !R.q; R.q = d.relay; if (first) { micStart(); relayTick(); captureLoop(); } }
       sync(d);
       d.signals.forEach(function (s) { after = Math.max(after, s.id); chain = chain.then(function () { return onSignal(s); }); });
       pollTimer = setTimeout(poll, d.signals.length ? 400 : 1000);
