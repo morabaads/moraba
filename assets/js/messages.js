@@ -96,6 +96,7 @@
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'مشتریان و ظاهر', onclick: function () { clientSettings(c); } }));
       if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
+      tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('video') + 'جلسه', title: 'جلسه آنلاین با این مشتری', onclick: function () { MP.meetingForm({ channelId: c.id, projectId: c.project_id, title: 'جلسه با ' + (c.client_name || c.title) }); } }));
     }
     if (c.type === 'group' && c.can_manage) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'اعضا', onclick: function () { groupForm(c); } }));
     if (c.can_logo && c.type !== 'client') tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('image') + 'لوگو', onclick: function () { groupLogo(c); } }));

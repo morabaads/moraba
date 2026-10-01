@@ -30,7 +30,7 @@ class MP_Meet {
 			array( 'meetings', 'POST', 'save', $auth ),
 			array( 'meetings/settings', 'GET', 'get_settings', $auth ),
 			array( 'meetings/settings', 'POST', 'save_settings', $m ),
-			array( 'meetings/stats', 'GET', 'stats', $m ),
+			array( 'meetings/stats', 'GET', 'stats', $auth ),
 			array( 'meetings/team-room', 'POST', 'team_room', $m ),
 			array( "meetings/$id", 'GET', 'show', $auth ),
 			array( "meetings/$id", 'POST', 'save', $auth ),
@@ -235,12 +235,21 @@ class MP_Meet {
 		}
 	}
 
-	/** Ends a live meeting whose time is up; returns the fresh row. */
+	/** Ends a live meeting whose time is up, or that everyone left 10 minutes ago; returns the fresh row. */
 	private static function check_time( $m ) {
+		global $wpdb;
 		$end = self::ends_at( $m );
 		if ( $end && self::ts() >= $end ) {
 			self::finish( $m );
 			return self::get( $m->id );
+		}
+		if ( 'live' === $m->status && $m->started_at && self::ts( $m->started_at ) < self::ts() - 600 ) {
+			$last = $wpdb->get_var( $wpdb->prepare( 'SELECT MAX(COALESCE(left_at, seen_at)) FROM ' . self::t( 'meeting_peers' ) . ' WHERE meeting_id = %d', $m->id ) );
+			$in   = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . self::t( 'meeting_peers' ) . " WHERE meeting_id = %d AND state IN ('in','waiting') AND seen_at >= %s", $m->id, gmdate( 'Y-m-d H:i:s', self::ts() - self::STALE ) ) );
+			if ( ! $in && ( ! $last || self::ts( $last ) < self::ts() - 600 ) ) {
+				self::finish( $m );
+				return self::get( $m->id );
+			}
 		}
 		return self::roll( $m );
 	}
@@ -823,6 +832,11 @@ class MP_Meet {
 			}
 		}
 		usort( $people, function ( $a, $b ) { return $b['minutes'] - $a['minutes']; } );
+		if ( ! MP_Util::is_manager() ) {
+			// Colleagues see only their own attendance (attendance page).
+			$me     = get_current_user_id();
+			$people = array_values( array_filter( $people, function ( $x ) use ( $me ) { return (int) $x['user_id'] === $me; } ) );
+		}
 		return array( 'from' => $from, 'to' => $to, 'meetings' => count( $held ), 'minutes' => (int) round( $total / 60 ), 'avg' => count( $held ) ? (int) round( $total / 60 / count( $held ) ) : 0, 'people' => $people );
 	}
 

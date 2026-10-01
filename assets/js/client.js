@@ -7,7 +7,7 @@
   var PST = { waiting: 'در انتظار شروع', doing: 'در حال انجام', done: 'تمام‌شده' };
   var IST = { sent: 'منتظر پرداخت', accepted: 'تأیید شد', paid: 'پرداخت شد', cancelled: 'لغو شد' };
   var MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
-  var TABS = [['progress', 'پیشرفت پروژه', 'pie'], ['designs', 'طرح‌ها', 'eye'], ['files', 'فایل‌های تحویلی', 'download'], ['invoices', 'فاکتورها', 'file'], ['contracts', 'قرارداد', 'edit'], ['chat', 'گفت‌وگو', 'chat']];
+  var TABS = [['progress', 'پیشرفت پروژه', 'pie'], ['designs', 'طرح‌ها', 'eye'], ['files', 'فایل‌های تحویلی', 'download'], ['invoices', 'فاکتورها', 'file'], ['contracts', 'قرارداد', 'edit'], ['meetings', 'جلسات', 'video'], ['chat', 'گفت‌وگو', 'chat']];
 
   /* ------------------------------------------------------------ helpers */
   function $(id) { return document.getElementById(id); }
@@ -91,10 +91,12 @@
     if (k === 'designs') return data.designs.filter(function (d) { return d.status === 'pending'; }).length;
     if (k === 'invoices') return data.invoices.filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; }).length;
     if (k === 'contracts') return (data.contracts || []).filter(function (x) { return x.status === 'sent'; }).length;
+    if (k === 'meetings') return (data.meetings || []).filter(function (x) { return x.status === 'live'; }).length;
     return 0;
   }
   function tabs() {
-    var list = data && data.project ? TABS.filter(function (t) { return t[0] !== 'contracts' || (data.contracts || []).length; }) : TABS.filter(function (t) { return t[0] === 'chat'; });
+    var hasMeet = data && (data.meetings || []).length;
+    var list = data && data.project ? TABS.filter(function (t) { return (t[0] !== 'contracts' || (data.contracts || []).length) && (t[0] !== 'meetings' || hasMeet); }) : TABS.filter(function (t) { return t[0] === 'chat' || (t[0] === 'meetings' && hasMeet); });
     // Sidebar: the panel's own menu items; phones: a bottom tab bar.
     var side = $('cp-nav'); side.replaceChildren();
     list.forEach(function (t) {
@@ -115,6 +117,7 @@
     files: function () { return 'فایل‌های نهایی که تیم تحویل داده است.'; },
     invoices: function () { return 'پیش‌فاکتورها و فاکتورهای این پروژه.'; },
     contracts: function () { return 'قراردادهای این پروژه؛ مطالعه، امضای آنلاین با کد پیامکی و نسخه PDF.'; },
+    meetings: function () { return 'جلسه‌های آنلاین با تیم؛ در زمان جلسه روی «ورود» بزنید.'; },
     chat: function () { return 'گفت‌وگو با تیم مربع؛ پاسخ‌ها همین‌جا می‌آید.'; }
   };
   var prevTab = 'progress';
@@ -252,14 +255,27 @@
     })) : empty('edit', 'قراردادی ارسال نشده', null));
   }
 
+  function meetings() {
+    var pane = $('pane-meetings'), list = (data && data.meetings) || [];
+    if (!pane) return;
+    pane.replaceChildren(list.length ? h('div', { class: 'cp-card cp-list' }, list.map(function (x) {
+      var live = x.status === 'live';
+      return h('a', { class: 'cp-row', href: x.link, target: '_blank', rel: 'noopener' }, [
+        h('span', { class: 'cp-row-ico', html: icon('video') }),
+        h('div', { class: 'cp-row-copy' }, [h('strong', { text: x.title }), h('small', { text: jal(x.date) + ' · ساعت ' + fa(x.time) + (x.duration ? ' · ' + fa(x.duration) + ' دقیقه' : '') })]),
+        h('div', { class: 'cp-row-end' }, [live ? h('span', { class: 'btn btn-primary btn-sm', text: 'ورود؛ جلسه شروع شده' }) : h('span', { class: 'btn btn-secondary btn-sm', text: 'ورود به جلسه' })])]);
+    })) : empty('video', 'جلسه‌ای تنظیم نشده', null));
+  }
+
   /* ------------------------------------------------------------ chat */
   var box = $('chat-messages'), form = $('client-form'), lastDay = '', sending = Promise.resolve(), chatBusy = null;
   function myName() { return me && me.name ? me.name : (form.elements.name.value.trim() || ''); }
   function hm(s) { return fa(String(s || '').slice(11, 16)); }
-  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit' };
+  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit', meeting: 'video' };
   function sysCard(m) {
     var t = m.meta && m.meta.t, act = null;
-    if (t === 'contract' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: /امضا شد/.test(m.body) ? 'دیدن قرارداد' : 'مطالعه و امضا' });
+    if (t === 'meeting') act = h('button', { type: 'button', class: 'sys-link', text: 'جلسات', onclick: function () { go('meetings'); } });
+    else if (t === 'contract' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: /امضا شد/.test(m.body) ? 'دیدن قرارداد' : 'مطالعه و امضا' });
     else if (t === 'invoice' && m.meta.url) act = h('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: (/صادر شد/.test(m.body) ? 'مشاهده و پرداخت ' : 'مشاهده ') + (m.meta.k === 'proforma' || /^پیش‌فاکتور/.test(m.body) ? 'پیش‌فاکتور' : 'فاکتور') });
     else if ((t === 'design' || t === 'file') && data && data.project) act = h('button', { type: 'button', class: 'sys-link', text: t === 'design' ? 'دیدن طرح' : 'دانلود فایل', onclick: function () {
       var d = t === 'design' && data.designs.filter(function (x) { return x.id === m.meta.id; })[0];
@@ -319,7 +335,7 @@
   form.elements.message.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(140, this.scrollHeight) + 'px'; });
 
   function refresh() {
-    return api('/portal').then(function (d) { data = d; if (d.project) { progress(); if (!reviewing) designs(); files(); invoices(); contracts(); } tabs(); }).catch(function () {});
+    return api('/portal').then(function (d) { data = d; if (d.project) { progress(); if (!reviewing) designs(); files(); invoices(); contracts(); } meetings(); tabs(); }).catch(function () {});
   }
 
   /* ------------------------------------------------------------ start */
@@ -344,9 +360,10 @@
       return api('/portal').then(function (d) {
         data = d;
         var want = (location.hash || '').slice(1);
-        if (!d.project) tab = 'chat';
+        meetings();
+        if (!d.project) tab = want === 'meetings' && (d.meetings || []).length ? 'meetings' : 'chat';
         else {
-          progress(); designs(); files(); invoices(); contracts(); contracts();
+          progress(); designs(); files(); invoices(); contracts();
           tab = TABS.some(function (t) { return t[0] === want; }) ? want : d.designs.some(function (x) { return x.status === 'pending'; }) ? 'designs' : 'progress';
         }
         go(tab);

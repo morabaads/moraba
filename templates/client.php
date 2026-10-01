@@ -67,6 +67,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 		<section class="cp-pane" id="pane-files" hidden></section>
 		<section class="cp-pane" id="pane-invoices" hidden></section>
 		<section class="cp-pane" id="pane-contracts" hidden></section>
+		<section class="cp-pane" id="pane-meetings" hidden></section>
 		<section class="cp-pane cp-chat" id="pane-chat" hidden>
 			<div class="cp-chat-card">
 				<header class="cp-chat-head">

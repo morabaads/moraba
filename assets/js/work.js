@@ -46,6 +46,18 @@
   function drawClock() {
     var c = $('#att-clock'); if (c) c.textContent = MP.clock(liveToday());
   }
+  /** Time in online meetings over the last 30 days (from the meetings' attendance). */
+  var meetStat = null;
+  function meetCard() {
+    var c = el('section', { class: 'card stat', style: { cursor: 'pointer' }, onclick: function () { MP.showView('meetings'); } }, el('small', { text: 'جلسات آنلاین ۳۰ روز اخیر' }), el('strong', { text: meetStat ? MP.duration(meetStat.minutes * 60) : '…' }), el('span', { text: meetStat ? fa(meetStat.meetings) + ' جلسه' + (meetStat.invited ? ' · دعوت به ' + fa(meetStat.invited) : '') : '' }));
+    if (!meetStat) MP.api('meetings/stats', { query: { from: J.addDays(S.today, -29), to: S.today } }).then(function (r) {
+      var mine = r.people.filter(function (p) { return p.user_id === S.me.id; })[0] || { minutes: 0, meetings: 0, invited: 0 };
+      meetStat = mine;
+      c.querySelector('strong').textContent = MP.duration(mine.minutes * 60);
+      c.querySelector('span').textContent = fa(mine.meetings) + ' جلسه' + (mine.invited ? ' · دعوت به ' + fa(mine.invited) : '');
+    }).catch(function () {});
+    return c;
+  }
   function render() {
     var body = $('#att-body'), a = S.attendance;
     if (!a) { body.replaceChildren(MP.skeleton(4)); return; }
@@ -69,7 +81,8 @@
         a.open ? el('button', { type: 'button', class: 'btn btn-out', html: icon('logout') + 'ثبت خروج', onclick: function () { MP.punch('out').then(render); } })
           : el('button', { type: 'button', class: 'btn btn-primary', html: icon('clock') + 'ثبت ورود', onclick: function () { MP.punch('in').then(render); } })),
       el('section', { class: 'card stat' }, el('small', { text: 'کارکرد این هفته' }), el('strong', { text: MP.duration(week) }), bars),
-      el('section', { class: 'card stat' }, el('small', { text: '۳۰ روز اخیر' }), el('strong', { text: MP.duration(month) }), el('span', { text: fa(days) + ' روز حضور · میانگین ' + MP.duration(days ? month / days : 0) })));
+      el('section', { class: 'card stat' }, el('small', { text: '۳۰ روز اخیر' }), el('strong', { text: MP.duration(month) }), el('span', { text: fa(days) + ' روز حضور · میانگین ' + MP.duration(days ? month / days : 0) })),
+      meetCard());
     if (a.open) tick = setInterval(drawClock, 1000);
 
     var sessions = el('section', { class: 'card pad' }, el('h2', { class: 'card-title', text: 'ورود و خروج‌های من' }));

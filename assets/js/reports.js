@@ -55,6 +55,32 @@
     }).catch(MP.soft);
   }
 
+  /* Meetings: how many were held, how long, and who attended. */
+  var meetRange = 30;
+  function meetStats() {
+    var body = $('#rep-body');
+    var seg = el('div', { class: 'seg sm', role: 'tablist' }, [[7, '۷ روز'], [30, '۳۰ روز'], [90, '۳ ماه'], [365, 'یک سال']].map(function (r) {
+      return el('button', { type: 'button', role: 'tab', 'aria-selected': String(r[0] === meetRange), text: r[1], onclick: function () { meetRange = r[0]; meetStats(); } });
+    }));
+    body.replaceChildren(el('div', { class: 'card-head', style: { marginBottom: '12px' } }, el('h2', { text: 'آمار جلسات آنلاین' }), seg), MP.skeleton(4));
+    MP.api('meetings/stats', { query: { from: J.addDays(S.today, -meetRange + 1), to: S.today } }).then(function (r) {
+      if (tab !== 'meetings') return;
+      var hours = function (m) { return m >= 60 ? fa(Math.floor(m / 60)) + ' ساعت' + (m % 60 ? ' و ' + fa(m % 60) + ' دقیقه' : '') : fa(m) + ' دقیقه'; };
+      var tb = el('tbody');
+      r.people.forEach(function (p) {
+        var rate = p.invited ? Math.min(100, Math.round(p.meetings / p.invited * 100)) : null, u = MP.user(p.user_id);
+        tb.append(el('tr', null, el('td', null, el('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '8px' } }, MP.avatar(u, 'sm'), u.name)),
+          el('td', { text: fa(p.meetings) }), el('td', { text: hours(p.minutes) }), el('td', { text: p.invited ? fa(p.invited) : '—' }),
+          el('td', { class: rate !== null && rate < 60 ? 'prio-high' : '', text: rate === null ? '—' : fa(rate) + '٪' })));
+      });
+      body.replaceChildren(el('div', { class: 'card-head', style: { marginBottom: '12px' } }, el('h2', { text: 'آمار جلسات آنلاین' }), seg),
+        el('div', { class: 'rep-stats' }, stat('جلسات برگزارشده', fa(r.meetings), 'در ' + fa(meetRange) + ' روز اخیر'), stat('مدت کل', hours(r.minutes), 'زمان برگزاری جلسات'), stat('میانگین هر جلسه', hours(r.avg), '')),
+        r.people.length ? el('section', { class: 'card rep-wide' }, el('h2', { class: 'card-title', text: 'حضور همکاران' }),
+          el('div', { class: 'table-wrap' }, el('table', { class: 'table' }, el('thead', null, el('tr', null, ['همکار', 'جلسات حاضر', 'مدت حضور', 'دعوت‌شده', 'نرخ حضور'].map(function (x) { return el('th', { text: x }); }))), tb)))
+          : MP.empty('video', 'جلسه‌ای در این بازه برگزار نشده', null, null, true));
+    }).catch(MP.soft);
+  }
+
   var AUDIT_ICON = { task: 'tasks', ledger: 'wallet', leave: 'leave', attendance: 'clock', project: 'folder', meeting: 'video', member: 'user' };
   var AUDIT_ACTION = { create: 'ایجاد', update: 'ویرایش', delete: 'حذف', approved: 'تأیید', rejected: 'رد', 'in': 'ورود', out: 'خروج', add: 'افزودن', remove: 'حذف', file: 'پیوست', import: 'ورود اکسل', undo: 'بازگردانی', reset: 'ریست', archive: 'آرشیو', restore: 'بازگردانی' };
   function audit(append) {
@@ -89,8 +115,8 @@
       S.users.forEach(function (u) { userSel.append(el('option', { value: u.id, text: u.id === S.me.id ? 'خودم' : u.name })); });
       userSel.value = S.me.id;
     }
-    userSel.hidden = tab === 'costs' || tab === 'payroll';
-    if (tab === 'audit') audit(); else if (tab === 'costs') MP.costReport($('#rep-body')); else if (tab === 'payroll') MP.payroll($('#rep-body')); else perf();
+    userSel.hidden = tab === 'costs' || tab === 'payroll' || tab === 'meetings';
+    if (tab === 'meetings') meetStats(); else if (tab === 'audit') audit(); else if (tab === 'costs') MP.costReport($('#rep-body')); else if (tab === 'payroll') MP.payroll($('#rep-body')); else perf();
   }
   userSel.onchange = open;
   $$('#rep-tab button').forEach(function (b) {
