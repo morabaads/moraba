@@ -224,7 +224,10 @@
   function settingsDialog() {
     MP.api('meetings/settings').then(function (s) {
       var form = el('form', { class: 'form' },
-        el('p', { class: 'hint', text: 'تصویر و صدا مستقیم بین مرورگرها رد و بدل می‌شود. اگر بعضی شرکت‌کنندگان (مثلاً روی اینترنت همراه) تصویر یکدیگر را نمی‌بینند، یک سرور TURN وارد کنید.' }),
+        MP.field('روش انتقال صدا و تصویر', MP.select('mode', [['relay', 'از طریق همین سایت (بدون هیچ سرور بیرونی) — پیشنهادی'], ['p2p', 'مستقیم بین مرورگرها (WebRTC، نیاز به STUN/TURN)']], s.mode || 'relay'),
+          'روش «همین سایت» روی هر اینترنتی کار می‌کند ولی حدود نیم تا یک ثانیه تأخیر دارد و تصویر چند فریم در ثانیه است؛ برای جلسه‌های تا حدود ۶ نفر مناسب است.'),
+        MP.field('کیفیت تصویر (روش همین سایت)', MP.select('video', [['low', 'کم — اینترنت ضعیف'], ['normal', 'معمولی'], ['high', 'خوب — مصرف بیشتر هاست']], s.video || 'normal')),
+        el('p', { class: 'hint', text: 'تنظیمات زیر فقط برای روش «مستقیم بین مرورگرها» است.' }),
         MP.field('سرورهای STUN', el('input', { name: 'stun', dir: 'ltr', value: s.stun, placeholder: 'stun:stun.l.google.com:19302' }), 'چند آدرس را با فاصله یا ویرگول جدا کنید.'),
         MP.field('سرور TURN (اختیاری)', el('input', { name: 'turn_url', dir: 'ltr', value: s.turn_url || '', placeholder: 'turn:turn.example.com:3478' })),
         el('div', { class: 'row' }, MP.field('نام کاربری TURN', el('input', { name: 'turn_user', dir: 'ltr', value: s.turn_user || '' })), MP.field('رمز TURN', el('input', { name: 'turn_pass', dir: 'ltr', type: 'password', value: s.turn_pass || '' }))),
@@ -237,7 +240,7 @@
         e.preventDefault();
         var f = form.elements;
         MP.busy(form, true);
-        MP.api('meetings/settings', { method: 'POST', body: { stun: f.stun.value, turn_url: f.turn_url.value, turn_user: f.turn_user.value, turn_pass: f.turn_pass.value, duration: +f.duration.value, waiting: f.waiting.value } })
+        MP.api('meetings/settings', { method: 'POST', body: { mode: f.mode.value, video: f.video.value, stun: f.stun.value, turn_url: f.turn_url.value, turn_user: f.turn_user.value, turn_pass: f.turn_pass.value, duration: +f.duration.value, waiting: f.waiting.value } })
           .then(function (n) { S.meetSettings = n; MP.dialog.close(); MP.toast('تنظیمات جلسه ذخیره شد'); })
           .catch(function (err) { MP.busy(form, false); MP.soft(err); });
       };

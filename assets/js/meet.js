@@ -121,6 +121,7 @@
     e.preventDefault();
     var btn = $('#join-btn'), err = $('#join-err');
     err.textContent = ''; btn.disabled = true;
+    audioUnlock();
     var before = local ? Promise.resolve(local) : startPreview();
     var name = nameValue(); try { if (name) localStorage.setItem('mp-meet-name', name); } catch (x) { /* private */ }
     before.then(function () { return api('/join', { name: name, password: $('#j-pass') ? $('#j-pass').value : '', mic: want.mic, cam: want.cam })
@@ -144,13 +145,14 @@
   }
 
   function makeTile(p, mine) {
-    var v = el('video', { autoplay: '', playsinline: '', 'webkit-playsinline': '' });
+    var v = R.on && !mine ? el('canvas', { width: 16, height: 9 }) : el('video', { autoplay: '', playsinline: '', 'webkit-playsinline': '' });
     if (mine) { v.muted = true; v.setAttribute('muted', ''); }
+    if (R.on && !mine) p.canvas = v;
     var t = el('div', { class: 'tile' + (mine ? ' mine' : '') }, v,
       el('div', { class: 'ph' }, el('span', { class: 'av' })),
       el('span', { class: 'net' }),
       el('div', { class: 'tag' }, el('i', { class: 'm', html: ic('mic-off') }), el('b'), el('i', { class: 'h', html: ic('hand') })));
-    p.tile = t; p.video = v;
+    p.tile = t; p.video = R.on && !mine ? null : v;
     if (p.stream) v.srcObject = p.stream;
     t.ondblclick = function () { t.classList.toggle('pin'); layout(); };
     $('#mt-grid').append(t);
@@ -170,6 +172,125 @@
     var g = $('#mt-grid'), n = g.children.length;
     g.dataset.n = n > 9 ? 'many' : n;
     g.classList.toggle('pinned', !!g.querySelector('.pin, .share'));
+  }
+
+
+  /* ------------------------------------------------------------ Relay mode: media through this site
+     Sound: 16 kHz μ-law pieces of 200 ms (silence is not sent). Picture: JPEG frames a few times a second.
+     One POST every ~250 ms sends ours and brings everyone else's. */
+  var R = { on: info.mode !== 'p2p', q: '', rest: false, busy: false, c: {}, vk: {}, aq: [], aseq: 1, vseq: 1, frame: null, frameAt: 0, fails: 0 };
+  var actx = null, gainNode = null, proc = null, micSrc = null, pend = [], pendN = 0, hang = 0, remoteUntil = 0, remoteLvl = 0;
+  var VQ = { low: [240, 0.5, 400], normal: [360, 0.6, 300], high: [480, 0.65, 220] }[info.video] || [360, 0.6, 300];
+  var DEC = new Float32Array(256);
+  (function () { for (var i = 0; i < 256; i++) { var u = ~i & 0xFF, sign = u & 0x80, e = (u >> 4) & 7, mt = u & 0x0F, x = ((mt << 3) + 0x84) << e; x -= 0x84; DEC[i] = (sign ? -x : x) / 32768; } })();
+  function ulaw(v) {
+    var x = Math.max(-1, Math.min(1, v)) * 32767 | 0, sign = (x >> 8) & 0x80;
+    if (sign) x = -x; if (x > 32635) x = 32635; x += 0x84;
+    var e = 7; for (var m = 0x4000; (x & m) === 0 && e > 0; e--, m >>= 1) { /* find exponent */ }
+    return ~(sign | (e << 4) | ((x >> (e + 3)) & 0x0F)) & 0xFF;
+  }
+  /** Must run inside the click that joins: iOS only starts sound after a tap. */
+  function audioUnlock() {
+    if (!R.on) return;
+    if (!actx) {
+      var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) { /* older iOS */ }
+      actx = new AC();
+      gainNode = actx.createGain(); gainNode.connect(actx.destination);
+    }
+    if (actx.state !== 'running') actx.resume();
+  }
+  function micStart() {
+    if (!actx || !aTrack || proc) return;
+    micSrc = actx.createMediaStreamSource(new MediaStream([aTrack]));
+    proc = actx.createScriptProcessor(4096, 1, 1);
+    var ratio = actx.sampleRate / 16000, carry = 0;
+    proc.onaudioprocess = function (e) {
+      var inp = e.inputBuffer.getChannelData(0), outN = Math.floor((inp.length - carry) / ratio), out = new Float32Array(outN);
+      for (var i = 0; i < outN; i++) { var a = carry + i * ratio, i0 = a | 0, b = Math.min(inp.length - 1, (a + ratio) | 0), sum = 0, n = 0; for (var k = i0; k <= b; k++) { sum += inp[k]; n++; } out[i] = n ? sum / n : 0; }
+      carry = (carry + outN * ratio) - inp.length; if (carry < 0) carry = 0;
+      pend.push(out); pendN += outN;
+      if (pendN < 3200) return;
+      var all = new Float32Array(pendN), o = 0; pend.forEach(function (x) { all.set(x, o); o += x.length; }); pend = []; pendN = 0;
+      if (!want.mic || me.state !== 'in') return;
+      var rms = 0; for (var j = 0; j < all.length; j++) rms += all[j] * all[j]; rms = Math.sqrt(rms / all.length);
+      var now = actx.currentTime;
+      // Without echo cancellation for played-back sound, drop quiet pieces while others are talking (echo).
+      var echo = now < remoteUntil + 0.25 && rms < Math.max(0.02, remoteLvl * 0.8);
+      if (rms > 0.012 && !echo) hang = 4;
+      if (hang <= 0) { talking(peers.me, false); return; }
+      hang--;
+      var bytes = new Uint8Array(all.length); for (var z = 0; z < all.length; z++) bytes[z] = ulaw(all[z]);
+      R.aq.push(bytes); if (R.aq.length > 25) R.aq.splice(0, R.aq.length - 25);
+      talking(peers.me, rms > 0.012);
+    };
+    micSrc.connect(proc); proc.connect(actx.destination);
+  }
+  ['touchend', 'click'].forEach(function (ev) { document.addEventListener(ev, function () { if (actx && actx.state !== 'running') actx.resume(); }, true); });
+  function micStop() { if (proc) { try { micSrc.disconnect(); proc.disconnect(); } catch (e) { /* gone */ } proc = null; micSrc = null; } }
+  function talking(p, on) { if (p && p.tile) p.tile.classList.toggle('talk', !!on); }
+  function playPiece(pid, bytes) {
+    if (!actx) return;
+    var o = peers[pid]; if (!o) return;
+    var n = bytes.length, outRate = actx.sampleRate, outN = Math.round(n * outRate / 16000), buf = actx.createBuffer(1, outN, outRate), d = buf.getChannelData(0), step = 16000 / outRate, rms = 0;
+    for (var i = 0; i < outN; i++) { var pos = i * step, i0 = pos | 0, f = pos - i0, a = DEC[bytes[i0]], b = DEC[bytes[Math.min(n - 1, i0 + 1)]]; d[i] = a + (b - a) * f; }
+    for (var j = 0; j < n; j += 8) rms += DEC[bytes[j]] * DEC[bytes[j]]; rms = Math.sqrt(rms / (n / 8));
+    var now = actx.currentTime, t = Math.max(now + 0.15, o.next || 0);
+    if (t - now > 1.0) t = now + 0.15; // fell behind: drop the delay
+    var src = actx.createBufferSource(); src.buffer = buf; src.connect(gainNode); src.start(t);
+    o.next = t + buf.duration;
+    remoteUntil = Math.max(remoteUntil, o.next); remoteLvl = Math.max(rms, remoteLvl * 0.7);
+    talking(o, true); clearTimeout(o.talkT); o.talkT = setTimeout(function () { talking(o, false); }, (o.next - now) * 1000 + 150);
+  }
+  function drawFrame(pid, bytes) {
+    var o = peers[pid]; if (!o || !o.canvas) return;
+    var blob = new Blob([bytes], { type: 'image/jpeg' });
+    var paint = function (img, w, h) { var c = o.canvas; if (c.width !== w || c.height !== h) { c.width = w; c.height = h; } c.getContext('2d').drawImage(img, 0, 0, w, h); o.tile.classList.add('has-frame'); };
+    if (window.createImageBitmap) createImageBitmap(blob).then(function (bm) { paint(bm, bm.width, bm.height); if (bm.close) bm.close(); }).catch(function () {});
+    else { var u = URL.createObjectURL(blob), im = new Image(); im.onload = function () { paint(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(u); }; im.src = u; }
+  }
+  var grab = null;
+  function captureFrame() {
+    var v = peers.me && peers.me.video, now = Date.now();
+    if (!v || (!want.cam && !sTrack) || !v.videoWidth || R.frame) return;
+    var share = !!sTrack, gap = share ? 1000 : VQ[2];
+    if (now - R.frameAt < gap) return;
+    R.frameAt = now;
+    var w = share ? Math.min(1280, v.videoWidth) : Math.min(VQ[0], v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth);
+    grab = grab || document.createElement('canvas'); grab.width = w; grab.height = h;
+    grab.getContext('2d').drawImage(v, 0, 0, w, h);
+    grab.toBlob(function (b) { if (b) b.arrayBuffer().then(function (ab) { R.frame = new Uint8Array(ab); }); }, 'image/jpeg', share ? 0.6 : VQ[1]);
+  }
+  function relayTick() {
+    if (!R.on || me.state !== 'in') return;
+    if (R.busy || !R.q) { setTimeout(relayTick, 200); return; }
+    captureFrame();
+    R.busy = true;
+    var started = Date.now(), audio = R.aq.splice(0), frame = R.frame; R.frame = null;
+    var head = { a: audio.map(function (x) { return x.length; }), as: R.aseq, v: frame ? frame.length : 0, vs: frame ? R.vseq : 0, c: R.c, vk: R.vk };
+    R.aseq += audio.length; if (frame) R.vseq++;
+    var hj = new TextEncoder().encode(JSON.stringify(head)), len = new Uint8Array(4);
+    new DataView(len.buffer).setUint32(0, hj.length);
+    var body = new Blob([len, hj].concat(audio, frame ? [frame] : []), { type: 'application/octet-stream' });
+    var url = R.rest ? C.api + '/relay?' + R.q : info.relay + '?' + R.q;
+    var h = R.rest && C.nonce ? { 'X-WP-Nonce': C.nonce } : {};
+    fetch(url, { method: 'POST', body: body, headers: h, credentials: R.rest ? 'same-origin' : 'omit', cache: 'no-store' })
+      .then(function (r) { if (!r.ok) { var e = new Error('relay'); e.status = r.status; throw e; } return r.arrayBuffer(); })
+      .then(function (ab) {
+        R.fails = 0;
+        var dv = new DataView(ab), jl = dv.getUint32(0), res = JSON.parse(new TextDecoder().decode(new Uint8Array(ab, 4, jl))), at = 4 + jl;
+        R.c = res.c || {}; Object.keys(res.vk || {}).forEach(function (k) { R.vk[k] = res.vk[k]; });
+        res.items.forEach(function (it) {
+          var bytes = new Uint8Array(ab, at, it[3]); at += it[3];
+          if (it[1] === 'a') playPiece(it[0], bytes); else drawFrame(it[0], bytes.slice());
+        });
+      })
+      .catch(function (e) {
+        R.fails++;
+        if (!R.rest && (e.status === 404 || e.status === 503 || e.status === 500 || !e.status)) R.rest = true; // relay.php blocked → WordPress route
+        if (e.status === 410) return;
+      })
+      .then(function () { R.busy = false; setTimeout(relayTick, Math.max(40, 250 - (Date.now() - started)) + (R.fails > 3 ? 1000 : 0)); });
   }
 
   /* --- connection state & playback */
@@ -240,7 +361,8 @@
   function drop(pid) {
     var o = peers[pid]; if (!o) return;
     clearTimeout(o.slow);
-    try { o.pc.close(); } catch (e) { /* closed */ }
+    clearTimeout(o.talkT);
+    if (o.pc) try { o.pc.close(); } catch (e) { /* closed */ }
     if (o.tile) o.tile.remove();
     delete peers[pid];
     layout();
@@ -294,6 +416,7 @@
       }
       me.state = d.me.state;
       remaining = d.remaining;
+      if (R.on && d.relay) { var first = !R.q; R.q = d.relay; if (first) { micStart(); relayTick(); } }
       sync(d);
       d.signals.forEach(function (s) { after = Math.max(after, s.id); chain = chain.then(function () { return onSignal(s); }); });
       pollTimer = setTimeout(poll, d.signals.length ? 400 : 1000);
@@ -311,7 +434,11 @@
       if (p.id === me.id) return;
       ids[p.id] = 1;
       var o = peers[p.id];
-      if (!o) {
+      if (!o && R.on) {
+        o = peers[p.id] = { id: p.id };
+        makeTile(o, false);
+        if (lastPeers.length) toast(p.name + ' وارد جلسه شد');
+      } else if (!o) {
         o = conn(p.id, me.id > p.id); // the newcomer calls everyone already in the room
         if (o.init) offer(o);
         if (lastPeers.length) toast(p.name + ' وارد جلسه شد');
@@ -401,6 +528,7 @@
 
   function finish(why) {
     clearTimeout(pollTimer);
+    micStop(); R.q = '';
     me.state = 'gone';
     Object.keys(peers).forEach(function (k) { if (k !== 'me') drop(k); });
     if (peers.me && peers.me.tile) peers.me.tile.remove();

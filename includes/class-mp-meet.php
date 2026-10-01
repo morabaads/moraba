@@ -39,6 +39,7 @@ class MP_Meet {
 			array( "$tok/kick", 'POST', 'room_kick', '__return_true' ),
 			array( "$tok/leave", 'POST', 'room_leave', '__return_true' ),
 			array( "$tok/end", 'POST', 'room_end', '__return_true' ),
+			array( "$tok/relay", 'POST', 'room_relay', '__return_true' ),
 		);
 		foreach ( $routes as $r ) {
 			register_rest_route( MP_Rest::NS, '/' . $r[0], array( 'methods' => $r[1], 'callback' => array( __CLASS__, $r[2] ), 'permission_callback' => $r[3] ) );
@@ -78,6 +79,8 @@ class MP_Meet {
 				'turn_pass' => '',
 				'duration'  => 60,
 				'waiting'   => 'guests',
+				'mode'      => 'relay', // relay: through this site, no outside server · p2p: WebRTC browser to browser
+				'video'     => 'normal', // low | normal | high
 			)
 		);
 	}
@@ -102,6 +105,12 @@ class MP_Meet {
 		}
 		if ( null !== $r['waiting'] ) {
 			$s['waiting'] = MP_Util::pick( $r['waiting'], array( 'off', 'guests', 'all' ), 'guests' );
+		}
+		if ( null !== $r['mode'] ) {
+			$s['mode'] = MP_Util::pick( $r['mode'], array( 'relay', 'p2p' ), 'relay' );
+		}
+		if ( null !== $r['video'] ) {
+			$s['video'] = MP_Util::pick( $r['video'], array( 'low', 'normal', 'high' ), 'normal' );
 		}
 		update_option( self::SETTINGS, $s, false );
 		return $s;
@@ -173,6 +182,7 @@ class MP_Meet {
 		$wpdb->update( self::t(), array( 'status' => 'ended', 'ended_at' => $now ), array( 'id' => $m->id ) );
 		$wpdb->query( $wpdb->prepare( 'UPDATE ' . self::t( 'meeting_peers' ) . " SET state = 'left', left_at = %s WHERE meeting_id = %d AND state IN ('in','waiting')", $now, $m->id ) ); // phpcs:ignore
 		$wpdb->delete( self::t( 'meeting_signals' ), array( 'meeting_id' => $m->id ) );
+		MP_Relay::purge( $m->token );
 	}
 
 	public static function payload( $m, $uid = 0 ) {
@@ -375,6 +385,7 @@ class MP_Meet {
 			}
 		}
 		MP_Audit::log( 'delete', 'meeting', $m->id, 'جلسه «' . $m->title . '» حذف شد' );
+		MP_Relay::purge( $m->token );
 		foreach ( array( 'meeting_people', 'meeting_peers', 'meeting_signals' ) as $tb ) {
 			$wpdb->delete( self::t( $tb ), array( 'meeting_id' => $m->id ) );
 		}
@@ -432,6 +443,9 @@ class MP_Meet {
 			'password'   => '' !== $m->password && ! $user,
 			'user'       => $user ? array( 'id' => $uid, 'name' => $user->display_name, 'avatar' => MP_Util::avatar_url( $uid ), 'host' => self::is_host( $m, $uid ) ) : null,
 			'ice'        => self::ice(),
+			'mode'       => self::settings()['mode'],
+			'video'      => self::settings()['video'],
+			'relay'      => MP_URL . 'relay.php',
 		);
 	}
 
@@ -551,6 +565,7 @@ class MP_Meet {
 			'host_here' => $hosts > 0,
 			'signals'   => $signals,
 			'remaining' => $end ? max( 0, $end - self::ts() ) : -1,
+			'relay'     => 'in' === $me->state && 'relay' === self::settings()['mode'] ? MP_Relay::issue( $m->token, $me->id ) : '',
 		);
 	}
 
@@ -631,6 +646,7 @@ class MP_Meet {
 			return self::err( 'فقط میزبان.', 403 );
 		}
 		$wpdb->query( $wpdb->prepare( 'UPDATE ' . self::t( 'meeting_peers' ) . " SET state = 'kicked', left_at = %s WHERE id = %d AND meeting_id = %d AND role <> 'host'", MP_Util::now(), (int) $r['target'], $h[0]->id ) ); // phpcs:ignore
+		MP_Relay::revoke( $h[0]->token, (int) $r['target'] );
 		return array( 'ok' => true );
 	}
 
@@ -642,6 +658,19 @@ class MP_Meet {
 			$wpdb->update( self::t( 'meeting_peers' ), array( 'state' => 'left', 'left_at' => MP_Util::now() ), array( 'id' => $me->id ) );
 		}
 		return array( 'ok' => true );
+	}
+
+	/** POST room/{token}/relay — the media relay through WordPress, when relay.php can't be used. */
+	public static function room_relay( WP_REST_Request $r ) {
+		if ( ! self::by_token( (string) $r['token'] ) ) {
+			return self::err( 'جلسه پیدا نشد.', 404 );
+		}
+		$res = MP_Relay::handle( MP_Relay::base_wp(), $r->get_query_params(), $r->get_body() );
+		status_header( $res[0] );
+		header( 'Content-Type: application/octet-stream' );
+		header( 'Cache-Control: no-store' );
+		echo $res[1]; // phpcs:ignore
+		exit;
 	}
 
 	public static function room_end( WP_REST_Request $r ) {
