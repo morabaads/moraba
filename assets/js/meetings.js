@@ -195,6 +195,32 @@
 
   /* ------------------------------------------------------------ settings (supervisors) */
 
+  /** Gathers ICE candidates with the servers in the form: shows whether STUN and TURN answer from this network. */
+  function testIce(form, btn) {
+    var f = form.elements, out = $('.mt-test-out', form), servers = [];
+    f.stun.value.split(/[\s,]+/).filter(Boolean).forEach(function (u) { servers.push({ urls: u }); });
+    if (f.turn_url.value.trim()) servers.push({ urls: f.turn_url.value.trim().split(/[\s,]+/), username: f.turn_user.value, credential: f.turn_pass.value });
+    if (!window.RTCPeerConnection) { out.textContent = 'این مرورگر WebRTC ندارد.'; return; }
+    var pc, found = { host: 0, srflx: 0, relay: 0 }, done = false;
+    try { pc = new RTCPeerConnection({ iceServers: servers }); } catch (err) { out.textContent = 'آدرس سرورها معتبر نیست: ' + err.message; return; }
+    btn.disabled = true; out.textContent = 'در حال تست (حداکثر ۸ ثانیه)…';
+    function finish() {
+      if (done) return; done = true; btn.disabled = false; pc.close();
+      out.replaceChildren(
+        el('div', { class: found.srflx ? 'ok' : 'bad', text: (found.srflx ? '✓ ' : '✗ ') + 'STUN: ' + (found.srflx ? 'پاسخ داد' : 'پاسخی نیامد (احتمالاً فیلتر است)') }),
+        f.turn_url.value.trim() ? el('div', { class: found.relay ? 'ok' : 'bad', text: (found.relay ? '✓ ' : '✗ ') + 'TURN: ' + (found.relay ? 'کار می‌کند' : 'پاسخی نیامد؛ آدرس، نام کاربری و رمز را بررسی کنید') })
+          : el('div', { class: 'bad', text: '✗ TURN تنظیم نشده؛ بدون آن، بیشتر اتصال‌ها روی اینترنت همراه برقرار نمی‌شود.' }),
+        el('small', { text: 'این تست از شبکه همین دستگاه است؛ نتیجه برای شبکه‌های دیگر ممکن است فرق کند.' }));
+    }
+    pc.onicecandidate = function (e) {
+      if (!e.candidate) return finish();
+      var m = / typ (\w+)/.exec(e.candidate.candidate); if (m && found[m[1]] !== undefined) found[m[1]]++;
+    };
+    pc.createDataChannel('t');
+    pc.createOffer().then(function (d) { return pc.setLocalDescription(d); }).catch(finish);
+    setTimeout(finish, 8000);
+  }
+
   function settingsDialog() {
     MP.api('meetings/settings').then(function (s) {
       var form = el('form', { class: 'form' },
@@ -205,6 +231,7 @@
         el('div', { class: 'row' },
           MP.field('مدت پیش‌فرض جلسه', MP.select('duration', DURATIONS.map(function (d) { return [d[0], d[1]]; }), +s.duration)),
           MP.field('اتاق انتظار پیش‌فرض', MP.select('waiting', WAITING.map(function (w) { return [w[0], w[1]]; }), s.waiting))),
+        el('div', { class: 'mt-test' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('repeat') + 'تست اتصال', onclick: function (e) { testIce(form, e.currentTarget); } }), el('div', { class: 'mt-test-out' })),
         MP.actions('ذخیره'));
       form.onsubmit = function (e) {
         e.preventDefault();

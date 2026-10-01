@@ -2373,3 +2373,6 @@ button.tf-box .icon{width:12px;height:12px}
 .day-note.meet{background:var(--info-soft);color:var(--info);border:0;font:inherit;font-size:12px;width:100%;text-align:start}
 .week-strip .dots i.meet{background:var(--brand)}
 .time-trigger.invalid{border-color:var(--danger)!important;box-shadow:0 0 0 3px var(--danger-soft)}
+.mt-test{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin:4px 0 8px}
+.mt-test-out{display:flex;flex-direction:column;gap:2px;font-size:12.5px}
+.mt-test-out .ok{color:var(--ok)}.mt-test-out .bad{color:var(--danger)}.mt-test-out small{color:var(--muted)}

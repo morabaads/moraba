@@ -72,7 +72,7 @@ class MP_Meet {
 		return wp_parse_args(
 			is_array( $s ) ? $s : array(),
 			array(
-				'stun'      => 'stun:stun.l.google.com:19302',
+				'stun'      => 'stun:stun.l.google.com:19302 stun:stun.cloudflare.com:3478 stun:stun.nextcloud.com:443',
 				'turn_url'  => '',
 				'turn_user' => '',
 				'turn_pass' => '',

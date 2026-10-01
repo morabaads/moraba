@@ -45,7 +45,7 @@ $mp_i = function ( $n ) {
 		<div class="pre-card">
 			<div class="pre-media">
 				<div class="tile me-preview" id="preview">
-					<video id="pv" autoplay muted playsinline></video>
+					<video id="pv" autoplay muted playsinline webkit-playsinline></video>
 					<div class="ph" id="pv-ph"><span>دوربین خاموش است</span></div>
 					<div class="pre-tools">
 						<button type="button" class="rb" id="pv-mic" aria-label="میکروفون"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?></button>
@@ -53,6 +53,7 @@ $mp_i = function ( $n ) {
 					</div>
 				</div>
 				<p class="hint" id="pv-hint"></p>
+				<button type="button" class="btn ghost sm retry" id="pv-retry" hidden>اجازه دوربین و میکروفون</button>
 			</div>
 			<form class="pre-form" id="join-form" autocomplete="off">
 				<img class="logo" src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="MORABA">
@@ -96,6 +97,7 @@ $mp_i = function ( $n ) {
 			</aside>
 		</div>
 		<div class="toast" id="toast" role="status" hidden></div>
+		<button type="button" class="tap-play" id="tap-play" hidden><?php echo $mp_i( 'speaker' ); // phpcs:ignore ?>برای پخش صدا و تصویر بزنید</button>
 		<footer class="bar">
 			<button type="button" class="rb" id="b-mic" aria-label="میکروفون"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?></button>
 			<button type="button" class="rb" id="b-cam" aria-label="دوربین"><?php echo $mp_i( 'cam' ); // phpcs:ignore ?></button>

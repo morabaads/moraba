@@ -125,3 +125,9 @@ button,input{font:inherit;color:inherit}
 	#b-end{position:fixed;top:10px;inset-inline-end:12px;margin:0}
 	.room:has(#b-end:not([hidden])) .top{padding-inline-end:150px}
 }
+.retry{display:flex;margin:6px auto 0}
+.tile .net{position:absolute;top:10px;inset-inline-end:10px;background:rgba(0,0,0,.6);padding:2px 10px;border-radius:8px;font-size:11px;z-index:2}
+.tile .net:empty{display:none}
+.tile[data-net="failed"] .net{background:rgba(229,72,77,.85)}
+.tile.weak:after{display:none}
+.tap-play{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;display:flex;align-items:center;gap:10px;padding:16px 26px;border:0;border-radius:18px;background:var(--brand);color:#fff;font:inherit;font-weight:800;font-size:15px;box-shadow:0 20px 60px rgba(0,0,0,.5);cursor:pointer}

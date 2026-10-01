@@ -37,15 +37,42 @@
 
   function show(id) { ['pre', 'wait', 'room', 'bye'].forEach(function (s) { $('#' + s).hidden = s !== id; }); }
   var toastT = null;
-  function toast(t) { var n = $('#toast'); n.textContent = t; n.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { n.hidden = true; }, 3500); }
+  function toast(t, ms) { var n = $('#toast'); n.textContent = t; n.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { n.hidden = true; }, ms || 3500); }
 
   /* ------------------------------------------------------------ Local media */
+  var mediaErr = '';
   function getMedia() {
     var md = navigator.mediaDevices;
-    if (!md || !md.getUserMedia) return Promise.resolve(null);
-    return md.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } })
-      .catch(function () { return md.getUserMedia({ audio: true }).catch(function () { return md.getUserMedia({ video: true }); }); })
-      .catch(function () { return null; });
+    mediaErr = '';
+    if (!window.isSecureContext) { mediaErr = 'insecure'; return Promise.resolve(null); }
+    if (!md || !md.getUserMedia) { mediaErr = 'unsupported'; return Promise.resolve(null); }
+    var keep = function (e) { if (!mediaErr || mediaErr === 'NotFoundError') mediaErr = e && e.name || 'error'; return null; };
+    return md.getUserMedia({ audio: true, video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } })
+      .catch(function (e) { keep(e); return md.getUserMedia({ audio: true, video: true }); })
+      .catch(function (e) { keep(e); return md.getUserMedia({ audio: true }); })
+      .catch(function (e) { keep(e); return md.getUserMedia({ video: true }); })
+      .then(function (st) { if (st) mediaErr = ''; return st; }, keep);
+  }
+  function mediaHint(s) {
+    var ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var inApp = /Telegram|WhatsApp|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent) || (ios && !/Safari\//.test(navigator.userAgent));
+    if (s) return !vTrack ? 'دوربینی پیدا نشد؛ فقط صدا فرستاده می‌شود.' : !aTrack ? 'میکروفونی پیدا نشد؛ فقط تصویر فرستاده می‌شود.' : '';
+    if (mediaErr === 'insecure') return 'برای دوربین و میکروفون، سایت باید با https باز شود.';
+    if (mediaErr === 'unsupported' || mediaErr === 'NotSupportedError' || inApp) return ios ? 'این مرورگر به دوربین دسترسی ندارد. لینک را در Safari باز کنید (نه داخل تلگرام، واتساپ یا اینستاگرام).' : 'این مرورگر به دوربین دسترسی ندارد. لینک را در Chrome باز کنید (نه داخل تلگرام، واتساپ یا اینستاگرام).';
+    if (mediaErr === 'NotAllowedError' || mediaErr === 'SecurityError') return ios ? 'اجازه دوربین و میکروفون داده نشد. در Safari روی «aA» کنار آدرس ← تنظیمات وب‌سایت ← دوربین و میکروفون را «اجازه» کنید و دوباره امتحان کنید.' : 'اجازه دوربین و میکروفون داده نشد. روی قفل کنار آدرس بزنید، دسترسی را مجاز کنید و دوباره امتحان کنید.';
+    if (mediaErr === 'NotReadableError' || mediaErr === 'AbortError') return 'دوربین یا میکروفون دست برنامه دیگری است (تماس، زوم…). آن را ببندید و دوباره امتحان کنید.';
+    return 'دوربین و میکروفون در دسترس نیست؛ می‌توانید فقط ببینید و بشنوید.';
+  }
+  function startPreview() {
+    return getMedia().then(function (st) {
+      if (!local && st) want = { mic: true, cam: true };
+      if (local) local.getTracks().forEach(function (t) { t.stop(); });
+      setLocal(st);
+      var pv = $('#pv'); pv.srcObject = st || null; if (st) pv.play().catch(function () {});
+      $('#pv-hint').textContent = mediaHint(st);
+      $('#pv-retry').hidden = !!st;
+      return st;
+    });
   }
   function setLocal(stream) {
     local = stream;
@@ -85,11 +112,8 @@
     $('#join-btn').disabled = true; $('#join-err').textContent = 'این جلسه به پایان رسیده است.';
   }
 
-  getMedia().then(function (s) {
-    setLocal(s);
-    if (s) $('#pv').srcObject = s;
-    $('#pv-hint').textContent = !s ? 'دسترسی به دوربین و میکروفون داده نشد؛ می‌توانید فقط ببینید و بشنوید.' : !vTrack ? 'دوربینی پیدا نشد.' : '';
-  });
+  startPreview();
+  $('#pv-retry').onclick = function () { startPreview(); };
   $('#pv-mic').onclick = function () { want.mic = !want.mic; applyLocal(); };
   $('#pv-cam').onclick = function () { want.cam = !want.cam; applyLocal(); };
 
@@ -97,13 +121,14 @@
     e.preventDefault();
     var btn = $('#join-btn'), err = $('#join-err');
     err.textContent = ''; btn.disabled = true;
+    var before = local ? Promise.resolve(local) : startPreview();
     var name = nameValue(); try { if (name) localStorage.setItem('mp-meet-name', name); } catch (x) { /* private */ }
-    api('/join', { name: name, password: $('#j-pass') ? $('#j-pass').value : '', mic: want.mic, cam: want.cam })
+    before.then(function () { return api('/join', { name: name, password: $('#j-pass') ? $('#j-pass').value : '', mic: want.mic, cam: want.cam })
       .then(function (d) {
         me = { id: d.peer, secret: d.secret, role: d.role, state: d.state };
         if (d.state === 'waiting') { show('wait'); poll(); } else enter();
-      })
-      .catch(function (x) { btn.disabled = false; err.textContent = x.message; });
+      });
+    }).catch(function (x) { btn.disabled = false; err.textContent = x.message; });
   };
 
   /* ------------------------------------------------------------ Room */
@@ -119,9 +144,11 @@
   }
 
   function makeTile(p, mine) {
-    var v = el('video', { autoplay: '', playsinline: '' }); if (mine) v.muted = true;
+    var v = el('video', { autoplay: '', playsinline: '', 'webkit-playsinline': '' });
+    if (mine) { v.muted = true; v.setAttribute('muted', ''); }
     var t = el('div', { class: 'tile' + (mine ? ' mine' : '') }, v,
       el('div', { class: 'ph' }, el('span', { class: 'av' })),
+      el('span', { class: 'net' }),
       el('div', { class: 'tag' }, el('i', { class: 'm', html: ic('mic-off') }), el('b'), el('i', { class: 'h', html: ic('hand') })));
     p.tile = t; p.video = v;
     if (p.stream) v.srcObject = p.stream;
@@ -145,20 +172,51 @@
     g.classList.toggle('pinned', !!g.querySelector('.pin, .share'));
   }
 
+  /* --- connection state & playback */
+  function setNet(o, st) {
+    if (!o.tile) return;
+    o.tile.dataset.net = st;
+    o.tile.querySelector('.net').textContent = st === 'connecting' ? 'در حال اتصال…' : st === 'weak' ? 'اتصال ضعیف…' : st === 'failed' ? 'اتصال برقرار نشد' : '';
+  }
+  var hinted = false;
+  function slowHint() {
+    if (hinted) return; hinted = true;
+    toast(me.role === 'host' ? 'ارتباط مستقیم با بعضی شرکت‌کنندگان برقرار نشد. در پنل ← جلسات ← تنظیمات، یک سرور TURN وارد کنید.' : 'ارتباط تصویری برقرار نشد؛ شبکه شما اتصال مستقیم را اجازه نمی‌دهد. به میزبان خبر دهید.', 9000);
+  }
+  // iOS (and Chrome without a recent tap) refuse to start a video with sound on their own: ask for one tap.
+  function play(v) {
+    if (!v || !v.srcObject) return;
+    var pr = v.play();
+    if (pr && pr.catch) pr.catch(function () { $('#tap-play').hidden = false; });
+  }
+  $('#tap-play').onclick = function () {
+    $('#tap-play').hidden = true;
+    document.querySelectorAll('#mt-grid video').forEach(function (v) { v.play().catch(function () {}); });
+  };
+
   /* --- peer connections */
   function conn(pid, init) {
     var pc = new RTCPeerConnection({ iceServers: ice });
     var o = { id: pid, pc: pc, q: [], stream: new MediaStream(), init: init, a: null, v: null };
     pc.ontrack = function (e) {
-      if (o.stream.getTracks().indexOf(e.track) < 0) o.stream.addTrack(e.track);
-      if (o.video && o.video.srcObject !== o.stream) o.video.srcObject = o.stream;
-      if (o.video) o.video.play().catch(function () {});
+      // Safari does not pick up tracks added to a stream it is already playing: hand it a fresh stream.
+      var tracks = o.stream.getTracks().filter(function (t) { return t.kind !== e.track.kind; }).concat([e.track]);
+      o.stream = new MediaStream(tracks);
+      if (o.video) { o.video.srcObject = o.stream; play(o.video); }
     };
     pc.onicecandidate = function (e) { if (e.candidate) signal(pid, 'ice', e.candidate.toJSON()); };
-    pc.onconnectionstatechange = function () {
-      if (o.tile) o.tile.classList.toggle('weak', pc.connectionState === 'failed' || pc.connectionState === 'disconnected');
-      if (pc.connectionState === 'failed' && o.init) offer(o, true);
-    };
+    function state() {
+      var st = pc.iceConnectionState, c = pc.connectionState || st;
+      var ok = st === 'connected' || st === 'completed' || c === 'connected';
+      var bad = st === 'failed' || c === 'failed';
+      setNet(o, ok ? '' : bad ? 'failed' : st === 'disconnected' ? 'weak' : 'connecting');
+      if (ok) { clearTimeout(o.slow); o.connected = true; play(o.video); }
+      if (bad && o.init && !o.restarted) { o.restarted = true; offer(o, true); }
+      if (bad) slowHint();
+    }
+    pc.oniceconnectionstatechange = state;
+    pc.onconnectionstatechange = state;
+    o.slow = setTimeout(function () { if (!o.connected) { setNet(o, 'failed'); slowHint(); } }, 20000);
     if (init) {
       o.a = pc.addTransceiver('audio', { direction: 'sendrecv' });
       o.v = pc.addTransceiver('video', { direction: 'sendrecv' });
@@ -181,6 +239,7 @@
   }
   function drop(pid) {
     var o = peers[pid]; if (!o) return;
+    clearTimeout(o.slow);
     try { o.pc.close(); } catch (e) { /* closed */ }
     if (o.tile) o.tile.remove();
     delete peers[pid];
