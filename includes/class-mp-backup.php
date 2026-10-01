@@ -37,6 +37,135 @@ class MP_Backup {
 		'staff'     => array( 'کارمندان (نقش، شماره، عکس، تنظیمات شخصی)', array() ),
 	);
 
+	/**
+	 * What can be wiped on its own, in detail: key => [heading, label, tables emptied, rows only (table => SQL condition), follow-up].
+	 * Follow-ups keep the rest consistent (e.g. tasks of a deleted project lose the project instead of pointing nowhere).
+	 */
+	const RESET_ITEMS = array(
+		'projects'     => array( 'پروژه‌ها', 'پروژه‌ها (با بخش‌ها، مراحل و اعضا)', array( 'projects', 'project_members', 'sections', 'milestones' ), array(), 'unlink_projects' ),
+		'folders'      => array( 'پروژه‌ها', 'فولدرهای پروژه (خود پروژه‌ها می‌مانند)', array( 'folders' ), array(), 'unlink_folders' ),
+		'notes'        => array( 'پروژه‌ها', 'یادداشت‌های پروژه', array( 'notes' ), array(), '' ),
+		'goals'        => array( 'پروژه‌ها', 'اهداف هفتگی', array( 'goals' ), array(), '' ),
+		'tasks'        => array( 'تسک‌ها', 'تسک‌ها (با چک‌لیست و نظرها)', array( 'tasks', 'task_items', 'task_comments', 'timelog' ), array(), '' ),
+		'timelog'      => array( 'تسک‌ها', 'ریز زمان‌های کار (تسک‌ها می‌مانند)', array( 'timelog' ), array(), '' ),
+		'templates'    => array( 'تسک‌ها', 'قالب‌های تسک', array( 'templates' ), array(), 'reseed_templates' ),
+		'daily'        => array( 'تسک‌ها', 'گزارش‌های روزانه', array( 'daily_reports' ), array(), '' ),
+		'messages'     => array( 'گفت‌وگوها', 'پیام‌ها (گروه‌ها می‌مانند)', array( 'messages', 'reads' ), array(), '' ),
+		'team_groups'  => array( 'گفت‌وگوها', 'گروه‌های تیم و گفت‌وگوهای خصوصی (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type IN ('group','direct'))", 'channel_members' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'group')", 'channels' => "type IN ('group','direct')" ), '' ),
+		'client_groups'=> array( 'گفت‌وگوها', 'گروه‌های مشتری و لینک پرتال (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'client')", 'client_contacts' => '1=1', 'channels' => "type = 'client'" ), '' ),
+		'clients'      => array( 'مشتریان', 'مشتریان (پرونده مشتری و پروژه‌هایش)', array( 'clients', 'client_projects' ), array(), '' ),
+		'designs'      => array( 'مشتریان', 'طرح‌ها و فایل‌های تحویلی پرتال (با نظرها)', array( 'client_items', 'design_pins' ), array(), '' ),
+		'pins'         => array( 'مشتریان', 'فقط نظرهای روی طرح‌ها', array( 'design_pins' ), array(), '' ),
+		'invoices'     => array( 'مالی', 'فاکتورها', array(), array( 'invoices' => "kind = 'invoice'" ), '' ),
+		'proformas'    => array( 'مالی', 'پیش‌فاکتورها', array(), array( 'invoices' => "kind = 'proforma'" ), '' ),
+		'ledger'       => array( 'مالی', 'حسابداری (دخل و خرج)', array( 'ledger' ), array(), '' ),
+		'contracts'    => array( 'قراردادها', 'قراردادها', array( 'contracts' ), array(), '' ),
+		'ctemplates'   => array( 'قراردادها', 'قالب‌های قرارداد (قالب پیش‌فرض همیشه می‌ماند)', array( 'contract_templates' ), array(), '' ),
+		'attendance'   => array( 'حضور و مرخصی', 'ورود و خروج‌ها (حضور و غیاب)', array( 'attendance' ), array(), '' ),
+		'leaves'       => array( 'حضور و مرخصی', 'مرخصی‌ها', array( 'leaves' ), array(), '' ),
+		'meetings'     => array( 'جلسات و یادآوری', 'جلسات (با حضور، گفت‌وگو، دعوت‌ها و ضبط‌ها)', array( 'meetings', 'meeting_people', 'meeting_peers', 'meeting_invites', 'meeting_chat', 'meeting_signals' ), array(), 'wipe_meeting_files' ),
+		'reminders'    => array( 'جلسات و یادآوری', 'یادآوری‌ها', array( 'reminders' ), array(), '' ),
+		'notifications'=> array( 'سایر', 'اعلان‌ها', array( 'notifications' ), array(), '' ),
+		'audit'        => array( 'سایر', 'تاریخچه تغییرات', array( 'audit' ), array(), '' ),
+		'files'        => array( 'سایر', 'همه فایل‌ها و پیوست‌ها', array( 'files' ), array(), 'wipe_files' ),
+		'settings'     => array( 'سایر', 'تنظیمات پنل (پیامک، ربات‌ها، حقوق، فاکتور…)', array(), array(), 'wipe_settings' ),
+		'staff'        => array( 'سایر', 'اطلاعات کارمندان (شماره، سمت، عکس، تنظیمات شخصی)', array(), array(), 'wipe_staff' ),
+	);
+
+	/** Rows that each reset item would remove right now. */
+	public static function reset_counts() {
+		global $wpdb;
+		$out = array();
+		foreach ( self::RESET_ITEMS as $k => $it ) {
+			$n = 0;
+			if ( $it[2] ) { // the main thing of the item is its first table
+				$n = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . MP_Install::table( $it[2][0] ) ); // phpcs:ignore
+			}
+			foreach ( $it[3] as $t => $where ) {
+				if ( in_array( $t, array( 'channels', 'invoices' ), true ) ) {
+					$n = max( $n, (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . MP_Install::table( $t ) . ' WHERE ' . self::where( $where ) ) ); // phpcs:ignore
+				}
+			}
+			$out[ $k ] = '' === $it[4] || $it[2] || $it[3] ? $n : null;
+		}
+		return $out;
+	}
+
+	private static function where( $sql ) {
+		return str_replace( '{channels}', MP_Install::table( 'channels' ), $sql );
+	}
+
+	/** Empties the chosen items (a safety backup first). */
+	public static function reset_items( $keys ) {
+		global $wpdb;
+		$keys = array_values( array_intersect( array_keys( self::RESET_ITEMS ), (array) $keys ) );
+		if ( ! $keys ) {
+			return new WP_Error( 'mp_reset', 'چیزی انتخاب نشده است.' );
+		}
+		$safety = self::write( 'before-reset' );
+		if ( is_wp_error( $safety ) ) {
+			return $safety;
+		}
+		foreach ( $keys as $k ) {
+			$it = self::RESET_ITEMS[ $k ];
+			// Rows first (their conditions may look at tables emptied below), then whole tables.
+			foreach ( $it[3] as $t => $where ) {
+				$wpdb->query( 'DELETE FROM ' . MP_Install::table( $t ) . ' WHERE ' . self::where( $where ) ); // phpcs:ignore
+			}
+			foreach ( $it[2] as $t ) {
+				$wpdb->query( 'DELETE FROM ' . MP_Install::table( $t ) ); // phpcs:ignore
+			}
+			if ( $it[4] ) {
+				call_user_func( array( __CLASS__, $it[4] ) );
+			}
+		}
+		MP_Audit::log( 'reset', 'panel', 0, 'پاک کردن: ' . implode( '، ', array_map( function ( $k ) { return self::RESET_ITEMS[ $k ][1]; }, $keys ) ) );
+		return $safety;
+	}
+
+	private static function unlink_projects() {
+		global $wpdb;
+		$wpdb->query( 'UPDATE ' . MP_Install::table( 'tasks' ) . ' SET project_id = 0, section_id = 0' ); // phpcs:ignore
+		$wpdb->query( 'DELETE FROM ' . MP_Install::table( 'channels' ) . " WHERE type = 'project'" ); // phpcs:ignore
+		$wpdb->query( 'UPDATE ' . MP_Install::table( 'channels' ) . ' SET project_id = 0' ); // phpcs:ignore
+		$wpdb->query( 'DELETE FROM ' . MP_Install::table( 'client_projects' ) ); // phpcs:ignore
+	}
+
+	private static function unlink_folders() {
+		global $wpdb;
+		$wpdb->query( 'UPDATE ' . MP_Install::table( 'projects' ) . ' SET folder_id = 0' ); // phpcs:ignore
+	}
+
+	private static function reseed_templates() {
+		delete_option( 'mp_templates_seeded' );
+		MP_Templates::seed();
+	}
+
+	private static function wipe_meeting_files() {
+		global $wpdb;
+		foreach ( $wpdb->get_col( 'SELECT id FROM ' . MP_Install::table( 'files' ) . " WHERE context IN ('meeting','meeting_rec','meeting_audio')" ) as $id ) { // phpcs:ignore
+			MP_Files::delete( (int) $id );
+		}
+		self::empty_dir( MP_Relay::base_wp(), array( 'index.php', '.htaccess', 'key.php' ) );
+	}
+
+	private static function wipe_files() {
+		self::empty_dir( MP_Files::dir(), array( 'index.php', '.htaccess' ) );
+	}
+
+	private static function wipe_settings() {
+		foreach ( array_diff( self::OPTIONS, self::STAFF_OPTIONS ) as $o ) {
+			delete_option( $o );
+		}
+	}
+
+	private static function wipe_staff() {
+		foreach ( self::META as $k ) {
+			delete_metadata( 'user', 0, $k, '', true );
+		}
+		self::empty_dir( MP_Util::avatar_dir(), array( 'index.php' ) );
+	}
+
 	/** Selected sections from a request (all when none is given). */
 	public static function pick_groups( $in ) {
 		$keys = array_keys( self::GROUPS );
@@ -503,16 +632,24 @@ class MP_Backup {
 		self::guard( 'mp_backup_reset' );
 		$word = isset( $_POST['confirm_word'] ) ? trim( sanitize_text_field( wp_unslash( $_POST['confirm_word'] ) ) ) : '';
 		if ( 'ریست' !== $word && 'RESET' !== strtoupper( $word ) ) {
-			self::back( 'error', 'برای بازنشانی، کلمه «ریست» را در کادر بنویسید.' );
+			self::back( 'error', 'برای پاک کردن، کلمه «ریست» را در کادر بنویسید.' );
 		}
-		if ( empty( $_POST['groups'] ) ) {
-			self::back( 'error', 'بخش‌هایی را که باید پاک شوند تیک بزنید.' );
+		if ( ! empty( $_POST['factory'] ) ) {
+			$r = self::reset( ! empty( $_POST['people'] ) );
+			if ( is_wp_error( $r ) ) {
+				self::back( 'error', $r->get_error_message() );
+			}
+			self::back( 'success', 'پنل به حالت روز اول برگشت. یک پشتیبان از وضعیت قبل در فهرست پشتیبان‌ها ذخیره شد.' );
 		}
-		$r = self::reset_groups( self::pick_groups( wp_unslash( $_POST['groups'] ) ), ! empty( $_POST['people'] ) ); // phpcs:ignore
+		$items = isset( $_POST['items'] ) && is_array( $_POST['items'] ) ? array_map( 'sanitize_key', wp_unslash( $_POST['items'] ) ) : array(); // phpcs:ignore
+		if ( ! $items ) {
+			self::back( 'error', 'مواردی را که باید پاک شوند تیک بزنید.' );
+		}
+		$r = self::reset_items( $items );
 		if ( is_wp_error( $r ) ) {
 			self::back( 'error', $r->get_error_message() );
 		}
-		self::back( 'success', 'بخش‌های انتخاب‌شده پاک شد. یک پشتیبان از وضعیت قبل در فهرست زیر ذخیره شد و با «بازگردانی» برمی‌گردد.' );
+		self::back( 'success', 'پاک شد: ' . implode( '، ', array_map( function ( $k ) { return isset( self::RESET_ITEMS[ $k ] ) ? self::RESET_ITEMS[ $k ][1] : $k; }, $items ) ) . '. یک پشتیبان از وضعیت قبل در فهرست پشتیبان‌ها ذخیره شد و با «بازگردانی» برمی‌گردد.' );
 	}
 
 	/** Checkboxes for the sections, with «همه». $checked: tick all by default. */
@@ -586,17 +723,36 @@ class MP_Backup {
 			</table>
 		<?php endif; ?>
 
-		<h3 style="color:#b32d2e">پاک کردن بخش‌ها / بازنشانی کارخانه (ریست)</h3>
-		<form method="post" action="<?php echo $post; // phpcs:ignore ?>" onsubmit="var n=[].slice.call(this.querySelectorAll('input[name^=groups]:checked')).map(function(i){return i.parentNode.textContent.trim()});if(!n.length){alert('بخشی انتخاب نشده');return false;}return confirm('این بخش‌ها کلاً پاک شوند؟\n\n'+n.join('\n')+'\n\n(یک پشتیبان خودکار گرفته می‌شود)');" style="border:1px solid #d63638;border-radius:6px;padding:12px 16px;max-width:760px;background:#fcf0f1">
+		<h3 style="color:#b32d2e">پاک کردن اطلاعات</h3>
+		<?php $mp_counts = self::reset_counts(); $mp_heads = array(); foreach ( self::RESET_ITEMS as $k => $it ) { $mp_heads[ $it[0] ][ $k ] = $it[1]; } ?>
+		<form method="post" action="<?php echo $post; // phpcs:ignore ?>" id="mp-reset" onsubmit="var n=[].slice.call(this.querySelectorAll('input[name^=items]:checked')).map(function(i){return '• '+i.dataset.label});if(!n.length){alert('چیزی انتخاب نشده');return false;}return confirm('این موارد کلاً پاک شوند؟\n\n'+n.join('\n')+'\n\n(قبلش یک پشتیبان خودکار گرفته می‌شود)');" style="border:1px solid #d63638;border-radius:8px;padding:14px 18px;max-width:820px;background:#fcf0f1">
 			<?php wp_nonce_field( 'mp_backup_reset' ); ?>
 			<input type="hidden" name="action" value="mp_backup_reset">
-			<p>تیک بزنید چه چیزهایی کلاً پاک شود (مثلاً فقط «مشتریان»). اگر همه تیک بخورد، افزونه مثل روز اول نصب می‌شود. قبل از پاک کردن خودکار پشتیبان گرفته می‌شود.</p>
-			<?php self::boxes( false, true ); ?>
-			<p><strong>فقط وقتی همه بخش‌ها انتخاب شده — کارمندان:</strong><br>
-			<label><input type="radio" name="people" value="" checked> کارمندان شامل ریست نشوند — نقش، شماره موبایل، سمت، عکس پروفایل و تنظیمات شخصی‌شان می‌ماند و بلافاصله می‌توانند وارد شوند</label><br>
-			<label><input type="radio" name="people" value="1"> کارمندان هم ریست شوند — نقش‌های پنل، شماره‌ها و عکس‌ها پاک می‌شود (خود حساب‌های کاربری وردپرس حذف نمی‌شوند)</label></p>
+			<p style="margin-top:0">هر مورد جدا پاک می‌شود و بقیه دست نمی‌خورند؛ مثلاً فقط «قراردادها» بدون قالب‌های قرارداد، یا فقط «پیش‌فاکتورها». عدد کنار هر مورد، تعداد فعلی آن است. قبل از پاک کردن خودکار پشتیبان گرفته می‌شود.</p>
+			<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px">
+			<?php foreach ( $mp_heads as $mp_h => $mp_list ) : ?>
+				<fieldset style="border:1px solid #e0b4b4;border-radius:8px;padding:8px 12px;background:#fff;margin:0">
+					<legend style="font-weight:700;padding:0 6px"><?php echo esc_html( $mp_h ); ?></legend>
+					<?php foreach ( $mp_list as $k => $label ) : ?>
+						<label style="display:flex;gap:6px;align-items:flex-start;margin:4px 0;line-height:1.6"><input type="checkbox" name="items[]" value="<?php echo esc_attr( $k ); ?>" data-label="<?php echo esc_attr( $label ); ?>" style="margin-top:4px">
+							<span><?php echo esc_html( $label ); ?><?php if ( null !== $mp_counts[ $k ] ) : ?> <span style="color:<?php echo $mp_counts[ $k ] ? '#b32d2e' : '#8c8f94'; ?>;font-size:12px">(<?php echo esc_html( MP_Jalali::digits( (string) $mp_counts[ $k ] ) ); ?>)</span><?php endif; ?></span></label>
+					<?php endforeach; ?>
+				</fieldset>
+			<?php endforeach; ?>
+			</div>
 			<p><label>برای تأیید بنویسید «ریست»: <input name="confirm_word" autocomplete="off" required style="width:90px"></label>
-			<?php submit_button( 'پاک کردن بخش‌های انتخاب‌شده', 'delete', 'submit', false ); ?></p>
+			<?php submit_button( 'پاک کردن موارد انتخاب‌شده', 'delete', 'submit', false ); ?></p>
+		</form>
+
+		<h3 style="color:#b32d2e">بازنشانی کارخانه</h3>
+		<form method="post" action="<?php echo $post; // phpcs:ignore ?>" onsubmit="return confirm('همه اطلاعات پنل پاک شود و افزونه مثل روز اول شود؟\n(قبلش یک پشتیبان خودکار گرفته می‌شود)');" style="border:1px solid #d63638;border-radius:8px;padding:12px 18px;max-width:820px;background:#fcf0f1">
+			<?php wp_nonce_field( 'mp_backup_reset' ); ?>
+			<input type="hidden" name="action" value="mp_backup_reset"><input type="hidden" name="factory" value="1">
+			<p style="margin-top:0">همه چیز پاک می‌شود و افزونه مثل روز اول نصب می‌شود.</p>
+			<p><label><input type="radio" name="people" value="" checked> کارمندان بمانند — نقش، شماره موبایل، سمت، عکس و تنظیمات شخصی‌شان می‌ماند و بلافاصله می‌توانند وارد شوند</label><br>
+			<label><input type="radio" name="people" value="1"> کارمندان هم ریست شوند — نقش‌های پنل، شماره‌ها و عکس‌ها پاک می‌شود (حساب‌های کاربری وردپرس حذف نمی‌شوند)</label></p>
+			<p><label>برای تأیید بنویسید «ریست»: <input name="confirm_word" autocomplete="off" required style="width:90px"></label>
+			<?php submit_button( 'بازنشانی کامل', 'delete', 'submit', false ); ?></p>
 		</form>
 		<?php
 	}

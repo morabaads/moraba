@@ -2431,3 +2431,4 @@ button.tf-box .icon{width:12px;height:12px}
 }
 .mt-action-row .field{margin:0;gap:2px}.mt-action-row .field>span{display:none}
 .mt-add{align-self:flex-start;margin-top:6px}
+.seg-n{display:inline-block;min-width:18px;margin-inline-start:6px;padding:0 6px;border-radius:99px;background:var(--surface-3);font-size:11px;line-height:18px;text-align:center}

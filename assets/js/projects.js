@@ -74,10 +74,11 @@
     grid.append(el('section', { class: 'card proj-progress' }, el('div', { class: 'card-head' }, el('h2', { text: 'پیشرفت پروژه' })), prog));
 
     // Assignments
-    var assign = el('section', { class: 'card proj-assign' }, el('div', { class: 'card-head' }, el('h2', { text: 'تسک‌های تعیین‌شده' }),
-      S.manager ? el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('plus') + 'انتساب تسک', onclick: function () {
-        MP.taskForm({ userId: p.members.filter(function (id) { return id !== S.me.id; })[0] || S.me.id, projectId: p.id, title: 'انتساب تسک در ' + p.name });
-      } }) : null), el('div', { id: 'proj-assign-list' }, MP.skeleton(2)));
+    var assign = el('section', { class: 'card proj-assign' }, el('div', { class: 'card-head' }, el('h2', { text: 'تسک‌های پروژه' }),
+      el('div', { class: 'card-tools' }, el('div', { class: 'seg sm', id: 'proj-task-seg', role: 'tablist' }),
+        el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('plus') + (S.manager ? 'تسک / انتساب' : 'تسک جدید'), onclick: function () {
+          MP.taskForm({ userId: S.me.id, projectId: p.id });
+        } }))), el('div', { id: 'proj-assign-list' }, MP.skeleton(2)));
     grid.append(assign);
 
     // Notes
@@ -94,15 +95,30 @@
     MP.api('tasks', { query: { project_id: p.id } }).then(function (l) { ptasks = l; renderAssign(); }).catch(function () {});
   }
 
+  /** Every task of the project — assigned by a supervisor or added by anyone for themselves. */
+  var taskFilter = 'open';
   function renderAssign() {
     var box = $('#proj-assign-list'); if (!box) return;
-    var list = ptasks.filter(function (t) { return t.source === 'manager'; }).sort(function (a, b) { return (a.done - b.done) || a.date.localeCompare(b.date); });
+    var open = ptasks.filter(function (t) { return !t.done; }).length, done = ptasks.length - open;
+    var seg = $('#proj-task-seg');
+    if (seg) seg.replaceChildren.apply(seg, [['open', 'باز', open], ['done', 'انجام‌شده', done], ['all', 'همه', ptasks.length]].map(function (x) {
+      return el('button', { type: 'button', role: 'tab', 'aria-selected': String(taskFilter === x[0]), onclick: function () { taskFilter = x[0]; renderAssign(); } }, x[1], el('span', { class: 'seg-n', text: fa(x[2]) }));
+    }));
+    var list = ptasks.filter(function (t) { return taskFilter === 'all' || (taskFilter === 'done' ? t.done : !t.done); })
+      .sort(function (a, b) { return (a.done - b.done) || a.date.localeCompare(b.date) || (a.time || '99').localeCompare(b.time || '99'); });
     box.replaceChildren();
-    if (!list.length) { box.append(MP.empty('tasks', 'تسکی تعیین نشده', S.manager ? 'برای اعضای پروژه تسک تعیین کنید.' : 'تسک‌هایی که ناظر در این پروژه تعیین کند اینجاست.', null, true)); return; }
-    var stack = el('div', { class: 'task-stack', style: { maxHeight: '360px' } });
-    list.forEach(function (t) { stack.append(MP.taskRow(t)); });
+    if (!list.length) { box.append(MP.empty('tasks', taskFilter === 'done' ? 'تسک انجام‌شده‌ای نیست' : 'تسکی در این پروژه نیست', taskFilter === 'done' ? null : 'هنگام ساخت تسک، این پروژه را انتخاب کنید یا از دکمه بالا تسک بسازید.', null, true)); return; }
+    var stack = el('div', { class: 'task-stack', style: { maxHeight: '420px' } });
+    list.forEach(function (t) { stack.append(MP.taskRow(t, { owner: true })); });
     box.append(stack);
   }
+  // A task added or changed anywhere (form, calendar, voice…) shows up here without reloading.
+  var reloadT = 0;
+  MP.on('tasks', function () {
+    if (!MP.visible('projects') || !S.projectId || !$('#proj-assign-list')) return;
+    clearTimeout(reloadT);
+    reloadT = setTimeout(function () { MP.api('tasks', { query: { project_id: S.projectId } }).then(function (l) { ptasks = l; renderAssign(); }).catch(function () {}); MP.loadProjects && MP.loadProjects(); }, 300);
+  });
   function renderNotes(filter) {
     var box = $('#proj-notes-list'); if (!box) return;
     box.replaceChildren();
