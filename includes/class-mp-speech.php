@@ -83,8 +83,19 @@ class MP_Speech {
 		return MP_Rest::message_payload( $m, get_current_user_id() );
 	}
 
+	/** A stored recording (e.g. a meeting's sound) to text; returns the text or WP_Error. */
+	public static function transcribe_file( $path, $mime ) {
+		if ( ! self::enabled() ) {
+			return self::err( 'برای متن جلسه، مدیر سایت باید در تنظیمات پنل «سرویس تبدیل گفتار» را فعال کند.', 409 );
+		}
+		if ( ! is_file( $path ) || filesize( $path ) > 25 * MB_IN_BYTES ) {
+			return self::err( 'فایل صدای جلسه پیدا نشد یا بزرگ‌تر از ۲۵ مگابایت است.' );
+		}
+		return self::whisper( $path, $mime, 600 );
+	}
+
 	/** Sends an audio file to the speech-to-text API; returns the text or WP_Error. */
-	private static function whisper( $path, $mime ) {
+	private static function whisper( $path, $mime, $timeout = 60 ) {
 		$ext      = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
 		$boundary = wp_generate_password( 24, false );
 		$fields   = array( 'model' => get_option( 'mp_speech_stt_model', 'whisper-1' ), 'language' => 'fa', 'response_format' => 'json' );
@@ -96,7 +107,7 @@ class MP_Speech {
 		$res = wp_remote_post(
 			self::base() . '/audio/transcriptions',
 			array(
-				'timeout' => 60,
+				'timeout' => $timeout,
 				'headers' => array( 'Authorization' => 'Bearer ' . get_option( 'mp_speech_key' ), 'Content-Type' => 'multipart/form-data; boundary=' . $boundary ),
 				'body'    => $body,
 			)

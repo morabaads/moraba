@@ -730,6 +730,30 @@ class MP_AI {
 		);
 	}
 
+	/** A plain answer (no tools) for other parts of the panel, e.g. meeting minutes. Returns text or WP_Error. */
+	public static function ask( $system, $user, $json = false ) {
+		if ( ! self::enabled() ) {
+			return self::err( 'هوش مصنوعی پنل فعال نیست؛ در تنظیمات پنل کلید سرویس را وارد کنید.', 409 );
+		}
+		$body = array(
+			'model'       => self::model(),
+			'messages'    => array( array( 'role' => 'system', 'content' => $system ), array( 'role' => 'user', 'content' => $user ) ),
+			'temperature' => 0.2,
+		);
+		if ( $json ) {
+			$body['response_format'] = array( 'type' => 'json_object' );
+		}
+		$res = wp_remote_post( self::base() . '/chat/completions', array( 'timeout' => 120, 'headers' => array( 'Authorization' => 'Bearer ' . self::key(), 'Content-Type' => 'application/json' ), 'body' => wp_json_encode( $body ) ) );
+		if ( is_wp_error( $res ) ) {
+			return self::err( 'سرویس هوش مصنوعی در دسترس نیست: ' . $res->get_error_message(), 502 );
+		}
+		$data = json_decode( wp_remote_retrieve_body( $res ), true );
+		if ( 200 !== (int) wp_remote_retrieve_response_code( $res ) || ! isset( $data['choices'][0]['message']['content'] ) ) {
+			return self::err( 'سرویس هوش مصنوعی خطا داد: ' . ( isset( $data['error']['message'] ) ? $data['error']['message'] : 'HTTP ' . wp_remote_retrieve_response_code( $res ) ), 502 );
+		}
+		return (string) $data['choices'][0]['message']['content'];
+	}
+
 	private static function complete( array $messages ) {
 		$res = wp_remote_post(
 			self::base() . '/chat/completions',

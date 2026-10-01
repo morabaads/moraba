@@ -3,13 +3,13 @@
  * Meeting media relay: sound and picture go through this site instead of browser-to-browser,
  * so a meeting needs no STUN / TURN server and works on any network that can open the site.
  *
- * Each participant sends small pieces of compressed audio (μ-law, 16 kHz) and the latest camera
- * frame (JPEG) in one POST, and gets back what the others sent since its last call.
- * Storage is plain files under uploads/mp-relay/{meeting}/:
- *   a{peer}-{gen}.log  audio records (seq, length, bytes), rotated every 4 MB
- *   g{peer}            current generation of that peer's audio log
- *   v{peer}.bin        latest video frame (seq + JPEG), replaced atomically
+ * Each participant sends its newest sound and picture records in one POST, and gets back what the
+ * others sent since its last call. Storage is plain files under uploads/mp-relay/{meeting}/:
+ *   l{peer}-{gen}.log  records (u32 length, u8 type, 3 spare bytes, bytes), rotated every 8 MB
+ *   g{peer}            current generation of that peer's log
+ *   k{peer}            "gen:offset" of the newest picture that can be decoded on its own
  *   x{peer}            the peer was removed by the host
+ *   m{peer}            the host muted this peer: its sound is dropped
  *
  * relay.php (plugin root) runs this without loading WordPress, which keeps each call to a few
  * milliseconds; the REST route room/{token}/relay is the fallback. Calls are signed with an HMAC
@@ -21,8 +21,8 @@ if ( ! defined( 'ABSPATH' ) && ! defined( 'MP_RELAY' ) ) {
 
 class MP_Relay {
 
-	const SEG     = 4194304; // audio log rotation size
-	const BACKLOG = 65536;   // more unread audio than this (~4 s) → skip to live
+	const SEG     = 8388608; // log rotation size
+	const BACKLOG = 1048576; // more unread than this → skip to the newest keyframe
 	const MAXBODY = 3145728;
 
 	/* ------------------------------------------------------------------ WordPress side */
@@ -129,9 +129,11 @@ class MP_Relay {
 	}
 
 	/**
-	 * Body: u32 json length, json {a:[lengths], as: first audio seq, v: video length, vs: video seq,
-	 * c:{peer:[gen,offset]}, vk:{peer:seq}}, then the audio pieces and the video frame.
-	 * Reply: u32 json length, json {c, vk, items:[[peer,'a'|'v',seq,length]]}, then the bytes.
+	 * Body: u32 json length, json {r:[[type,length],…] records to add, c:{peer:[gen,offset]} read cursors,
+	 * w:{peer:'hi'|'lo'|'off'} wanted video, kf:[peer…] start those from their last keyframe},
+	 * then the records' bytes.
+	 * Record types: 1 μ-law sound, 2 Opus sound, 3 JPEG frame, 4 video keyframe, 5 video frame.
+	 * Reply: u32 json length, json {c, items:[[peer,type,length]]}, then the bytes.
 	 *
 	 * @return array [http status, body]
 	 */
@@ -161,65 +163,78 @@ class MP_Relay {
 		$pos = 4 + $jl;
 
 		// What this participant sends.
-		$out = '';
-		$seq = isset( $j['as'] ) ? (int) $j['as'] : 0;
-		foreach ( isset( $j['a'] ) && is_array( $j['a'] ) ? $j['a'] : array() as $len ) {
-			$len = max( 0, min( 65536, (int) $len ) );
-			$out .= pack( 'NN', $seq++, $len ) . substr( $body, $pos, $len );
+		$muted = file_exists( "$d/m$p" );
+		$out   = '';
+		$keyAt = -1;
+		foreach ( isset( $j['r'] ) && is_array( $j['r'] ) ? $j['r'] : array() as $rec ) {
+			$type = isset( $rec[0] ) ? (int) $rec[0] : 0;
+			$len  = isset( $rec[1] ) ? max( 0, min( 1048576, (int) $rec[1] ) ) : 0;
+			$data = substr( $body, $pos, $len );
 			$pos += $len;
+			if ( $type < 1 || $type > 5 || strlen( $data ) !== $len || ( $muted && $type <= 2 ) ) {
+				continue;
+			}
+			if ( 3 === $type || 4 === $type ) {
+				$keyAt = strlen( $out );
+			}
+			$out .= pack( 'NCCn', $len, $type, 0, 0 ) . $data;
 		}
 		if ( '' !== $out ) {
-			$gen  = self::gen( $d, $p );
-			$file = "$d/a$p-$gen.log";
-			file_put_contents( $file, $out, FILE_APPEND | LOCK_EX ); // phpcs:ignore
-			clearstatcache( true, $file );
-			if ( filesize( $file ) > self::SEG ) {
-				file_put_contents( "$d/g$p", (string) ( $gen + 1 ) ); // phpcs:ignore
-				@unlink( "$d/a$p-" . ( $gen - 1 ) . '.log' ); // phpcs:ignore
+			$gen = self::gen( $d, $p );
+			$fh  = fopen( "$d/l$p-$gen.log", 'ab' ); // phpcs:ignore
+			if ( $fh ) {
+				flock( $fh, LOCK_EX );
+				$at = fstat( $fh )['size'];
+				fwrite( $fh, $out ); // phpcs:ignore
+				fflush( $fh );
+				flock( $fh, LOCK_UN );
+				fclose( $fh ); // phpcs:ignore
+				if ( $keyAt >= 0 ) {
+					file_put_contents( "$d/k$p", $gen . ':' . ( $at + $keyAt ) ); // phpcs:ignore
+				}
+				if ( $at + strlen( $out ) > self::SEG ) {
+					file_put_contents( "$d/g$p", (string) ( $gen + 1 ) ); // phpcs:ignore
+					@unlink( "$d/l$p-" . ( $gen - 1 ) . '.log' ); // phpcs:ignore
+				}
 			}
-		}
-		$vl = isset( $j['v'] ) ? (int) $j['v'] : 0;
-		if ( $vl > 0 && $vl < 1048576 ) {
-			file_put_contents( "$d/v$p.tmp", pack( 'N', (int) $j['vs'] ) . substr( $body, $pos, $vl ) ); // phpcs:ignore
-			rename( "$d/v$p.tmp", "$d/v$p.bin" ); // phpcs:ignore
 		}
 		touch( $d );
 
 		// What the others sent.
 		$cur   = isset( $j['c'] ) && is_array( $j['c'] ) ? $j['c'] : array();
-		$vk    = isset( $j['vk'] ) && is_array( $j['vk'] ) ? $j['vk'] : array();
+		$wants = isset( $j['w'] ) && is_array( $j['w'] ) ? $j['w'] : array();
+		$kf    = isset( $j['kf'] ) && is_array( $j['kf'] ) ? array_map( 'intval', $j['kf'] ) : array();
 		$items = array();
 		$data  = '';
 		$nc    = array();
-		$nvk   = array();
 		$ids   = array();
-		foreach ( (array) glob( "$d/g*" ) as $f ) {
-			$ids[ (int) substr( basename( (string) $f ), 1 ) ] = 'a';
-		}
-		foreach ( (array) glob( "$d/a*-0.log" ) as $f ) {
-			$ids[ (int) substr( basename( (string) $f ), 1 ) ] = 'a';
-		}
-		foreach ( (array) glob( "$d/v*.bin" ) as $f ) {
-			$id = (int) substr( basename( (string) $f ), 1 );
-			if ( ! isset( $ids[ $id ] ) ) {
-				$ids[ $id ] = 'v';
-			}
+		foreach ( (array) glob( "$d/l*-*.log" ) as $f ) {
+			$ids[ (int) substr( basename( (string) $f ), 1 ) ] = 1;
 		}
 		unset( $ids[ $p ] );
 		foreach ( array_keys( $ids ) as $o ) {
 			if ( ! $o || file_exists( "$d/x$o" ) ) {
 				continue;
 			}
-			// Audio.
-			$g    = self::gen( $d, $o );
-			$c    = isset( $cur[ $o ] ) && is_array( $cur[ $o ] ) ? array( (int) $cur[ $o ][0], (int) $cur[ $o ][1] ) : null;
-			$live = "$d/a$o-$g.log";
-			if ( null === $c ) {
-				clearstatcache( true, $live );
-				$c = array( $g, is_file( $live ) ? filesize( $live ) : 0 ); // start at "now"
+			$g     = self::gen( $d, $o );
+			$live  = "$d/l$o-$g.log";
+			clearstatcache( true, $live );
+			$end   = array( $g, is_file( $live ) ? filesize( $live ) : 0 );
+			$noVid = isset( $wants[ $o ] ) && 'off' === $wants[ $o ];
+			$c     = isset( $cur[ $o ] ) && is_array( $cur[ $o ] ) ? array( (int) $cur[ $o ][0], (int) $cur[ $o ][1] ) : null;
+			$jump  = null === $c || in_array( $o, $kf, true ) || ( $c[0] === $g && $end[1] - $c[1] > self::BACKLOG ) || $c[0] < $g - 1;
+			$soundFrom = $c ? $c : $end;
+			if ( $jump ) {
+				// Start at the newest keyframe so the picture can be decoded, but play no old sound.
+				$soundFrom = $end;
+				$c         = $end;
+				$k         = is_file( "$d/k$o" ) ? explode( ':', (string) file_get_contents( "$d/k$o" ) ) : array(); // phpcs:ignore
+				if ( 2 === count( $k ) && ! $noVid && (int) $k[0] >= $g - 1 && is_file( "$d/l$o-" . (int) $k[0] . '.log' ) ) {
+					$c = array( (int) $k[0], (int) $k[1] );
+				}
 			}
 			while ( $c[0] <= $g ) {
-				$f = "$d/a$o-{$c[0]}.log";
+				$f = "$d/l$o-{$c[0]}.log";
 				if ( ! is_file( $f ) ) {
 					if ( $c[0] < $g ) {
 						$c = array( $c[0] + 1, 0 );
@@ -230,21 +245,23 @@ class MP_Relay {
 				$fh = fopen( $f, 'rb' ); // phpcs:ignore
 				flock( $fh, LOCK_SH );
 				$size = fstat( $fh )['size'];
-				if ( $size - $c[1] > self::BACKLOG ) {
-					$c[1] = $size; // too far behind: jump to live instead of playing old sound
-				}
 				if ( $size > $c[1] ) {
 					fseek( $fh, $c[1] );
-					$chunk = (string) fread( $fh, $size - $c[1] ); // phpcs:ignore
+					$chunk = (string) fread( $fh, min( $size - $c[1], 4194304 ) ); // phpcs:ignore
 					$at    = 0;
 					while ( $at + 8 <= strlen( $chunk ) ) {
-						$h = unpack( 'Nseq/Nlen', substr( $chunk, $at, 8 ) );
+						$h = unpack( 'Nlen/Ctype', substr( $chunk, $at, 5 ) );
 						if ( $at + 8 + $h['len'] > strlen( $chunk ) ) {
 							break;
 						}
-						$items[] = array( $o, 'a', $h['seq'], $h['len'] );
-						$data   .= substr( $chunk, $at + 8, $h['len'] );
-						$at     += 8 + $h['len'];
+						$here  = array( $c[0], $c[1] + $at );
+						$sound = $h['type'] <= 2;
+						$older = $here[0] < $soundFrom[0] || ( $here[0] === $soundFrom[0] && $here[1] < $soundFrom[1] );
+						if ( ! ( $sound && $older ) && ! ( ! $sound && $noVid ) ) {
+							$items[] = array( $o, $h['type'], $h['len'] );
+							$data   .= substr( $chunk, $at + 8, $h['len'] );
+						}
+						$at += 8 + $h['len'];
 					}
 					$c[1] += $at;
 				}
@@ -257,29 +274,22 @@ class MP_Relay {
 				break;
 			}
 			$nc[ $o ] = $c;
-			// Video: only the newest frame.
-			$vf = "$d/v$o.bin";
-			if ( is_file( $vf ) ) {
-				// Only the 4-byte frame number is read unless the frame is new for this reader.
-				$fh  = fopen( $vf, 'rb' ); // phpcs:ignore
-				$raw = $fh ? (string) fread( $fh, 4 ) : ''; // phpcs:ignore
-				if ( 4 === strlen( $raw ) ) {
-					$vs = unpack( 'N', $raw );
-					$vs = $vs[1];
-					if ( $vs > ( isset( $vk[ $o ] ) ? (int) $vk[ $o ] : 0 ) ) {
-						$jpg = (string) stream_get_contents( $fh );
-						$items[] = array( $o, 'v', $vs, strlen( $jpg ) );
-						$data   .= $jpg;
-					}
-					$nvk[ $o ] = max( $vs, isset( $vk[ $o ] ) ? (int) $vk[ $o ] : 0 );
-				}
-				if ( $fh ) {
-					fclose( $fh ); // phpcs:ignore
-				}
-			}
 		}
-		$json = json_encode( array( 'c' => (object) $nc, 'vk' => (object) $nvk, 'items' => $items ) ); // phpcs:ignore
+		$json = json_encode( array( 'c' => (object) $nc, 'items' => $items ) ); // phpcs:ignore
 		return array( 200, pack( 'N', strlen( $json ) ) . $json . $data );
+	}
+
+	/** Host-enforced mute: the relay drops this person's sound until it is lifted. */
+	public static function mute( $token, $peer, $on ) {
+		$d = self::base_wp() . '/' . self::room_id( $token );
+		if ( ! is_dir( $d ) ) {
+			return;
+		}
+		if ( $on ) {
+			touch( "$d/m" . (int) $peer );
+		} elseif ( file_exists( "$d/m" . (int) $peer ) ) {
+			unlink( "$d/m" . (int) $peer ); // phpcs:ignore
+		}
 	}
 
 	private static function gen( $d, $p ) {

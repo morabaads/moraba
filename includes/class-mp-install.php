@@ -441,6 +441,14 @@ class MP_Install {
 			status varchar(12) NOT NULL DEFAULT 'scheduled',
 			started_at datetime NULL,
 			ended_at datetime NULL,
+			locked tinyint(1) NOT NULL DEFAULT 0,
+			mic_lock tinyint(1) NOT NULL DEFAULT 0,
+			recording tinyint(1) NOT NULL DEFAULT 0,
+			recurrence varchar(10) NOT NULL DEFAULT 'none',
+			permanent tinyint(1) NOT NULL DEFAULT 0,
+			channel_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			stage text NULL,
+			minutes longtext NULL,
 			created_by bigint(20) unsigned NOT NULL,
 			created_at datetime NOT NULL,
 			PRIMARY KEY  (id),
@@ -460,12 +468,48 @@ class MP_Install {
 			cam tinyint(1) NOT NULL DEFAULT 1,
 			hand tinyint(1) NOT NULL DEFAULT 0,
 			share tinyint(1) NOT NULL DEFAULT 0,
+			away tinyint(1) NOT NULL DEFAULT 0,
+			allow_mic tinyint(1) NOT NULL DEFAULT 0,
+			rtt smallint(5) unsigned NOT NULL DEFAULT 0,
+			ckey varchar(32) NOT NULL DEFAULT '',
+			caps varchar(160) NOT NULL DEFAULT '',
+			wants varchar(400) NOT NULL DEFAULT '',
 			created_at datetime NOT NULL,
 			joined_at datetime NULL,
 			left_at datetime NULL,
 			seen_at datetime NULL,
 			PRIMARY KEY  (id),
 			KEY meeting_id (meeting_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'meeting_invites' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			meeting_id bigint(20) unsigned NOT NULL,
+			code varchar(16) NOT NULL,
+			name varchar(80) NOT NULL DEFAULT '',
+			phone varchar(20) NOT NULL DEFAULT '',
+			ckey varchar(32) NOT NULL DEFAULT '',
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			used_at datetime NULL,
+			PRIMARY KEY  (id),
+			KEY meeting_id (meeting_id),
+			KEY code (code)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'meeting_chat' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			meeting_id bigint(20) unsigned NOT NULL,
+			peer_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			name varchar(80) NOT NULL DEFAULT '',
+			kind varchar(10) NOT NULL DEFAULT 'msg',
+			body text NULL,
+			file_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			meta text NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY meeting_id (meeting_id,id)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'meeting_signals' ) . " (

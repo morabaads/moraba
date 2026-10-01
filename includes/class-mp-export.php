@@ -9,7 +9,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Export {
 
 	public static function handle( $what ) {
-		if ( ! in_array( $what, array( 'ledger', 'payroll', 'tasks' ), true ) || ! is_user_logged_in() || ! current_user_can( 'ledger' !== $what ? 'mp_manage_panel' : 'mp_access_panel' ) ) {
+		if ( ! in_array( $what, array( 'ledger', 'payroll', 'tasks', 'meeting' ), true ) || ! is_user_logged_in() || ! current_user_can( in_array( $what, array( 'ledger', 'meeting' ), true ) ? 'mp_access_panel' : 'mp_manage_panel' ) ) {
 			status_header( 403 );
 			exit( 'Forbidden' );
 		}
@@ -20,6 +20,9 @@ class MP_Export {
 		}
 		if ( 'tasks' === $what ) {
 			MP_Task_IO::export();
+		}
+		if ( 'meeting' === $what ) {
+			MP_Meet::export( isset( $_GET['id'] ) ? (int) $_GET['id'] : 0 ); // phpcs:ignore WordPress.Security.NonceVerification
 		}
 		if ( 'payroll' === $what ) {
 			$p = MP_Payroll::sheets( isset( $_GET['month'] ) ? sanitize_text_field( wp_unslash( $_GET['month'] ) ) : '' ); // phpcs:ignore WordPress.Security.NonceVerification

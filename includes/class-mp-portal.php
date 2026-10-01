@@ -278,7 +278,7 @@ class MP_Portal {
 			return $gate;
 		}
 		$pid = (int) $ch->project_id;
-		$out = array( 'project' => null, 'designs' => array(), 'files' => array(), 'invoices' => array(), 'contracts' => array() );
+		$out = array( 'project' => null, 'designs' => array(), 'files' => array(), 'invoices' => array(), 'contracts' => array(), 'meetings' => MP_Meet::for_portal( $ch ) );
 		if ( ! $pid ) {
 			return $out;
 		}
@@ -314,6 +314,7 @@ class MP_Portal {
 			}
 		}
 		$out['contracts'] = MP_Contracts::for_portal( $pid );
+		$out['meetings']  = MP_Meet::for_portal( $ch );
 		return $out;
 	}
 

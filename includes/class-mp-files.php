@@ -196,6 +196,11 @@ class MP_Files {
 		if ( 'client_logo' === $file->context ) {
 			return true; // a client group's logo is public, like the page it sits on
 		}
+		// Meeting chat files and the design on show: a signed link opens them for the meeting's guests.
+		$mk = isset( $_GET['mk'] ) ? (string) wp_unslash( $_GET['mk'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification, WordPress.Security.ValidatedSanitizedInput
+		if ( '' !== $mk && hash_equals( MP_Meet::file_sig( $file->id ), $mk ) ) {
+			return true;
+		}
 		if ( $client_token ) {
 			$tch = MP_Client::channel( $client_token );
 			if ( ! $tch || MP_Client::gate( $tch ) ) {
@@ -230,6 +235,10 @@ class MP_Files {
 		if ( 'client_item' === $file->context ) {
 			return MP_Util::can_see_project( $file->context_id );
 		}
+		if ( in_array( $file->context, array( 'meeting', 'meeting_rec', 'meeting_audio' ), true ) ) {
+			$m = MP_Meet::get( $file->context_id );
+			return $m && MP_Meet::can_see( $m, $uid );
+		}
 		return false;
 	}
 
@@ -245,7 +254,7 @@ class MP_Files {
 			status_header( 404 );
 			exit( 'Not found' );
 		}
-		$inline = ! isset( $_GET['download'] ) && ( 0 === strpos( $file->mime, 'image/' ) || 0 === strpos( $file->mime, 'audio/' ) || 'application/pdf' === $file->mime ); // phpcs:ignore WordPress.Security.NonceVerification
+		$inline = ! isset( $_GET['download'] ) && ( 0 === strpos( $file->mime, 'image/' ) || 0 === strpos( $file->mime, 'audio/' ) || 0 === strpos( $file->mime, 'video/' ) || 'application/pdf' === $file->mime ); // phpcs:ignore WordPress.Security.NonceVerification
 		// Drop anything themes/plugins buffered (BOM, whitespace, gzip handlers) so the bytes arrive intact.
 		while ( ob_get_level() ) {
 			ob_end_clean();
@@ -273,7 +282,7 @@ class MP_Files {
 		}
 		header( 'Content-Length: ' . ( $end - $start + 1 ) );
 		header( 'X-Content-Type-Options: nosniff' );
-		header( "Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'" );
+		header( "Content-Security-Policy: default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'" );
 		header( 'Content-Disposition: ' . ( $inline ? 'inline' : 'attachment' ) . "; filename*=UTF-8''" . rawurlencode( $file->name ) );
 		header( 'Cache-Control: private, max-age=86400' );
 		header_remove( 'Pragma' );

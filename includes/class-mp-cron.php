@@ -52,27 +52,7 @@ class MP_Cron {
 		MP_Digest::tick();
 		MP_Contracts::tick();
 
-		// Meetings starting within the next 10 minutes.
-		$soon     = gmdate( 'H:i', strtotime( $now . ' UTC' ) + 10 * MINUTE_IN_SECONDS );
-		$meetings = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT * FROM ' . MP_Install::table( 'meetings' ) . ' WHERE meeting_date = %s AND meeting_time > %s AND meeting_time <= %s',
-				current_time( 'Y-m-d' ),
-				current_time( 'H:i' ),
-				$soon
-			)
-		);
-		foreach ( $meetings as $m ) {
-			$key = 'mp_meeting_alert_' . $m->id;
-			if ( get_transient( $key ) ) {
-				continue;
-			}
-			set_transient( $key, 1, DAY_IN_SECONDS );
-			$people   = $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . MP_Install::table( 'meeting_people' ) . ' WHERE meeting_id = %d', $m->id ) );
-			$people[] = $m->created_by;
-			foreach ( array_unique( array_map( 'intval', $people ) ) as $p ) {
-				MP_Notify::send( $p, 'meeting', 'جلسه «' . $m->title . '» تا چند دقیقه دیگر شروع می‌شود', 'ساعت ' . $m->meeting_time, 'meeting', $m->id );
-			}
-		}
+		// Meetings: recurring dates move on; reminders 10 minutes before (panel, messengers, SMS, invited guests).
+		MP_Meet::tick();
 	}
 }
