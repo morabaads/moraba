@@ -139,11 +139,6 @@
 
   /* ------------------------------------------------------------ form */
 
-  /** The next half hour from now, e.g. 14:10 → 14:30. */
-  function nextSlot() {
-    var d = new Date(), m = d.getHours() * 60 + d.getMinutes(); m = Math.min(23 * 60 + 30, Math.ceil((m + 1) / 30) * 30);
-    return (m / 60 < 10 ? '0' : '') + Math.floor(m / 60) + ':' + (m % 60 ? '30' : '00');
-  }
   MP.meetingForm = function (preset) {
     preset = preset || {};
     var m = preset.meeting || null;
@@ -161,7 +156,7 @@
       el('label', { class: 'tf-titlebox' }, el('span', { class: 'tf-label', html: icon('video') + 'عنوان جلسه' + '<em>ضروری</em>' }),
         el('input', { name: 'title', class: 'tf-title', required: true, maxlength: 160, placeholder: 'مثلاً بررسی طراحی داشبورد', value: m ? m.title : preset.title || '', autocomplete: 'off' })),
       el('section', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('calendar') + 'زمان' }),
-        el('div', { class: 'row' }, MP.dateField('date', m ? m.date : preset.date || S.today, 'تاریخ'), MP.field('ساعت', el('input', { name: 'time', type: 'time', value: m ? m.time : preset.time || nextSlot() }))),
+        el('div', { class: 'row' }, MP.dateField('date', m ? m.date : preset.date || S.today, 'تاریخ'), MP.field('ساعت', el('input', { name: 'time', type: 'time', value: m ? m.time : preset.time || '' }), 'خالی بماند = همین الان')),
         el('span', { class: 'tf-note', text: 'مدت جلسه (پس از آن، جلسه خودکار پایان می‌یابد)' }), durChips, durInput),
       el('section', { class: 'tf-sec' }, el('span', { class: 'tf-label', html: icon('user') + 'دعوت همکاران' }),
         MP.peoplePicker('people', m ? m.people : preset.people || [], [S.me.id]),
@@ -180,10 +175,6 @@
       e.preventDefault();
       var f = form.elements, url = f.url.value.trim();
       if (!f.title.value.trim()) { f.title.focus(); MP.toast('عنوان جلسه را بنویسید', { error: true }); return; }
-      if (!/^\d\d:\d\d$/.test(f.time.value)) {
-        var tt = $('.time-trigger', form); if (tt) { tt.classList.add('invalid'); tt.scrollIntoView({ block: 'center', behavior: 'smooth' }); setTimeout(function () { tt.click(); }, 300); }
-        MP.toast('ساعت جلسه را انتخاب کنید', { error: true }); return;
-      }
       if (url) { try { if (['http:', 'https:'].indexOf(new URL(url).protocol) < 0) throw new Error(); } catch (err) { f.url.setCustomValidity('لینک باید با https یا http شروع شود'); f.url.reportValidity(); return; } }
       MP.busy(form, true);
       MP.api(m ? 'meetings/' + m.id : 'meetings', { method: 'POST', body: {

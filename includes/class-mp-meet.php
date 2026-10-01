@@ -297,6 +297,10 @@ class MP_Meet {
 		$date  = MP_Util::valid_date( $r['date'] ) ? $r['date'] : MP_Util::today();
 		$time  = (string) $r['time'];
 		$url   = trim( (string) $r['url'] );
+		if ( '' === $time ) {
+			// No time chosen: an instant meeting (now), or the old time when editing.
+			$time = $old ? $old->meeting_time : current_time( 'H:i' );
+		}
 		if ( '' === $title ) {
 			return self::err( 'عنوان جلسه را وارد کنید.' );
 		}
