@@ -441,7 +441,7 @@ class MP_Client {
 		if ( ! $p ) {
 			return null;
 		}
-		$c = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) total, SUM(status = 'done') done FROM " . self::t( 'tasks' ) . ' WHERE project_id = %d AND archived_at IS NULL', $pid ) );
+		$c = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) total, SUM(status = 'done') done FROM " . self::t( 'tasks' ) . ' WHERE project_id = %d AND archived_at IS NULL AND client_hidden = 0', $pid ) );
 		return array(
 			'id'       => (int) $p->id,
 			'name'     => $p->name,

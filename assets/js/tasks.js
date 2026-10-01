@@ -104,6 +104,7 @@
       el('button', { type: 'button', class: 'row-main', onclick: function () { MP.openTask(t.id, t); } },
         el('span', { class: 'row-title' }, t.source === 'manager' ? el('span', { class: 'lock-ico', title: 'تعیین‌شده توسط ناظر', html: icon('lock') }) : null,
           el('span', { text: t.title }), t.priority === 'high' ? el('span', { class: 'chip danger', text: 'فوری' }) : null,
+          t.client_hidden && t.project_id ? el('span', { class: 'chip', title: 'در پرتال مشتری نمایش داده نمی‌شود', text: 'مخفی از مشتری' }) : null,
           t.source === 'manager' && !t.seen_at && t.user_id === S.me.id ? el('span', { class: 'chip lock', text: 'جدید' }) : null),
         meta.length ? el('span', { class: 'row-meta' }, meta) : null));
     return MP.swipeable(row, {
@@ -247,6 +248,8 @@
       el('summary', null, el('span', { html: icon('settings') + ' تنظیمات بیشتر' }), el('small', { text: 'پروژه، اولویت، تکرار، توضیحات' + (t ? '، وضعیت' : '') })));
     adv.append(el('div', { class: 'row' }, MP.field('پروژه', ps), MP.field('بخش', ss)));
     adv.append(el('div', { class: 'field' }, el('span', { text: 'اولویت' }), priSeg, pri));
+    adv.append(el('label', { class: 'check-row tf-hide' }, el('input', { type: 'checkbox', name: 'client_hidden', checked: !!(t && t.client_hidden) }),
+      el('span', null, el('b', { text: 'مخفی از مشتری' }), el('small', { text: ' — در پرتال مشتری و درصد پیشرفت پروژه حساب نمی‌شود (کارهای داخلی تیم).' }))));
     if (!t) {
       var until = MP.dateField('recur_until', J.addDays(opts.date || S.today, 30), 'تکرار تا');
       until.hidden = true;
@@ -263,7 +266,7 @@
     form.onsubmit = function (e) {
       e.preventDefault();
       var f = form.elements;
-      var body = { title: f.title.value.trim(), date: f.date.value, time: f.time.value, project_id: +f.project_id.value, section_id: +f.section_id.value, priority: f.priority.value, status: f.status.value, description: f.description.value };
+      var body = { title: f.title.value.trim(), date: f.date.value, time: f.time.value, project_id: +f.project_id.value, section_id: +f.section_id.value, priority: f.priority.value, status: f.status.value, description: f.description.value, client_hidden: f.client_hidden.checked };
       if (!body.title) { f.title.setCustomValidity('عنوان تسک را وارد کنید'); f.title.reportValidity(); return; }
       if (!t) {
         body.recurrence = f.recurrence.value; body.recur_until = f.recur_until.value;

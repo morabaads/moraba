@@ -286,13 +286,13 @@ class MP_Portal {
 		if ( ! $p ) {
 			return $out;
 		}
-		$counts = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) total, SUM(status = 'done') done FROM " . self::t( 'tasks' ) . ' WHERE project_id = %d AND archived_at IS NULL', $pid ) );
+		$counts = $wpdb->get_row( $wpdb->prepare( "SELECT COUNT(*) total, SUM(status = 'done') done FROM " . self::t( 'tasks' ) . ' WHERE project_id = %d AND archived_at IS NULL AND client_hidden = 0', $pid ) );
 		$miles  = array();
 		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT title, start_date, end_date, status FROM ' . self::t( 'milestones' ) . ' WHERE project_id = %d ORDER BY start_date, id', $pid ) ) as $m ) {
 			$miles[] = array( 'title' => $m->title, 'start' => $m->start_date, 'end' => $m->end_date, 'status' => $m->status );
 		}
 		$sections = array();
-		foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT s.title, s.status, COUNT(t.id) total, SUM(t.status = 'done') done FROM " . self::t( 'sections' ) . ' s LEFT JOIN ' . self::t( 'tasks' ) . ' t ON t.section_id = s.id AND t.archived_at IS NULL WHERE s.project_id = %d GROUP BY s.id ORDER BY s.sort, s.id', $pid ) ) as $s ) {
+		foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT s.title, s.status, COUNT(t.id) total, SUM(t.status = 'done') done FROM " . self::t( 'sections' ) . ' s LEFT JOIN ' . self::t( 'tasks' ) . ' t ON t.section_id = s.id AND t.archived_at IS NULL AND t.client_hidden = 0 WHERE s.project_id = %d GROUP BY s.id ORDER BY s.sort, s.id', $pid ) ) as $s ) {
 			$sections[] = array( 'title' => $s->title, 'status' => $s->status, 'total' => (int) $s->total, 'done' => (int) $s->done );
 		}
 		$out['project'] = array(

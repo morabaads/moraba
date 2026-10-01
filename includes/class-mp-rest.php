@@ -274,6 +274,7 @@ class MP_Rest {
 			'project_id'    => (int) $task->project_id,
 			'section_id'    => (int) $task->section_id,
 			'priority'      => $task->priority,
+			'client_hidden' => ! empty( $task->client_hidden ),
 			'status'        => $task->status,
 			'done'          => 'done' === $task->status,
 			'source'        => $task->source,
@@ -372,6 +373,9 @@ class MP_Rest {
 		if ( null !== $r['priority'] ) {
 			$f['priority'] = MP_Util::pick( $r['priority'], array( 'low', 'medium', 'high' ), 'medium' );
 		}
+		if ( null !== $r['client_hidden'] ) {
+			$f['client_hidden'] = $r['client_hidden'] && 'false' !== $r['client_hidden'] ? 1 : 0;
+		}
 		if ( null !== $r['project_id'] ) {
 			$project = (int) $r['project_id'];
 			if ( $project && ! MP_Util::can_see_project( $project ) ) {
@@ -436,7 +440,7 @@ class MP_Rest {
 		$failed = array();
 		foreach ( $items as $i => $it ) {
 			$one = new WP_REST_Request( 'POST' );
-			foreach ( array( 'user_id', 'title', 'date', 'time', 'priority', 'project_id', 'section_id', 'description', 'checklist' ) as $k ) {
+			foreach ( array( 'user_id', 'title', 'date', 'time', 'priority', 'project_id', 'section_id', 'description', 'checklist', 'client_hidden' ) as $k ) {
 				if ( isset( $it[ $k ] ) ) {
 					$one->set_param( $k, $it[ $k ] );
 				}
@@ -527,7 +531,7 @@ class MP_Rest {
 			if ( (int) $task->user_id !== $uid ) {
 				return self::err( 'اجازه تغییر این تسک را ندارید.', 403 );
 			}
-			foreach ( array( 'title', 'description', 'date', 'time', 'priority', 'project_id', 'section_id', 'user_id' ) as $k ) {
+			foreach ( array( 'title', 'description', 'date', 'time', 'priority', 'project_id', 'section_id', 'user_id', 'client_hidden' ) as $k ) {
 				if ( null !== $r[ $k ] ) {
 					return self::err( 'این تسک را ناظر تعیین کرده و قابل ویرایش نیست؛ فقط وضعیت آن را می‌توانید تغییر دهید.', 403, 'mp_locked' );
 				}

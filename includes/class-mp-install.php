@@ -170,6 +170,7 @@ class MP_Install {
 			done_at datetime DEFAULT NULL,
 			recurrence varchar(10) NOT NULL DEFAULT 'none',
 			recur_parent bigint(20) unsigned NOT NULL DEFAULT 0,
+			client_hidden tinyint(1) NOT NULL DEFAULT 0,
 			seen_at datetime DEFAULT NULL,
 			time_spent int(11) unsigned NOT NULL DEFAULT 0,
 			timer_started datetime DEFAULT NULL,
