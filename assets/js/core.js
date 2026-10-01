@@ -546,7 +546,7 @@
   /* ------------------------------------------------------------ Navigation */
 
   var views = {}, app = $('.app');
-  var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'clients', 'contracts', 'attendance', 'reminders', 'accounting', 'reports'];
+  var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'meetings', 'clients', 'contracts', 'attendance', 'reminders', 'accounting', 'reports'];
   MP.view = function (name, def) { views[name] = def; };
   MP.showView = function (name, opts) {
     if (!views[name]) name = 'dashboard';
@@ -730,7 +730,8 @@
       calendar: function () { var t = MP.taskById(n.ref_id); MP.showView('calendar', { date: t ? t.date : S.today }); },
       task: function () { MP.openTask(n.ref_id); },
       messages: function () { MP.showView('messages', { channel: n.ref_id }); },
-      meeting: function () { MP.showView('dashboard'); MP.reveal('.meetings-card'); },
+      meeting: function () { MP.showView('meetings', { open: n.ref_id }); },
+      meetings: function () { MP.showView('meetings', { open: n.ref_id }); },
       projects: function () { if (n.ref_id) S.projectId = n.ref_id; MP.showView('projects'); },
       reminders: function () { MP.showView('reminders'); },
       attendance: function () { MP.showView('attendance'); },

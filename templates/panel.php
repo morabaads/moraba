@@ -9,6 +9,7 @@ $mp_nav = array(
 	'mytasks'    => array( 'tasks', 'تسک‌های من', 'tasks' ),
 	'projects'   => array( 'folder', 'پروژه‌ها', '' ),
 	'messages'   => array( 'chat', 'پیام‌ها', 'messages' ),
+	'meetings'   => array( 'video', 'جلسات', '' ),
 	'clients'    => array( 'user', 'مشتریان', '' ),
 	'contracts'  => array( 'edit', 'قراردادها', '', true ),
 	'attendance' => array( 'clock', 'حضور و مرخصی', 'leaves' ),
@@ -257,6 +258,22 @@ $mp_nav = array(
 			</div>
 			<div class="tabs" role="tablist" id="cl-tabs" aria-label="فیلتر مشتریان"></div>
 			<div id="cl-body"></div>
+		</section>
+
+		<!-- ================= Meetings ================= -->
+		<section class="view" id="view-meetings" data-view="meetings" hidden aria-label="جلسات">
+			<div class="page-head">
+				<div><h1>جلسات</h1><p>جلسه آنلاین با لینک اختصاصی، اتاق انتظار، دعوت همکاران و مهمان</p></div>
+				<div class="page-actions">
+					<button type="button" class="btn btn-secondary manager-only" id="mt-settings"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?>تنظیمات</button>
+					<button type="button" class="btn btn-primary" id="mt-new"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>جلسه جدید</button>
+				</div>
+			</div>
+			<div class="mt-tools">
+				<div class="tabs" role="tablist" id="mt-tabs" aria-label="فیلتر جلسات"></div>
+				<label class="search mt-search"><?php echo $mp_i( 'search' ); // phpcs:ignore ?><input type="search" id="mt-q" placeholder="جستجو در جلسات…" aria-label="جستجو در جلسات"></label>
+			</div>
+			<div id="mt-body"></div>
 		</section>
 
 		<!-- ================= Contracts ================= -->

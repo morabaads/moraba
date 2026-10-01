@@ -35,6 +35,7 @@ class MP_Install {
 			MP_Templates::seed();
 			MP_Costs::migrate();
 			MP_Client::migrate_customers();
+			MP_Meet::migrate();
 			// files.context was 10 characters: «client_item» / «client_logo» got cut. Repair them.
 			global $wpdb;
 			$wpdb->query( 'UPDATE ' . self::table( 'files' ) . " SET context = 'client_item' WHERE context = 'client_ite'" ); // phpcs:ignore
@@ -432,10 +433,51 @@ class MP_Install {
 			meeting_time varchar(5) NOT NULL,
 			url varchar(500) NOT NULL DEFAULT '',
 			project_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			description text NULL,
+			token varchar(32) NOT NULL DEFAULT '',
+			password varchar(64) NOT NULL DEFAULT '',
+			duration smallint(5) unsigned NOT NULL DEFAULT 0,
+			waiting varchar(10) NOT NULL DEFAULT 'guests',
+			status varchar(12) NOT NULL DEFAULT 'scheduled',
+			started_at datetime NULL,
+			ended_at datetime NULL,
 			created_by bigint(20) unsigned NOT NULL,
 			created_at datetime NOT NULL,
 			PRIMARY KEY  (id),
-			KEY meeting_date (meeting_date)
+			KEY meeting_date (meeting_date),
+			KEY token (token)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'meeting_peers' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			meeting_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			name varchar(80) NOT NULL DEFAULT '',
+			role varchar(10) NOT NULL DEFAULT 'guest',
+			state varchar(10) NOT NULL DEFAULT 'waiting',
+			secret varchar(32) NOT NULL DEFAULT '',
+			mic tinyint(1) NOT NULL DEFAULT 1,
+			cam tinyint(1) NOT NULL DEFAULT 1,
+			hand tinyint(1) NOT NULL DEFAULT 0,
+			share tinyint(1) NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			joined_at datetime NULL,
+			left_at datetime NULL,
+			seen_at datetime NULL,
+			PRIMARY KEY  (id),
+			KEY meeting_id (meeting_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'meeting_signals' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			meeting_id bigint(20) unsigned NOT NULL,
+			from_peer bigint(20) unsigned NOT NULL,
+			to_peer bigint(20) unsigned NOT NULL,
+			kind varchar(12) NOT NULL,
+			body mediumtext NOT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY to_peer (to_peer,id)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'meeting_people' ) . " (

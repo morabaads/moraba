@@ -341,58 +341,16 @@
       var people = m.people.slice(); if (people.indexOf(m.created_by) < 0) people.unshift(m.created_by);
       var stack = el('span', { class: 'stack' });
       people.slice(0, 3).forEach(function (id) { stack.append(MP.avatar(MP.user(id), 'sm')); });
-      box.append(el('button', { type: 'button', class: 'meeting-row' + (next && m.id === next.id ? ' next' : ''), onclick: function () { meetingDetails(m); } },
+      box.append(el('button', { type: 'button', class: 'meeting-row' + (next && m.id === next.id ? ' next' : ''), onclick: function () { MP.meetingDetails(m); } },
         el('span', { class: 'meeting-time num', text: MP.timeFa(m.time) }),
         el('span', { style: { flex: '1', minWidth: '0' } }, el('strong', { text: m.title }), el('small', { text: people.map(function (id) { return MP.user(id).name; }).join('، ') })),
         stack));
     });
     var join = $('#join-meeting');
     join.disabled = !next;
-    $('span', join).textContent = next ? (next.url ? 'پیوستن به «' + next.title + '» ساعت ' + MP.timeFa(next.time) : 'جلسه بعدی ساعت ' + MP.timeFa(next.time)) : 'جلسه‌ای در پیش نیست';
-    join.onclick = function () { if (next) { if (next.url) openUrl(next.url); else meetingDetails(next); } };
+    $('span', join).textContent = next ? 'پیوستن به «' + next.title + '» ساعت ' + MP.timeFa(next.time) : 'جلسه‌ای در پیش نیست';
+    join.onclick = function () { if (next) MP.joinMeeting(next); };
   }
-  function openUrl(url) {
-    try { var u = new URL(url); if (u.protocol === 'https:' || u.protocol === 'http:') { window.open(u.href, '_blank', 'noopener,noreferrer'); return; } } catch (e) { /* invalid */ }
-    MP.toast('لینک جلسه معتبر نیست', { error: true });
-  }
-  function meetingDetails(m) {
-    var people = m.people.map(function (id) { return MP.user(id).name; });
-    MP.dialog.open(m.title, el('div', null,
-      MP.detailRow('زمان', J.formatLong(m.date) + ' · ساعت ' + MP.timeFa(m.time)),
-      MP.detailRow('برگزارکننده', MP.user(m.created_by).name),
-      people.length ? MP.detailRow('شرکت‌کنندگان', people.join('، ')) : null,
-      m.project_id && MP.project(m.project_id) ? MP.detailRow('پروژه', MP.project(m.project_id).name) : null,
-      el('div', { class: 'dialog-actions', style: { marginTop: '16px' } },
-        m.url ? el('button', { class: 'btn btn-primary', type: 'button', html: icon('video') + 'ورود به جلسه', onclick: function () { openUrl(m.url); } }) : null,
-        m.can_delete ? el('button', { class: 'btn btn-danger', type: 'button', text: 'لغو جلسه', onclick: function () {
-          MP.confirm('لغو جلسه', 'جلسه «' + m.title + '» لغو شود؟ به شرکت‌کنندگان اطلاع داده می‌شود.', 'لغو جلسه').then(function (ok) {
-            if (ok) MP.api('meetings/' + m.id, { method: 'DELETE' }).then(function () { MP.toast('جلسه لغو شد'); return MP.loadMeetings(); }).then(renderMeetings).catch(MP.soft);
-          });
-        } }) : null)), { focus: false });
-  }
-  MP.meetingForm = function (preset) {
-    preset = preset || {};
-    var form = el('form', { class: 'form' },
-      MP.field('عنوان جلسه', el('input', { name: 'title', required: true, maxlength: 160, placeholder: 'مثلاً بررسی طراحی داشبورد', value: preset.title || '' })),
-      el('div', { class: 'row' }, MP.dateField('date', S.today, 'تاریخ'), MP.field('ساعت', el('input', { name: 'time', type: 'time', required: true }))),
-      el('div', { class: 'field' }, el('span', { text: 'شرکت‌کنندگان' }), MP.peoplePicker('people', preset.people || [], [S.me.id])),
-      el('div', { class: 'row' },
-        MP.field('پروژه', MP.projectSelect('project_id', preset.projectId || 0)),
-        MP.field('لینک جلسه (اختیاری)', el('input', { name: 'url', type: 'url', placeholder: 'https://…', dir: 'ltr' }))),
-      MP.actions('ثبت و دعوت'));
-    form.onsubmit = function (e) {
-      e.preventDefault();
-      var f = form.elements, url = f.url.value.trim();
-      if (url) { try { if (['http:', 'https:'].indexOf(new URL(url).protocol) < 0) throw new Error(); } catch (err) { f.url.setCustomValidity('لینک باید با https یا http شروع شود'); f.url.reportValidity(); return; } }
-      MP.busy(form, true);
-      MP.api('meetings', { method: 'POST', body: { title: f.title.value.trim(), date: f.date.value, time: f.time.value, url: url, project_id: +f.project_id.value, people: MP.checked(form, 'people') } })
-        .then(function () { MP.dialog.close(); MP.toast('جلسه ثبت شد و به شرکت‌کنندگان اطلاع داده شد'); return MP.loadMeetings(); })
-        .then(renderMeetings)
-        .catch(function (err) { MP.busy(form, false); MP.soft(err); });
-    };
-    form.elements.url.oninput = function () { form.elements.url.setCustomValidity(''); };
-    MP.dialog.open('جلسه جدید', form, { wide: true });
-  };
   $('#add-meeting').onclick = function () { MP.meetingForm(); };
 
   /* ------------------------------------------------------------ View */
@@ -407,6 +365,7 @@
   MP.on('attendance', function () { if (MP.visible('dashboard')) renderKpis(); });
   MP.on('channels', function () { if (MP.visible('dashboard')) renderKpis(); });
   MP.on('day', function () { mini = null; MP.loadMeetings().then(function () { if (MP.visible('dashboard')) render(); }); });
+  MP.on('meetings', function () { MP.loadMeetings().then(function () { if (MP.visible('dashboard')) renderMeetings(); }); });
   MP.on('notification', function (n) {
     if (n.type === 'task' || n.type === 'project') MP.loadTasks().then(MP.loadProjects);
     if (n.type === 'meeting') MP.loadMeetings().then(function () { if (MP.visible('dashboard')) renderMeetings(); });

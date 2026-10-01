@@ -62,9 +62,6 @@ class MP_Rest {
 			array( "messages/$id", 'DELETE', 'delete_message', $auth ),
 			array( 'auth/logout', 'POST', 'logout', $auth ),
 
-			array( 'meetings', 'GET', 'list_meetings', $auth ),
-			array( 'meetings', 'POST', 'create_meeting', $auth ),
-			array( "meetings/$id", 'DELETE', 'delete_meeting', $auth ),
 
 			array( 'reminders', 'GET', 'list_reminders', $auth ),
 			array( 'reminders', 'POST', 'create_reminder', $auth ),
@@ -1562,99 +1559,6 @@ class MP_Rest {
 			MP_Notify::send( $member, 'message', 'پیام جدید مشتری در «' . $ch->title . '»', wp_trim_words( $body, 12 ), 'messages', $ch->id );
 		}
 		return array( 'sent' => true );
-	}
-
-	/* ------------------------------------------------------------------ Meetings */
-
-	private static function meeting_payload( $m ) {
-		global $wpdb;
-		$people = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'meeting_people' ) . ' WHERE meeting_id = %d', $m->id ) ) );
-		return array(
-			'id'         => (int) $m->id,
-			'title'      => $m->title,
-			'date'       => $m->meeting_date,
-			'time'       => $m->meeting_time,
-			'url'        => $m->url,
-			'project_id' => (int) $m->project_id,
-			'people'     => $people,
-			'created_by' => (int) $m->created_by,
-			'can_delete' => (int) $m->created_by === self::uid() || MP_Util::is_manager(),
-		);
-	}
-
-	public static function list_meetings( WP_REST_Request $r ) {
-		global $wpdb;
-		$from = MP_Util::valid_date( $r['from'] ) ? $r['from'] : MP_Util::today();
-		$to   = MP_Util::valid_date( $r['to'] ) ? $r['to'] : $from;
-		$uid  = self::uid();
-		$rows = $wpdb->get_results(
-			$wpdb->prepare(
-				'SELECT DISTINCT m.* FROM ' . self::t( 'meetings' ) . ' m LEFT JOIN ' . self::t( 'meeting_people' ) . ' p ON p.meeting_id = m.id
-				WHERE m.meeting_date BETWEEN %s AND %s AND (m.created_by = %d OR p.user_id = %d) ORDER BY m.meeting_date, m.meeting_time',
-				$from,
-				$to,
-				$uid,
-				$uid
-			)
-		);
-		return array_map( array( __CLASS__, 'meeting_payload' ), $rows );
-	}
-
-	public static function create_meeting( WP_REST_Request $r ) {
-		global $wpdb;
-		$title = MP_Util::text( $r['title'], 160 );
-		$date  = MP_Util::valid_date( $r['date'] ) ? $r['date'] : MP_Util::today();
-		$time  = (string) $r['time'];
-		$url   = trim( (string) $r['url'] );
-		if ( '' === $title ) {
-			return self::err( 'عنوان جلسه را وارد کنید.' );
-		}
-		if ( '' === $time || ! MP_Util::valid_time( $time ) ) {
-			return self::err( 'ساعت جلسه معتبر نیست.' );
-		}
-		if ( '' !== $url && ( ! filter_var( $url, FILTER_VALIDATE_URL ) || ! in_array( wp_parse_url( $url, PHP_URL_SCHEME ), array( 'http', 'https' ), true ) ) ) {
-			return self::err( 'لینک باید با https یا http شروع شود.' );
-		}
-		$wpdb->insert(
-			self::t( 'meetings' ),
-			array(
-				'title'        => $title,
-				'meeting_date' => $date,
-				'meeting_time' => $time,
-				'url'          => esc_url_raw( $url ),
-				'project_id'   => (int) $r['project_id'],
-				'created_by'   => self::uid(),
-				'created_at'   => MP_Util::now(),
-			)
-		);
-		$mid    = (int) $wpdb->insert_id;
-		MP_Audit::log( 'create', 'meeting', $mid, 'جلسه «' . $title . '» ' . MP_Jalali::format( $date ) . ' ساعت ' . MP_Jalali::digits( $time ) );
-		$people = is_array( $r['people'] ) ? array_unique( array_map( 'intval', $r['people'] ) ) : array();
-		foreach ( $people as $p ) {
-			if ( MP_Util::is_panel_user( $p ) ) {
-				$wpdb->insert( self::t( 'meeting_people' ), array( 'meeting_id' => $mid, 'user_id' => $p ) );
-				if ( $p !== self::uid() ) {
-					MP_Notify::send( $p, 'meeting', wp_get_current_user()->display_name . ' شما را به جلسه «' . $title . '» دعوت کرد', $date . ' · ' . $time, 'meeting', $mid, self::wants_email( $p ) );
-				}
-			}
-		}
-		return self::meeting_payload( $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'meetings' ) . ' WHERE id = %d', $mid ) ) );
-	}
-
-	public static function delete_meeting( WP_REST_Request $r ) {
-		global $wpdb;
-		$m = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'meetings' ) . ' WHERE id = %d', (int) $r['id'] ) );
-		if ( ! $m || ( (int) $m->created_by !== self::uid() && ! MP_Util::is_manager() ) ) {
-			return self::err( 'فقط برگزارکننده می‌تواند جلسه را لغو کند.', 403 );
-		}
-		foreach ( $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'meeting_people' ) . ' WHERE meeting_id = %d', $m->id ) ) as $p ) {
-			if ( (int) $p !== self::uid() ) {
-				MP_Notify::send( $p, 'meeting', 'جلسه «' . $m->title . '» لغو شد', $m->meeting_date . ' · ' . $m->meeting_time, 'meeting' );
-			}
-		}
-		$wpdb->delete( self::t( 'meeting_people' ), array( 'meeting_id' => $m->id ) );
-		$wpdb->delete( self::t( 'meetings' ), array( 'id' => $m->id ) );
-		return array( 'deleted' => true );
 	}
 
 	/* ------------------------------------------------------------------ Reminders */

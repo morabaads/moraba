@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       پنل کارمندان مربع
  * Description:       پنل کاری کارمندان مربع استودیو: میز کار، پروژه‌ها، تسک‌ها، تقویم شمسی با تسک‌های تعیین‌شده توسط ناظر، پیام‌ها، جلسات و یادآوری‌ها. نمایش با آدرس /panel یا شورت‌کد [moraba_panel].
- * Version:           3.16.6
+ * Version:           3.17.0
  * Requires at least: 6.2
  * Requires PHP:      7.4
  * Author:            Moraba Studio
@@ -12,8 +12,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MP_VERSION', '3.16.6' );
-define( 'MP_DB_VERSION', '18' );
+define( 'MP_VERSION', '3.17.0' );
+define( 'MP_DB_VERSION', '19' );
 define( 'MP_FILE', __FILE__ );
 define( 'MP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MP_URL', plugin_dir_url( __FILE__ ) );
@@ -40,6 +40,7 @@ require_once MP_DIR . 'includes/class-mp-ai.php';
 require_once MP_DIR . 'includes/class-mp-brain.php';
 require_once MP_DIR . 'includes/class-mp-client.php';
 require_once MP_DIR . 'includes/class-mp-contracts.php';
+require_once MP_DIR . 'includes/class-mp-meet.php';
 require_once MP_DIR . 'includes/class-mp-costs.php';
 require_once MP_DIR . 'includes/class-mp-payroll.php';
 require_once MP_DIR . 'includes/class-mp-frontend.php';
@@ -62,6 +63,7 @@ add_action( 'rest_api_init', array( 'MP_Digest', 'register' ) );
 add_action( 'rest_api_init', array( 'MP_AI', 'register' ) );
 add_action( 'rest_api_init', array( 'MP_Client', 'register' ) );
 add_action( 'rest_api_init', array( 'MP_Contracts', 'register' ) );
+add_action( 'rest_api_init', array( 'MP_Meet', 'register' ) );
 add_action( 'rest_api_init', array( 'MP_Costs', 'register' ) );
 add_action( 'rest_api_init', array( 'MP_Payroll', 'register' ) );
 MP_Auth::init();

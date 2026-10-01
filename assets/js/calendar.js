@@ -4,7 +4,7 @@
   'use strict';
   var MP = window.MP, S = MP.S, J = MP.J, el = MP.el, $ = MP.$, $$ = MP.$$, fa = MP.fa, icon = MP.icon;
 
-  var st = { mode: 'person', userId: 0, view: null, selected: '', tasks: [], leaves: [], goal: '', goalWeek: '', teamStart: '', loading: false };
+  var st = { mode: 'person', userId: 0, view: null, selected: '', tasks: [], leaves: [], meetings: [], goal: '', goalWeek: '', teamStart: '', loading: false };
   var grid = $('#cal-grid'), panel = $('#day-panel'), userSel = $('#cal-user');
 
   function monthRange() {
@@ -21,9 +21,11 @@
     render();
     return Promise.all([
       MP.api('tasks', { query: { user_id: st.userId, from: r.from, to: r.to } }),
-      MP.api('leaves', { query: { from: r.from, to: r.to, scope: S.manager ? '' : 'mine' } })
+      MP.api('leaves', { query: { from: r.from, to: r.to, scope: S.manager ? '' : 'mine' } }),
+      isMe() ? MP.api('meetings', { query: { from: r.from, to: r.to, mine: 1 } }).catch(function () { return []; }) : Promise.resolve([])
     ]).then(function (res) {
       st.tasks = res[0];
+      st.meetings = res[2];
       st.leaves = res[1].filter(function (l) { return l.user_id === st.userId && l.status !== 'rejected'; });
       if (isMe()) res[0].forEach(function (t) { MP.upsertTask(t, true); });
       render(); loadGoal();
@@ -35,6 +37,7 @@
     MP.api('goals', { query: { week_start: ws, user_id: st.userId } }).then(function (g) { if (st.goalWeek === ws) { st.goal = g.text; renderPanel(); } }).catch(function () {});
   }
   function leaveOn(iso) { return st.leaves.filter(function (l) { return iso >= l.start && iso <= l.end; })[0] || null; }
+  function meetingsOn(iso) { return isMe() ? st.meetings.filter(function (m) { return m.date === iso; }) : []; }
   function remindersOn(iso) { return isMe() ? S.reminders.filter(function (r) { return r.date === iso && !(r.fired && r.repeat === 'none'); }) : []; }
 
   /* ---- Month grid */
@@ -47,9 +50,9 @@
   function dayCell(iso, strip) {
     var list = st.tasks.filter(function (t) { return t.date === iso; });
     var locked = list.filter(function (t) { return t.source === 'manager'; }).length, own = list.length - locked;
-    var done = list.filter(function (t) { return t.done; }).length, leave = leaveOn(iso), rems = remindersOn(iso);
+    var done = list.filter(function (t) { return t.done; }).length, leave = leaveOn(iso), rems = remindersOn(iso), meets = meetingsOn(iso);
     var cls = ['cal-day', iso === st.selected ? 'selected' : '', iso === S.today ? 'today' : '', J.weekday(iso) === 6 ? 'fri' : '', leave && leave.status === 'approved' && !strip ? 'leave' : '', list.length && done === list.length ? 'all-done' : ''].join(' ');
-    var label = J.formatLong(iso) + (list.length ? '، ' + fa(list.length) + ' تسک' : '') + (locked ? '، ' + fa(locked) + ' تسک ناظر' : '') + (leave ? '، مرخصی' : '') + (rems.length ? '، یادآوری' : '');
+    var label = J.formatLong(iso) + (list.length ? '، ' + fa(list.length) + ' تسک' : '') + (locked ? '، ' + fa(locked) + ' تسک ناظر' : '') + (leave ? '، مرخصی' : '') + (rems.length ? '، یادآوری' : '') + (meets.length ? '، ' + fa(meets.length) + ' جلسه' : '');
     var click = function () {
       MP.haptic(6);
       if (strip) { changeDay(iso); return; }
@@ -61,6 +64,7 @@
       if (locked) dots.append(el('i', { class: 'lock' }));
       if (own) dots.append(el('i'));
       if (leave) dots.append(el('i', { class: 'leave' }));
+      if (meets.length) dots.append(el('i', { class: 'meet' }));
       return el('button', { type: 'button', class: cls, dataset: { date: iso }, 'aria-pressed': String(iso === st.selected), 'aria-label': label, onclick: click },
         el('span', { class: 'wd', text: ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'][J.weekday(iso)] }),
         el('span', { class: 'd-num', text: fa(J.fromIso(iso).jd) }), dots);
@@ -68,6 +72,7 @@
     var tags = el('span', { class: 'd-tags' });
     if (locked) tags.append(el('span', { class: 'd-tag lock', html: icon('lock') }, fa(locked)));
     if (own) tags.append(el('span', { class: 'd-tag', text: fa(own) + ' تسک' }));
+    if (meets.length) tags.append(el('span', { class: 'd-tag meet', html: icon('video') }, fa(meets.length)));
     if (leave) tags.append(el('span', { class: 'd-tag leave', text: leave.status === 'approved' ? 'مرخصی' : 'مرخصی؟' }));
     var bar = null;
     if (list.length) { bar = el('span', { class: 'd-bar' }, el('i')); bar.firstChild.style.width = done / list.length * 100 + '%'; }
@@ -130,6 +135,7 @@
     var extra = el('div', { class: 'day-extra' });
     if (leave) extra.append(el('div', { class: 'day-note leave', html: icon('leave') }, (leave.status === 'approved' ? 'مرخصی تأییدشده' : 'درخواست مرخصی در انتظار') + (leave.kind === 'hourly' ? ' · ' + MP.timeFa(leave.from_time) + '–' + MP.timeFa(leave.to_time) : '')));
     rems.forEach(function (r) { extra.append(el('div', { class: 'day-note rem', html: icon('alarm') }, MP.timeFa(r.time) + ' · ' + r.title)); });
+    meetingsOn(day).forEach(function (m) { extra.append(el('button', { type: 'button', class: 'day-note meet', html: icon('video'), onclick: function () { MP.meetingDetails(m); } }, MP.timeFa(m.time) + ' · جلسه «' + m.title + '»' + (m.status === 'live' ? ' · در حال برگزاری' : ''))); });
     if (extra.children.length) panel.append(extra);
     var box = el('div', { class: 'day-list' });
     if (!list.length) box.append(MP.empty('calendar', other ? 'برای ' + who.name + ' کاری تعیین نشده' : 'برای این روز کاری ندارید', other ? 'با + برای این روز تسک تعیین کنید.' : 'با + تسک شخصی اضافه کنید.', null, true));
@@ -263,6 +269,7 @@
     };
   });
 
+  MP.on('meetings', function () { if (MP.visible('calendar')) load(); });
   MP.view('calendar', {
     open: function (opts) {
       if (opts.date) select(opts.date);
