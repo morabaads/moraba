@@ -187,7 +187,7 @@ input[type=time],input[dir=ltr],.ltr{direction:ltr;text-align:right}
 .app{display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr);gap:28px;padding:16px 20px 28px 16px;max-width:1760px;margin:0 auto;min-height:100vh;transition:grid-template-columns var(--t) var(--ease)}
 .sidebar{position:sticky;top:16px;height:calc(100vh - 32px);display:flex;flex-direction:column;padding:10px 4px 10px 0}
 .sidebar .brand{display:flex;align-items:center;padding:10px 14px 30px;min-height:74px}
-.brand-logo{height:40px;width:auto;mix-blend-mode:multiply}
+.brand-logo{height:24px;width:auto;mix-blend-mode:multiply}
 html.dark .brand-logo,html.dark .brand-symbol{mix-blend-mode:normal;filter:invert(1) hue-rotate(180deg) brightness(1.1)}
 .brand-symbol{display:none;width:40px;height:40px;mix-blend-mode:multiply}
 .nav{display:flex;flex-direction:column;gap:4px}
@@ -1246,7 +1246,7 @@ html.reduced-motion .bubble-row.b-new,html.reduced-motion .bubble-row.b-new .bub
 body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);--lg-field:#0f0f12;--lg-ink:#f3f3f3;--lg-muted:#9a9aa2;
   background:radial-gradient(900px 500px at 50% -10%,rgba(242,138,36,.08),transparent 60%),var(--lg-bg);color:var(--lg-ink);min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px 16px}
 .login-card{width:min(470px,100%);background:linear-gradient(180deg,#18181b,#131316);border:1px solid var(--lg-line);border-radius:28px;padding:48px 40px 34px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);animation:pop-in .45s var(--ease)}
-.login-logo{display:block;height:44px;width:auto;margin:0 auto 30px}
+.login-logo{display:block;height:24px;width:auto;margin:0 auto 30px}
 .login-card h1{font-size:25px;font-weight:800;margin:0 0 10px;color:var(--lg-ink)}
 .login-sub{color:var(--lg-muted);font-size:14px;margin:0 0 30px;line-height:1.9}
 .login-label,.login-card label{display:block;text-align:right;font-weight:700;font-size:13.5px;color:#cfcfd4;margin:0 0 10px}
@@ -1291,7 +1291,7 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 .mp-login .ios-install{--surface:#1b1b1f;--surface-2:#242428;--ink:#f3f3f3;--muted:#9a9aa2;--line:rgba(255,255,255,.1)}
 @media (max-width:520px){
   .login-card{padding:36px 22px 26px;border-radius:24px}
-  .login-logo{height:36px;margin-bottom:24px}
+  .login-logo{height:22px;margin-bottom:24px}
   .login-card h1{font-size:22px}
   .login-sub{margin-bottom:24px}
 }
@@ -1792,9 +1792,9 @@ body.mp-login{--lg-bg:#0e0e10;--lg-card:#151518;--lg-line:rgba(255,255,255,.1);-
 
 /* ================================================================ Client portal */
 .cp-body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh}
-.cp-studio-logo{height:30px;width:auto;display:block}
+.cp-studio-logo{height:24px;width:auto;display:block}
 html.dark .cp-studio-logo{filter:invert(1) hue-rotate(180deg) brightness(1.1)}
-.cp-studio-logo.sm{height:22px}
+.cp-studio-logo.sm{height:18px}
 .cp-link{border:0;background:none;padding:0;color:var(--brand);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .cp-link:disabled{color:var(--muted);cursor:default}
 
