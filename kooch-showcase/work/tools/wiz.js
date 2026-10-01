@@ -1,0 +1,13 @@
+const {chromium}=require('/opt/node22/lib/node_modules/playwright');
+const S='/tmp/kooch-work/shots/';
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+const ctx=await b.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1,locale:'fa-IR'});
+const p=await ctx.newPage();
+await p.goto('http://127.0.0.1:8080/wp-login.php');await p.fill('#user_login','admin');await p.fill('#user_pass','admin');await p.click('#wp-submit');await p.waitForLoadState('networkidle');
+await p.goto('http://127.0.0.1:8080/wp-admin/admin.php?page=kooch-new',{waitUntil:'networkidle'});await p.waitForTimeout(1500);
+await p.fill('input[placeholder*="انتقال محصولات"]','انتقال محصولات فروشگاه نمونه');
+await p.click('text=ساخت کوچ و شروع تنظیمات');await p.waitForTimeout(3000);
+await p.screenshot({path:S+'w1.png',fullPage:true});
+console.log(p.url());
+const txt=await p.evaluate(()=>document.querySelector('#wpbody-content').innerText.slice(0,1500));console.log(txt);
+await b.close();})();
