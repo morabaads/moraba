@@ -634,6 +634,7 @@
       el('div', { class: 'menu menu-list' },
         el('button', { type: 'button', html: icon('edit'), onclick: openAccount }, 'حساب کاربری و اعلان‌ها'),
         el('button', { type: 'button', html: icon('settings'), onclick: openAppearance }, 'ظاهر پنل'),
+        el('button', { type: 'button', html: icon('grid'), onclick: function () { MP.openWidgets(); } }, 'ویجت‌ها روی صفحه اصلی'),
         el('button', { type: 'button', html: icon('help'), onclick: openHelp }, 'راهنما'),
         !MP.standalone() ? el('button', { type: 'button', html: icon('download'), onclick: MP.install }, 'نصب اپلیکیشن روی گوشی') : null,
         el('button', { type: 'button', class: 'danger', html: icon('logout'), onclick: logout }, 'خروج از حساب'))), { focus: false });
