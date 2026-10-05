@@ -244,6 +244,7 @@ html.dark .nav-item.active{background:var(--surface-3)}
 .punch-chip .punch-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
 .punch-chip.is-in .punch-dot{animation:pulse 1.6s infinite}
 .punch-chip.is-out{background:var(--surface-2);color:var(--ink-2)}
+.punch-chip .punch-time{min-width:7.2ch;text-align:center}.punch-chip .punch-text:empty{display:none}
 
 /* popovers */
 .popover{position:absolute;top:calc(100% + 10px);left:0;z-index:50;width:360px;max-width:calc(100vw - 24px);background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--sh-3);overflow:hidden;animation:pop-in var(--t) var(--ease);transform-origin:top left}
@@ -919,7 +920,7 @@ body.is-offline .topbar{top:34px}
   .profile-btn .avatar,.profile-btn .initials{width:34px;height:34px;font-size:12px}
   .profile-btn .badge.dot{position:absolute;top:-1px;right:-1px;border:2px solid var(--bg)}
   .punch-chip{height:34px;padding:0 11px;gap:6px}
-  .punch-chip .punch-text{display:inline;font-size:11px}
+  .punch-chip .punch-text{display:inline;font-size:11px}.punch-chip .punch-time{font-size:11px}
 
   /* full-screen search / command palette */
   .search-anchor{display:none}

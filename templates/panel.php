@@ -64,7 +64,7 @@ $mp_nav = array(
 			<strong class="page-title" id="page-title"></strong>
 			<div class="hello"><strong id="hello-name"><span class="sk sk-text" style="width:140px"></span></strong><span id="hello-role"></span></div>
 			<div class="topbar-tools">
-				<button type="button" class="punch-chip" id="punch-chip" hidden><span class="punch-dot"></span><span class="punch-text">ثبت ورود</span></button>
+				<button type="button" class="punch-chip" id="punch-chip" hidden><span class="punch-dot"></span><span class="punch-text">ثبت ورود</span><span class="punch-time num" hidden></span></button>
 				<button type="button" class="icon-btn search-btn" aria-label="جستجو"><?php echo $mp_i( 'search' ); // phpcs:ignore ?></button>
 				<div class="search-anchor">
 					<label class="search"><?php echo $mp_i( 'search' ); // phpcs:ignore ?><input type="search" placeholder="جستجو در تسک، پروژه، افراد…" aria-label="جستجو" aria-expanded="false" aria-controls="search-popover" autocomplete="off"><kbd>Ctrl K</kbd></label><button type="button" class="search-cancel">لغو</button>

@@ -19,7 +19,10 @@
     chip.hidden = false;
     chip.classList.toggle('is-in', !!a.open);
     chip.classList.toggle('is-out', !a.open);
-    $('.punch-text', chip).textContent = a.open ? (MP.isMobile() ? 'حاضر' : 'حاضر · ' + MP.duration(liveToday())) : (MP.isMobile() ? 'ورود' : 'ثبت ورود');
+    $('.punch-text', chip).textContent = a.open ? (MP.isMobile() ? '' : 'حاضر') : (MP.isMobile() ? 'ورود' : 'ثبت ورود');
+    var t = $('.punch-time', chip);
+    t.hidden = !a.open;
+    if (a.open) t.textContent = MP.clock(liveToday());
     chip.title = a.open ? 'ثبت خروج' : 'ثبت ورود';
   }
   MP.punch = function (action, note) {
@@ -34,7 +37,10 @@
     if (a && a.open) MP.confirm('ثبت خروج', 'خروج در ساعت ' + J.faDigits(new Date().toTimeString().slice(0, 5)) + ' ثبت شود؟', 'ثبت خروج', false).then(function (ok) { if (ok) MP.punch('out'); });
     else MP.punch('in');
   };
-  setInterval(function () { if (S.attendance && S.attendance.open && !document.hidden) { drawChip(); if (MP.visible('attendance')) drawClock(); } }, 30000);
+  /* Live worked-time clock (with seconds) in the top chip; the attendance page runs its own. */
+  function tickClock() { if (S.attendance && S.attendance.open && !document.hidden) drawChip(); }
+  setInterval(tickClock, 1000);
+  document.addEventListener('visibilitychange', tickClock);
 
   /* ------------------------------------------------------------ Attendance page */
 
