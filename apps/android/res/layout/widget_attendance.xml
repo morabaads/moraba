@@ -20,15 +20,15 @@
         android:paddingEnd="16dp">
         <ImageView android:id="@+id/dot" android:layout_width="8dp" android:layout_height="8dp"
             android:src="@drawable/dot_ok" android:contentDescription="@null" />
-        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/label" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/label" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:layout_marginStart="8dp" android:text="حاضر" android:textColor="@color/ok"
             android:textSize="15sp" android:textStyle="bold" />
-        <Chronometer android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        <Chronometer style="@style/W" android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:layout_marginStart="8dp" android:textColor="@color/ok" android:textSize="15sp" android:textStyle="bold"
-            android:fontFeatureSettings="tnum" android:textDirection="ltr" />
+            android:fontFeatureSettings="ss02" android:textDirection="ltr" />
     </LinearLayout>
 
-    <TextView android:textDirection="anyRtl" android:textAlignment="viewStart"
+    <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart"
         android:id="@+id/sub"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

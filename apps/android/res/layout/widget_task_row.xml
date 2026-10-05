@@ -40,14 +40,14 @@
                 <ImageView android:id="@+id/lock" android:layout_width="24dp" android:layout_height="24dp"
                     android:layout_marginEnd="6dp" android:background="@drawable/bg_lock_ico" android:scaleType="center"
                     android:src="@drawable/ic_lock" android:visibility="gone" android:contentDescription="تعیین‌شده توسط ناظر" />
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:maxWidth="200dp" android:textColor="@color/ink" android:textSize="15sp" android:textStyle="bold"
                     android:maxLines="2" android:ellipsize="end" />
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/urgent" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/urgent" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginStart="6dp" android:background="@drawable/bg_chip_danger" android:paddingStart="8dp" android:paddingEnd="8dp"
                     android:paddingTop="1dp" android:paddingBottom="1dp" android:text="فوری" android:textColor="@color/danger"
                     android:textSize="11sp" android:textStyle="bold" android:visibility="gone" />
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/fresh" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/fresh" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginStart="6dp" android:background="@drawable/bg_chip_lock" android:paddingStart="9dp" android:paddingEnd="9dp"
                     android:paddingTop="1dp" android:paddingBottom="1dp" android:text="جدید" android:textColor="@color/lock"
                     android:textSize="11sp" android:textStyle="bold" android:visibility="gone" />
@@ -60,16 +60,16 @@
                 android:layout_marginTop="4dp"
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/due" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/due" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginEnd="10dp" android:textColor="@color/danger" android:textSize="12sp" android:textStyle="bold"
                     android:maxLines="1" android:visibility="gone" />
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/time" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/time" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_marginEnd="10dp" android:drawableStart="@drawable/ic_clock" android:drawablePadding="4dp"
                     android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:visibility="gone" />
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/project" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/project" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
                     android:layout_marginEnd="10dp" android:drawableStart="@drawable/ic_folder" android:drawablePadding="4dp"
                     android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" android:visibility="gone" />
-                <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/items" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                <TextView style="@style/W" android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/items" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:drawableStart="@drawable/ic_list" android:drawablePadding="4dp"
                     android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:visibility="gone" />
             </LinearLayout>

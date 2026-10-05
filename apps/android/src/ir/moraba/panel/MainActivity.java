@@ -153,6 +153,7 @@ public class MainActivity extends Activity {
         code.setHintTextColor(getColor(R.color.faint));
         code.setTextColor(getColor(R.color.ink));
         code.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        code.setTypeface(font(false));
         code.setBackgroundResource(R.drawable.bg_input);
         code.setPadding(dp(14), dp(12), dp(14), dp(12));
         code.setMinLines(3);
@@ -263,7 +264,7 @@ public class MainActivity extends Activity {
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         t.setTextColor(getColor(color));
         t.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
-        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTypeface(font(bold));
         t.setPadding(0, dp(2), 0, dp(2));
         return t;
     }
@@ -273,7 +274,7 @@ public class MainActivity extends Activity {
         b.setText(s);
         b.setAllCaps(false);
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setTypeface(font(true));
         b.setTextColor(primary ? 0xFFFFFFFF : getColor(R.color.ink));
         b.setBackgroundResource(primary ? R.drawable.bg_btn : R.drawable.bg_btn_ghost);
         b.setStateListAnimator(null);
@@ -285,6 +286,14 @@ public class MainActivity extends Activity {
     private void space(int dp) {
         View v = new View(this);
         box.addView(v, new LinearLayout.LayoutParams(1, dp(dp)));
+    }
+
+    /** The panel's font (Dana) on Android 8+, the system font before that. */
+    private Typeface font(boolean bold) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            try { return getResources().getFont(bold ? R.font.dana_bold : R.font.dana_regular); } catch (Exception ignored) { /* fall back */ }
+        }
+        return bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT;
     }
 
     private int dp(int v) {

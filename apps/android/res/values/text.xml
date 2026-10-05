@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget text; Android 8+ uses the panel's own font (values-v26). -->
+    <style name="W" />
+</resources>
