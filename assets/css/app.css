@@ -801,7 +801,7 @@ body.is-loading .meetings-card::after{background:linear-gradient(90deg,#222 25%,
   .chat-layout.open .chat-list{display:none}
   .chat-layout:not(.open) .chat-pane{display:none}
   .chat-back{display:inline-grid}
-  .punch-chip .punch-text{display:none}.punch-chip{padding:0 12px}
+  .punch-chip .punch-text{display:none}.punch-chip.is-in .punch-text{display:inline}.punch-chip{padding:0 12px}
 }
 /* ---------------------------------------------------------------- Print */
 @media print{.sidebar,.topbar,.bottom-nav,.page-actions,.toasts{display:none!important}.app{display:block}.card{box-shadow:none;border:1px solid #ddd}}

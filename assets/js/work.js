@@ -19,7 +19,7 @@
     chip.hidden = false;
     chip.classList.toggle('is-in', !!a.open);
     chip.classList.toggle('is-out', !a.open);
-    $('.punch-text', chip).textContent = a.open ? (MP.isMobile() ? '' : 'حاضر') : (MP.isMobile() ? 'ورود' : 'ثبت ورود');
+    $('.punch-text', chip).textContent = a.open ? 'حاضر' : (MP.isMobile() ? 'ورود' : 'ثبت ورود');
     var t = $('.punch-time', chip);
     t.hidden = !a.open;
     if (a.open) t.textContent = MP.clock(liveToday());
