@@ -20,6 +20,6 @@ test -f build/classes/ir/moraba/panel/MainActivity.class
 (cd build/dex && zip -q -u ../app.unaligned.apk classes.dex)
 "$BT/zipalign" -f -p 4 build/app.unaligned.apk build/app.aligned.apk
 # The same key every time, so a new version installs over the old one.
-"$BT/apksigner" sign --ks moraba.keystore --ks-pass pass:moraba-panel --key-pass pass:moraba-panel --out "$OUT" build/app.aligned.apk
+"$BT/apksigner" sign --v4-signing-enabled false --ks moraba.keystore --ks-pass pass:moraba-panel --key-pass pass:moraba-panel --out "$OUT" build/app.aligned.apk
 "$BT/apksigner" verify "$OUT"
 ls -l "$OUT"
