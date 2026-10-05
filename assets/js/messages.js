@@ -107,6 +107,8 @@
     if (c.can_delete) tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'آرشیو گروه', title: 'آرشیو گروه', html: icon('folder'), onclick: function () { deleteClient(c); } }));
     if (c.type === 'direct') tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'پروفایل', html: icon('user'), onclick: function () { MP.openProfile(c.other); } }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm' + (c.pinned ? ' is-on' : ''), 'aria-label': 'سنجاق', title: c.pinned ? 'سنجاق شده' : 'سنجاق کردن', html: icon('pin'), onclick: function (e) { chatMenu(c, e.currentTarget); } }));
+    // On a phone the header keeps only this: every button above is in the same menu.
+    tools.append(el('button', { type: 'button', class: 'icon-btn chat-more', 'aria-label': 'گزینه‌های گفت‌وگو', html: icon('more'), onclick: function (e) { chatMenu(c, e.currentTarget); } }));
     $('#composer').hidden = false;
     c.unread = 0; renderList();
     fetchNew(true).then(function () { if (!MP.isMobile()) $('#composer-text').focus(); });
