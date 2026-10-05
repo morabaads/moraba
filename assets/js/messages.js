@@ -475,6 +475,8 @@
         el('img', { src: x.file.url, alt: x.file.name || '', loading: 'lazy', decoding: 'async' }));
       if (x.pending && x !== list[0]) cell.classList.add('ph-wait');
       if (n > 1 && x.body && i > 0) cell.title = x.body;
+      // Six or more: three a row; a short last row stretches to the full width (no empty gap).
+      if (n >= 6 && i >= n - n % 3) { cell.style.gridColumn = 'span ' + 6 / (n % 3); cell.style.aspectRatio = n % 3 === 1 ? '2 / 1' : '3 / 2'; }
       grid.append(cell);
       var img = cell.firstChild;
       if (n === 1) img.addEventListener('load', function () { var w = img.naturalWidth, h = img.naturalHeight; if (w && h) cell.style.aspectRatio = Math.max(.6, Math.min(1.9, w / h)); });
@@ -873,9 +875,20 @@
     post(m);
     return m;
   }
+  /** At most three files go up at once; the rest wait their turn (a hundred photos don't choke the connection). */
+  var running = 0, waiting = [];
+  function slot(job) {
+    return new Promise(function (resolve, reject) {
+      function go() {
+        running++;
+        job().then(resolve, reject).then(function () { running--; if (waiting.length) waiting.shift()(); });
+      }
+      if (running < 3) go(); else waiting.push(go);
+    });
+  }
   function post(m) {
     var o = m.o, f = o.file, channel = m.channel;
-    var up = f && !o.fileId ? MP.upload('files', f, { context: 'message', context_id: channel }, function (p) { var r = rowsById[m.id]; if (r && r._bar) $('i', r._bar).style.width = p * 100 + '%'; }) : Promise.resolve(o.fileId ? { id: o.fileId } : null);
+    var up = f && !o.fileId ? slot(function () { return MP.uploadChunked('chat-upload', f, { context_id: channel }, function (p) { var r = rowsById[m.id]; if (r && r._bar) $('i', r._bar).style.width = p * 100 + '%'; }); }) : Promise.resolve(o.fileId ? { id: o.fileId } : null);
     // Posts go one after another so messages keep their order: each waits for the one sent before it.
     var before = queue;
     var done = up.then(function (file) {
@@ -1028,7 +1041,7 @@
   /** Before sending: thumbnails, «عکس» (compressed, grouped in an album) or «فایل» (original), and a caption. */
   function sendSheet(files, want) {
     if (!current || !files.length) return;
-    var list = files.slice(0, 20), pics = list.filter(isPic).length, mode = pics && want !== 'file' ? 'photo' : 'file', group = true;
+    var list = files.slice(), pics = list.filter(isPic).length, mode = pics && want !== 'file' ? 'photo' : 'file', group = true;
     var grid = el('div', { class: 'ss-grid' }), cap = el('textarea', { class: 'ss-cap', rows: 1, placeholder: 'توضیح (اختیاری)…', maxlength: 4000, dir: 'auto' });
     if (text.value.trim() && !editing) { cap.value = text.value.trim(); }
     var seg = el('div', { class: 'seg ss-seg', role: 'tablist' });
@@ -1060,11 +1073,19 @@
       clearCtx(false);
       MP.dialog.close();
       var photos = mode === 'photo' ? list.filter(isPic) : [], others = list.filter(function (x) { return photos.indexOf(x) < 0; });
-      var albumId = photos.length > 1 && group ? 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '';
-      // Caption: under the album (its first photo) or on the last file, as in Telegram.
-      var capOnPhotos = photos.length && (albumId || photos.length === 1) && !others.length;
-      Promise.all(photos.map(shrink)).then(function (small) {
-        small.forEach(function (x, i) { sendNow({ file: x, album: albumId, body: capOnPhotos && i === 0 ? caption : '', reply: i === 0 ? r : null, channel: channel }); });
+      // Albums hold up to ten photos, as in Telegram; more photos make more albums.
+      var albums = [], stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      photos.forEach(function (x, i) { albums.push(photos.length > 1 && group ? 'a' + stamp + Math.floor(i / 10) : ''); });
+      // Caption: under the (first) album or on the last file, as in Telegram.
+      var capOnPhotos = photos.length && (group || photos.length === 1) && !others.length;
+      // Photos are shrunk one by one (dozens of big photos at once would run a phone out of memory), each sent as soon as it is ready.
+      var chain = Promise.resolve();
+      photos.forEach(function (x, i) {
+        chain = chain.then(function () { return shrink(x); }).then(function (small) {
+          sendNow({ file: small, album: albums[i], body: capOnPhotos && i === 0 ? caption : '', reply: i === 0 ? r : null, channel: channel });
+        });
+      });
+      chain.then(function () {
         others.forEach(function (x, i) { sendNow({ file: x, asFile: true, body: !capOnPhotos && i === others.length - 1 ? caption : '', reply: !photos.length && i === 0 ? r : null, channel: channel }); });
       });
     };
@@ -1307,8 +1328,9 @@
       el('button', { type: 'button', class: 'gv-nav gv-next', 'aria-label': 'بعدی', html: icon('left'), onclick: function () { go(1); } }),
       el('button', { type: 'button', class: 'gv-nav gv-prev', 'aria-label': 'قبلی', html: icon('right'), onclick: function () { go(-1); } }),
       el('div', { class: 'gv-stage' }, img), cap);
+    var z = MP.zoomable(img, $('.gv-stage', v));
     function show() {
-      var m = photos[i]; img.src = m.file.url;
+      var m = photos[i]; z.reset(); img.src = m.file.url;
       count.textContent = fa(i + 1) + ' از ' + fa(photos.length);
       cap.replaceChildren(el('b', { text: m.mine ? 'شما' : m.author }), el('small', { text: MP.relTime(m.created_at) }));
       if (m.body) cap.append(el('p', { text: m.body, dir: 'auto' }));
@@ -1318,8 +1340,9 @@
     function go(d) { var n = i + d; if (n < 0 || n >= photos.length) return; i = n; show(); }
     function key(e) { if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft') go(1); else if (e.key === 'ArrowRight') go(-1); }
     var sx = null;
-    v.addEventListener('pointerdown', function (e) { sx = { x: e.clientX, y: e.clientY }; });
-    v.addEventListener('pointerup', function (e) { if (!sx) return; var dx = e.clientX - sx.x, dy = e.clientY - sx.y; sx = null; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1); else if (dy > 120) close(); });
+    // Swipe for the next photo / down to close — only when not zoomed (zoomed, a drag moves the photo).
+    v.addEventListener('pointerdown', function (e) { sx = z.zoomed() || e.target.closest('button, a') ? null : { x: e.clientX, y: e.clientY }; });
+    v.addEventListener('pointerup', function (e) { if (!sx) return; var dx = e.clientX - sx.x, dy = e.clientY - sx.y; sx = null; if (z.touched()) return; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1); else if (dy > 120) close(); });
     var layer = MP.pushLayer(function () { layer = null; close(); });
     function close() { document.removeEventListener('keydown', key); v.remove(); if (layer) { var l = layer; layer = null; MP.popLayer(l); } }
     document.addEventListener('keydown', key);

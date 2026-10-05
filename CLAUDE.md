@@ -18,6 +18,9 @@ Active branch: `claude/kind-wright-cxk6d0`. Reply to the owner in Persian; say p
     `class-mp-relay.php` + root `relay.php` media relay (no STUN/TURN needed; relay.php runs without WordPress).
   - `class-mp-backup.php` export/import, granular reset (`RESET_ITEMS`), factory reset.
   - `class-mp-chat.php` Telegram-style chat on top of MP_Rest's channels/messages: reply, edit, reactions (`reactions` table), pinned message (`channels.pinned_msg`), forward, «saved messages» (channel type `saved`), mute (user meta `mp_mutes`), @mentions, search, media tabs, link preview, «seen by»; `list_messages` with `wait=1&sig=` holds up to ~6 s until the chat changes (needs a host that runs PHP requests in parallel; the test server needs `PHP_CLI_SERVER_WORKERS=6`).
+  - `class-mp-chat.php` Telegram-style chat extras (edit, reactions, pin, forward, search, media, link preview) + `chat-upload`:
+    chat files go up in 1.5 MB pieces (`MP.uploadChunked`), so no host upload/size limit applies.
+    Apple emoji ship as one sprite `assets/emoji/apple.webp` (48px tiles, 40 per row) indexed by `assets/js/emoji-map.js`.
   - `class-mp-widget.php` home-screen widgets API (`widget` GET summary / POST punch·done·undo, `widget/devices` pairing codes kept hashed in user meta `mp_widget_devices`).
   - `class-mp-install.php` schema, `class-mp-frontend.php` routes (`/panel`, `/c/{token}` portal, `/i/` invoice, `/k/` contract, `/m/` meeting).
 - `templates/` — `panel.php` (staff app shell + views), `client.php` (portal), `meet.php` (meeting room), `contract.php`, `login.php`, `sprite.svg` (icons; element ids must not clash with symbol ids).

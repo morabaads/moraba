@@ -93,6 +93,7 @@ $mp_nav = array(
 							<button type="button" data-user-action="install" hidden><?php echo $mp_i( 'download' ); // phpcs:ignore ?>نصب روی گوشی</button>
 							<button type="button" data-user-action="logout" class="danger"><?php echo $mp_i( 'logout' ); // phpcs:ignore ?>خروج از حساب</button>
 						</div>
+						<p class="mp-ver">نسخه <?php echo esc_html( MP_Jalali::digits( MP_VERSION ) ); ?></p>
 					</section>
 				</div>
 			</div>

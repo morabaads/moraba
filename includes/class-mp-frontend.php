@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -131,7 +131,7 @@ class MP_Frontend {
 		if ( ! $is_panel ) {
 			return;
 		}
-		nocache_headers();
+		self::no_page_cache();
 		header( 'X-Frame-Options: SAMEORIGIN' );
 		if ( ! is_user_logged_in() ) {
 			self::template( 'login' );
@@ -145,8 +145,18 @@ class MP_Frontend {
 		exit;
 	}
 
-	private static function render_client( $token ) {
+	/** The panel must never come from a cache plugin or the host's cache (LiteSpeed, etc.), or an update would not show. */
+	private static function no_page_cache() {
 		nocache_headers();
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		}
+		header( 'X-LiteSpeed-Cache-Control: no-cache' );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate, max-age=0' );
+	}
+
+	private static function render_client( $token ) {
+		self::no_page_cache();
 		header( 'X-Robots-Tag: noindex' );
 		if ( ! MP_Client::channel( $token ) ) {
 			status_header( 404 );
@@ -412,6 +422,7 @@ JS;
 			'root'   => esc_url_raw( rest_url( MP_Rest::NS . '/' ) ),
 			'nonce'  => wp_create_nonce( 'wp_rest' ),
 			'assets' => MP_URL . 'assets/',
+			'version' => MP_VERSION,
 			'emoji'  => array( MP_Chat::emoji_url(), home_url( '/' ) . ( false === strpos( home_url( '/' ), '?' ) ? '?' : '&' ) . 'mp_emoji=' ),
 			'sw'     => add_query_arg( 'mp_sw', 1, home_url( '/' ) ),
 			'scope'  => self::scope(),

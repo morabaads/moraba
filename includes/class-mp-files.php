@@ -80,7 +80,7 @@ class MP_Files {
 	 * Audio by extension, confirmed by the file's real content (WordPress's own check rejects
 	 * recordings whose container sniffs as video/webm or video/mp4).
 	 */
-	private static function audio_check( $tmp, $name ) {
+	public static function audio_check( $tmp, $name ) {
 		$ext = strtolower( pathinfo( $name, PATHINFO_EXTENSION ) );
 		if ( ! isset( self::AUDIO[ $ext ] ) ) {
 			return null;

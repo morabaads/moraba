@@ -26,6 +26,7 @@ class MP_Chat {
 			array( "channels/$id/read", 'POST', 'read' ),
 			array( 'channels/saved', 'POST', 'saved' ),
 			array( 'link-preview', 'GET', 'link_preview' ),
+			array( 'chat-upload', 'POST', 'chunk' ),
 		);
 		foreach ( $r as $x ) {
 			register_rest_route( 'moraba-panel/v1', '/' . $x[0], array( 'methods' => $x[1], 'callback' => array( __CLASS__, $x[2] ), 'permission_callback' => $auth ) );
@@ -491,6 +492,126 @@ class MP_Chat {
 			$id = (int) $wpdb->insert_id;
 		}
 		return MP_Rest::channel_payload( MP_Rest::channel_for( $id, $uid ), $uid );
+	}
+
+	/* ------------------------------------------------------------------ Chunked upload (no size limit) */
+
+	/** Chat files beyond the panel's usual list: video, design and archive files. */
+	const MORE_TYPES = array(
+		'mp4|m4v'  => 'video/mp4',
+		'mov|qt'   => 'video/quicktime',
+		'webm'     => 'video/webm',
+		'3gp'      => 'video/3gpp',
+		'mkv'      => 'video/x-matroska',
+		'avi'      => 'video/x-msvideo',
+		'heic'     => 'image/heic',
+		'heif'     => 'image/heif',
+		'bmp'      => 'image/bmp',
+		'tif|tiff' => 'image/tiff',
+		'psd'      => 'image/vnd.adobe.photoshop',
+		'ai|eps'   => 'application/postscript',
+		'indd'     => 'application/x-indesign',
+		'cdr'      => 'application/cdr',
+		'fig'      => 'application/octet-stream',
+		'sketch'   => 'application/octet-stream',
+		'xd'       => 'application/octet-stream',
+		'rar'      => 'application/x-rar-compressed',
+		'7z'       => 'application/x-7z-compressed',
+		'csv'      => 'text/csv',
+		'ppt'      => 'application/vnd.ms-powerpoint',
+		'pptx'     => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+		'mp3'      => 'audio/mpeg',
+		'wav'      => 'audio/wav',
+		'm4a'      => 'audio/mp4',
+		'ttf'      => 'font/ttf',
+		'otf'      => 'font/otf',
+		'woff|woff2' => 'font/woff2',
+	);
+
+	/**
+	 * POST chat-upload {upload, index, total, name, context_id} + file (one piece).
+	 * The browser sends a file in small pieces, so the host's upload limit does not apply; the last piece
+	 * checks the whole file's type and stores it like any other message file.
+	 */
+	public static function chunk( WP_REST_Request $r ) {
+		global $wpdb;
+		$cid = (int) $r['context_id'];
+		if ( ! MP_Rest::can_read_channel( $cid ) ) {
+			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
+		}
+		$up    = preg_replace( '/[^a-z0-9]/i', '', (string) $r['upload'] );
+		$i     = (int) $r['index'];
+		$total = (int) $r['total'];
+		if ( strlen( $up ) < 12 || $total < 1 || $total > 200000 || $i < 0 || $i >= $total ) {
+			return self::err( 'بارگذاری معتبر نیست.' );
+		}
+		if ( empty( $_FILES['file']['tmp_name'] ) || ! empty( $_FILES['file']['error'] ) || ! is_uploaded_file( $_FILES['file']['tmp_name'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification, WordPress.Security.ValidatedSanitizedInput
+			return self::err( 'این بخش از فایل نرسید؛ دوباره تلاش می‌شود.' );
+		}
+		$dir = MP_Files::dir() . '/chunks';
+		wp_mkdir_p( $dir );
+		$part = $dir . '/' . self::uid() . '-' . substr( $up, 0, 40 ) . '.part';
+		$next = $part . '.next';
+		if ( 0 === $i ) {
+			// Old unfinished uploads (a day) are cleared now and then.
+			foreach ( (array) glob( $dir . '/*.part' ) as $old ) {
+				if ( filemtime( $old ) < time() - DAY_IN_SECONDS ) {
+					@unlink( $old ); // phpcs:ignore
+					@unlink( $old . '.next' ); // phpcs:ignore
+				}
+			}
+			@unlink( $part ); // phpcs:ignore
+		} else {
+			$want = is_file( $next ) ? (int) file_get_contents( $next ) : -1; // phpcs:ignore WordPress.WP.AlternativeFunctions
+			if ( $i < $want ) {
+				return array( 'next' => $want ); // a repeated piece (retry after a timeout)
+			}
+			if ( $i !== $want ) {
+				return self::err( 'ترتیب بخش‌های فایل به هم خورد؛ دوباره بفرستید.' );
+			}
+		}
+		$bytes = file_get_contents( $_FILES['file']['tmp_name'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions, WordPress.Security.ValidatedSanitizedInput
+		if ( false === $bytes || false === file_put_contents( $part, $bytes, FILE_APPEND ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions
+			return self::err( 'فضای ذخیره روی هاست کافی نیست.', 500 );
+		}
+		file_put_contents( $next, (string) ( $i + 1 ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		if ( $i < $total - 1 ) {
+			return array( 'next' => $i + 1 );
+		}
+		// Last piece: check the whole file, then store it.
+		@unlink( $next ); // phpcs:ignore
+		$name  = sanitize_file_name( wp_basename( (string) $r['name'] ) );
+		$name  = '' !== $name ? $name : 'file';
+		$check = preg_match( '/^voice-/', $name ) ? MP_Files::audio_check( $part, $name ) : null;
+		if ( ! $check ) {
+			$check = wp_check_filetype_and_ext( $part, $name, MP_Files::TYPES + self::MORE_TYPES );
+		}
+		if ( empty( $check['ext'] ) || empty( $check['type'] ) ) {
+			@unlink( $part ); // phpcs:ignore
+			return self::err( 'این نوع فایل مجاز نیست. عکس، ویدیو، PDF، ورد، اکسل، پاورپوینت، فایل طراحی (PSD/AI) یا فایل فشرده بفرستید.' );
+		}
+		$sub = gmdate( 'Y/m' );
+		wp_mkdir_p( MP_Files::dir() . '/' . $sub );
+		$rel  = $sub . '/' . wp_generate_password( 32, false, false ) . '.' . $check['ext'];
+		$size = filesize( $part );
+		if ( ! rename( $part, MP_Files::dir() . '/' . $rel ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions
+			@unlink( $part ); // phpcs:ignore
+			return self::err( 'ذخیره فایل انجام نشد.', 500 );
+		}
+		$wpdb->insert(
+			MP_Install::table( 'files' ),
+			array(
+				'user_id'    => self::uid(),
+				'context'    => 'message',
+				'context_id' => $cid,
+				'name'       => $name,
+				'mime'       => $check['type'],
+				'size'       => (int) $size,
+				'path'       => $rel,
+				'created_at' => MP_Util::now(),
+			)
+		);
+		return MP_Files::payload( MP_Files::get( $wpdb->insert_id ) );
 	}
 
 	/* ------------------------------------------------------------------ Apple emoji images */

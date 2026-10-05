@@ -3064,10 +3064,10 @@ html.dark .composer textarea{background:var(--surface-3)}
 }
 
 /* ---- Apple emoji images, big emoji, emoji picker */
-img.emj{display:inline-block;width:1.3em;height:1.3em;vertical-align:-.3em;margin:0 .04em;object-fit:contain}
+.emj{display:inline-block;width:1.3em;height:1.3em;vertical-align:-.3em;margin:0 .04em;object-fit:contain}
 .b-text.b-jumbo{font-size:40px;line-height:1.25}
 .b-text.b-jumbo.j1{font-size:64px}
-.b-text.b-jumbo img.emj{width:1.1em;height:1.1em;vertical-align:-.15em}
+.b-text.b-jumbo .emj{width:1.1em;height:1.1em;vertical-align:-.15em}
 .msg-row .bubble.jumbo{background:transparent!important;box-shadow:none;padding:0 2px 18px}
 .msg-row .bubble.jumbo::before{display:none}
 .msg-row .bubble.jumbo .b-meta{position:absolute;bottom:0;inset-inline-end:0;padding:2px 7px;border-radius:99px;background:rgba(0,0,0,.35);color:#fff}
@@ -3078,15 +3078,15 @@ img.emj{display:inline-block;width:1.3em;height:1.3em;vertical-align:-.3em;margi
 .ep-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));align-content:start;padding:2px 8px 8px;overscroll-behavior:contain}
 .ep-grid button{height:42px;border:0;background:none;border-radius:10px;cursor:pointer;display:grid;place-items:center;font-size:26px;line-height:1}
 .ep-grid button:hover{background:var(--surface-2)}
-.ep-grid img.emj{width:30px;height:30px;margin:0;vertical-align:0}
+.ep-grid .emj{width:30px;height:30px;margin:0;vertical-align:0}
 .ep-none{grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
 .ep-tabs{display:flex;justify-content:space-between;gap:2px;padding:6px 8px;border-top:1px solid var(--line);background:var(--surface-2)}
 .ep-tabs button{flex:1;height:36px;border:0;background:none;border-radius:10px;cursor:pointer;display:grid;place-items:center;font-size:20px;filter:grayscale(1);opacity:.55;transition:opacity .15s,filter .15s}
 .ep-tabs button.on{filter:none;opacity:1;background:var(--surface-3)}
-.ep-tabs img.emj{width:22px;height:22px;margin:0;vertical-align:0}
+.ep-tabs .emj{width:22px;height:22px;margin:0;vertical-align:0}
 .ctx-reacts button{display:grid;place-items:center}
-.ctx-reacts img.emj{width:28px;height:28px;margin:0;vertical-align:0}
-.b-react img.emj{width:17px;height:17px;vertical-align:-3px;margin:0}
+.ctx-reacts .emj{width:28px;height:28px;margin:0;vertical-align:0}
+.b-react .emj{width:17px;height:17px;vertical-align:-3px;margin:0}
 /* ---- Attach sheet (paperclip), like Telegram */
 .attach-sheet{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end}
 .as-shade{position:absolute;inset:0;background:rgba(0,0,0,.35);opacity:0;transition:opacity .18s}
@@ -3115,3 +3115,13 @@ img.emj{display:inline-block;width:1.3em;height:1.3em;vertical-align:-.3em;margi
 .as-tab:hover{background:var(--surface-2)}
 .emj-t{font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif}
 .ep-grid .emj-t{font-size:26px}.ep-tabs .emj-t{font-size:19px}.ctx-reacts .emj-t{font-size:24px}
+/* Zoomable photos (gallery + lightbox) */
+.gv-stage{overflow:hidden;touch-action:none}
+.gv-stage img{-webkit-user-drag:none;cursor:zoom-in}
+.gv-stage.zoomed img{cursor:grab;border-radius:0}
+.zoom-stage{overflow:hidden;touch-action:none;display:grid;place-items:center;border-radius:14px}
+.zoom-stage img{-webkit-user-drag:none;user-select:none}
+i.emj{font-style:normal;color:transparent;overflow:hidden;white-space:nowrap;text-indent:0;line-height:1;font-size:inherit;background:url(../emoji/apple.webp) no-repeat;background-size:4000% 3300%;user-select:all}
+i.emj::selection{color:transparent;background:rgba(80,140,255,.35)}
+@media (max-width:900px){.composer textarea,.ss-cap{font-size:16px}}
+.mp-ver{margin:8px 0 2px;text-align:center;font-size:11.5px;color:var(--muted);opacity:.8}

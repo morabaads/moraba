@@ -114,6 +114,44 @@
       xhr.send(fd);
     });
   };
+  /** Any size: the file goes up in 1.5 MB pieces (under every host's upload limit), each retried a few times. */
+  MP.uploadChunked = function (path, file, fields, onProgress) {
+    var SIZE = 1572864, total = Math.max(1, Math.ceil(file.size / SIZE));
+    var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + 'up';
+    function piece(i, tries) {
+      return new Promise(function (resolve, reject) {
+        var fd = new FormData();
+        fd.append('file', file.slice(i * SIZE, Math.min(file.size, (i + 1) * SIZE)), 'part');
+        fd.append('upload', id); fd.append('index', i); fd.append('total', total); fd.append('name', file.name || 'file');
+        Object.keys(fields || {}).forEach(function (k) { fd.append(k, fields[k]); });
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', C.root + path);
+        xhr.setRequestHeader('X-WP-Nonce', C.nonce);
+        xhr.withCredentials = true;
+        if (onProgress) xhr.upload.onprogress = function (e) { if (e.lengthComputable) onProgress(Math.min(1, (i * SIZE + e.loaded / e.total * Math.min(SIZE, file.size - i * SIZE)) / Math.max(1, file.size))); };
+        xhr.onload = function () {
+          var data = {}; try { data = JSON.parse(xhr.responseText); } catch (e) { /* not json */ }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+          else if (xhr.status >= 500 && tries < 4) setTimeout(function () { piece(i, tries + 1).then(resolve, reject); }, 1500 * (tries + 1));
+          else reject(errorFrom({ status: xhr.status }, data));
+        };
+        xhr.onerror = function () {
+          if (tries < 6) setTimeout(function () { piece(i, tries + 1).then(resolve, reject); }, 1500 * (tries + 1));
+          else reject(new Error('اتصال اینترنت برقرار نیست.'));
+        };
+        xhr.send(fd);
+      });
+    }
+    function from(i) {
+      return piece(i, 0).then(function (r) {
+        if (r && r.id) { if (onProgress) onProgress(1); return r; }
+        var next = r && typeof r.next === 'number' ? r.next : i + 1;
+        if (next >= total) throw new Error('بارگذاری فایل انجام نشد.');
+        return from(next);
+      });
+    }
+    return from(0);
+  };
   MP.fail = function (err) { MP.toast(err && err.message ? err.message : 'خطایی رخ داد.', { error: true }); throw err; };
   MP.soft = function (err) { MP.toast(err && err.message ? err.message : 'خطایی رخ داد.', { error: true }); };
 
@@ -509,10 +547,21 @@
   MP.emojiCode = function (seq) { return Array.from(seq).map(function (c) { return c.codePointAt(0).toString(16); }).join('-'); };
   /** One emoji as Apple's image: the site's saved copy, else fetched once by the site, else the phone's own. */
   // The phone's own emoji shows at once; Apple's image takes its place as soon as it has loaded.
-  var emojiOk = {};
+  var emojiOk = {}, tiles = null;
+  /** Apple's emoji ship with the plugin as one picture (assets/emoji/apple.webp, 40 per row): no outside site needed. */
+  function tile(code) {
+    if (!tiles) {
+      tiles = {};
+      String(window.MP_EMOJI_MAP || '').split(',').forEach(function (c, i) { if (c) tiles[c] = i; });
+    }
+    var i = tiles[code.replace(/-fe0f/g, '')];
+    return i === undefined ? -1 : i;
+  }
   MP.emojiImg = function (seq) {
-    if (appleNative || !C.emoji) return document.createTextNode(seq);
-    var code = MP.emojiCode(seq);
+    if (appleNative) return document.createTextNode(seq);
+    var code = MP.emojiCode(seq), t = tile(code);
+    if (t >= 0) return el('i', { class: 'emj', role: 'img', 'aria-label': seq, text: seq, style: { backgroundPosition: (t % 40) / 39 * 100 + '% ' + Math.floor(t / 40) / 32 * 100 + '%' } });
+    if (!C.emoji) return document.createTextNode(seq);
     if (emojiOk[code]) return el('img', { class: 'emj', alt: seq, draggable: 'false', src: emojiOk[code] });
     var span = el('span', { class: 'emj-t', text: seq }), img = new Image();
     img.onload = function () { emojiOk[code] = img.src; if (span.isConnected || span.parentNode) span.replaceWith(el('img', { class: 'emj', alt: seq, draggable: 'false', src: img.src })); };
@@ -522,8 +571,8 @@
   };
   /** Replaces the emoji in a node's text with Apple images (form fields are left alone). */
   MP.emojify = function (node) {
-    if (appleNative || !EMOJI_RE || !node || !C.emoji) return node;
-    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, { acceptNode: function (t) { return t.parentNode && /^(TEXTAREA|INPUT|SCRIPT|STYLE|OPTION)$/.test(t.parentNode.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } }), list = [], t;
+    if (appleNative || !EMOJI_RE || !node) return node;
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, { acceptNode: function (t) { return t.parentNode && (/^(TEXTAREA|INPUT|SCRIPT|STYLE|OPTION)$/.test(t.parentNode.nodeName) || /\bemj/.test(t.parentNode.className)) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } }), list = [], t;
     while ((t = walker.nextNode())) { EMOJI_RE.lastIndex = 0; if (EMOJI_RE.test(t.nodeValue)) list.push(t); }
     list.forEach(function (tn) {
       var s = tn.nodeValue, frag = document.createDocumentFragment(), last = 0, m;
@@ -549,9 +598,88 @@
   MP.fileChip = function (f) {
     return el('a', { class: 'file-chip', href: f.url, target: '_blank', rel: 'noopener' }, MP.iconEl(f.image ? 'eye' : 'file'), el('span', { text: f.name }), el('small', { class: 'muted', text: MP.fileSize(f.size) }));
   };
+  /**
+   * Zoom like the phone's photo viewer: pinch, double tap / double click, mouse wheel; drag to move while zoomed.
+   * img must sit centred in stage. Returns {reset(), zoomed(), touched()} — touched(): this gesture zoomed or used two fingers.
+   */
+  MP.zoomable = function (img, stage) {
+    var s = 1, tx = 0, ty = 0, pts = {}, pinch = null, pan = null, multi = false, lastTap = 0, lastXY = null, MAX = 6;
+    img.style.transformOrigin = '50% 50%'; img.style.willChange = 'transform'; img.draggable = false;
+    function center() { var r = stage.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; }
+    function clamp() {
+      var c = center(), mx = Math.max(0, (img.clientWidth * s - c.w) / 2), my = Math.max(0, (img.clientHeight * s - c.h) / 2);
+      tx = Math.min(mx, Math.max(-mx, tx)); ty = Math.min(my, Math.max(-my, ty));
+    }
+    function apply(anim) {
+      img.style.transition = anim ? 'transform .22s ease' : 'none';
+      img.style.transform = s === 1 && !tx && !ty ? '' : 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
+      stage.classList.toggle('zoomed', s > 1.01);
+    }
+    /** Scale to ns keeping the screen point (px, py) where it is. */
+    function zoomAt(ns, px, py, base) {
+      var c = center(), b = base || { s: s, x: tx, y: ty };
+      ns = Math.min(MAX, Math.max(1, ns));
+      tx = (px - c.x) - ns / b.s * (px - c.x - b.x); ty = (py - c.y) - ns / b.s * (py - c.y - b.y); s = ns;
+      if (s <= 1) { tx = 0; ty = 0; }
+      clamp();
+    }
+    function two() { var k = Object.keys(pts); return [pts[k[0]], pts[k[1]]]; }
+    var lastType = 'mouse';
+    stage.addEventListener('pointerdown', function (e) {
+      lastType = e.pointerType;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var n = Object.keys(pts).length;
+      if (n === 1) { multi = false; pan = { x: e.clientX, y: e.clientY, tx: tx, ty: ty, moved: 0 }; }
+      if (n === 2) {
+        multi = true; pan = null;
+        var p = two(); pinch = { d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1, mx: (p[0].x + p[1].x) / 2, my: (p[0].y + p[1].y) / 2, s: s, x: tx, y: ty };
+      }
+    });
+    stage.addEventListener('pointermove', function (e) {
+      if (!pts[e.pointerId]) return;
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (pinch && Object.keys(pts).length >= 2) {
+        var p = two(), d = Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y), mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
+        // Zoom around where the fingers started, then follow the fingers' midpoint.
+        zoomAt(pinch.s * d / pinch.d, pinch.mx, pinch.my, pinch);
+        if (s > 1) { tx += mx - pinch.mx; ty += my - pinch.my; clamp(); }
+        apply(false);
+      } else if (pan && s > 1) {
+        tx = pan.tx + e.clientX - pan.x; ty = pan.ty + e.clientY - pan.y; pan.moved = Math.max(pan.moved, Math.abs(e.clientX - pan.x) + Math.abs(e.clientY - pan.y));
+        clamp(); apply(false);
+      }
+    });
+    function up(e) {
+      if (!pts[e.pointerId]) return;
+      delete pts[e.pointerId];
+      var n = Object.keys(pts).length;
+      if (n < 2) pinch = null;
+      if (n === 1) { var k = Object.keys(pts)[0]; pan = { x: pts[k].x, y: pts[k].y, tx: tx, ty: ty, moved: 99 }; }
+      if (n) return;
+      if (s < 1.05 && s !== 1) { s = 1; tx = 0; ty = 0; apply(true); }
+      // Double tap: zoom in where tapped, or back out.
+      var now = Date.now(), still = !multi && (!pan || pan.moved < 10);
+      if (e.type === 'pointerup' && still && e.pointerType !== 'mouse') {
+        if (now - lastTap < 300 && lastXY && Math.abs(lastXY.x - e.clientX) + Math.abs(lastXY.y - e.clientY) < 40) { lastTap = 0; toggle(e.clientX, e.clientY); }
+        else { lastTap = now; lastXY = { x: e.clientX, y: e.clientY }; }
+      }
+      pan = null;
+    }
+    function toggle(x, y) { if (s > 1.01) { s = 1; tx = 0; ty = 0; } else zoomAt(2.5, x, y); apply(true); }
+    stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+    stage.addEventListener('dblclick', function (e) { e.preventDefault(); if (lastType === 'mouse') toggle(e.clientX, e.clientY); });
+    stage.addEventListener('wheel', function (e) { e.preventDefault(); zoomAt(s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0025)), e.clientX, e.clientY); apply(false); }, { passive: false });
+    return {
+      reset: function () { s = 1; tx = 0; ty = 0; pts = {}; pinch = null; pan = null; apply(false); },
+      zoomed: function () { return s > 1.01; },
+      touched: function () { return multi || s > 1.01; }
+    };
+  };
   MP.lightbox = function (f) {
+    var img = el('img', { src: f.url, alt: f.name, style: { maxWidth: '100%', maxHeight: '70vh', borderRadius: '14px' } }), stage = el('div', { class: 'zoom-stage' }, img);
+    MP.zoomable(img, stage);
     MP.dialog.open(f.name, el('div', { style: { textAlign: 'center' } },
-      el('img', { src: f.url, alt: f.name, style: { maxWidth: '100%', maxHeight: '70vh', borderRadius: '14px' } }),
+      stage,
       el('div', { class: 'dialog-actions', style: { justifyContent: 'center' } }, el('a', { class: 'btn btn-secondary', href: f.url + '&download=1', text: 'دانلود' }))), { wide: true, focus: false });
   };
 
@@ -589,6 +717,15 @@
       document.body.classList.toggle('keyboard', window.innerHeight - h > 140);
     };
     window.visualViewport.addEventListener('resize', vv); window.visualViewport.addEventListener('scroll', vv); vv();
+    // While the keyboard slides in or out, iPhone reports the new size late: follow it frame by frame.
+    var follow = function () { var end = Date.now() + 900; (function f() { vv(); if (Date.now() < end) requestAnimationFrame(f); })(); };
+    document.addEventListener('focusin', follow); document.addEventListener('focusout', follow);
+  }
+  // iPhone zooms the page in when a field is focused, which pushes the chat off screen; fields are 16px on phones and
+  // the zoom-on-focus is turned off (pinching to zoom still works on iPhone).
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+    var vp = document.querySelector('meta[name=viewport]');
+    if (vp && !/maximum-scale/.test(vp.content)) vp.content += ',maximum-scale=1';
   }
 
   /* ------------------------------------------------------------ Navigation */
@@ -685,7 +822,8 @@
         el('button', { type: 'button', html: icon('grid'), onclick: function () { MP.openWidgets(); } }, 'ویجت‌ها روی صفحه اصلی'),
         el('button', { type: 'button', html: icon('help'), onclick: openHelp }, 'راهنما'),
         !MP.standalone() ? el('button', { type: 'button', html: icon('download'), onclick: MP.install }, 'نصب اپلیکیشن روی گوشی') : null,
-        el('button', { type: 'button', class: 'danger', html: icon('logout'), onclick: logout }, 'خروج از حساب'))), { focus: false });
+        el('button', { type: 'button', class: 'danger', html: icon('logout'), onclick: logout }, 'خروج از حساب')),
+      el('p', { class: 'mp-ver', text: 'نسخه ' + String(C.version || '').replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }) })), { focus: false });
   };
   MP.standalone = function () { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; };
   var CREATE = [
