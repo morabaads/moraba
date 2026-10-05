@@ -13,7 +13,7 @@ class MP_Backup {
 
 	const FORMAT  = 'moraba-panel-backup';
 	const KEEP    = 10;
-	const TABLES  = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'meeting_peers', 'meeting_invites', 'meeting_chat', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates', 'shortlinks' );
+	const TABLES  = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'reactions', 'meetings', 'meeting_people', 'meeting_peers', 'meeting_invites', 'meeting_chat', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates', 'shortlinks' );
 	const OPTIONS = array( 'mp_slug', 'mp_page_id', 'mp_support', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_daily_report', 'mp_invoice_settings', 'mp_digest', 'mp_ai_url', 'mp_ai_model', 'mp_contract_settings', 'mp_meet_settings', 'mp_messages' );
 	const META    = array( 'mp_pins', 'mp_prefs', 'mp_job_title', 'mp_phone', 'mp_avatar_public', 'mp_avatar_file', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs', 'mp_last_seen', 'mp_hourly_rate', 'mp_pay' );
 	/**
@@ -24,7 +24,7 @@ class MP_Backup {
 		'projects'  => array( 'پروژه‌ها (فولدر، بخش، مرحله، هدف، یادداشت)', array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'goals', 'notes' ) ),
 		'tasks'     => array( 'تسک‌ها (چک‌لیست، نظر، زمان‌سنج، قالب، گزارش روزانه)', array( 'tasks', 'task_items', 'task_comments', 'timelog', 'templates', 'daily_reports' ) ),
 		'groups'    => array( 'گروه‌ها و گفت‌وگوها (تیم، خصوصی، مشتری)', array( 'channels', 'channel_members' ) ),
-		'messages'  => array( 'پیام‌ها', array( 'messages', 'reads' ) ),
+		'messages'  => array( 'پیام‌ها', array( 'messages', 'reads', 'reactions' ) ),
 		'clients'   => array( 'مشتریان (افراد، پرتال، طرح‌ها و نظرها)', array( 'clients', 'client_projects', 'client_contacts', 'client_items', 'design_pins' ) ),
 		'invoices'  => array( 'فاکتورها و پیش‌فاکتورها', array( 'invoices' ) ),
 		'contracts' => array( 'قراردادها و قالب‌ها', array( 'contracts', 'contract_templates' ) ),
@@ -50,8 +50,8 @@ class MP_Backup {
 		'timelog'      => array( 'تسک‌ها', 'ریز زمان‌های کار (تسک‌ها می‌مانند)', array( 'timelog' ), array(), '' ),
 		'templates'    => array( 'تسک‌ها', 'قالب‌های تسک', array( 'templates' ), array(), 'reseed_templates' ),
 		'daily'        => array( 'تسک‌ها', 'گزارش‌های روزانه', array( 'daily_reports' ), array(), '' ),
-		'messages'     => array( 'گفت‌وگوها', 'پیام‌ها (گروه‌ها می‌مانند)', array( 'messages', 'reads' ), array(), '' ),
-		'team_groups'  => array( 'گفت‌وگوها', 'گروه‌های تیم و گفت‌وگوهای خصوصی (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type IN ('group','direct'))", 'channel_members' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'group')", 'channels' => "type IN ('group','direct')" ), '' ),
+		'messages'     => array( 'گفت‌وگوها', 'پیام‌ها (گروه‌ها می‌مانند)', array( 'messages', 'reads', 'reactions' ), array(), '' ),
+		'team_groups'  => array( 'گفت‌وگوها', 'گروه‌های تیم و گفت‌وگوهای خصوصی (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type IN ('group','direct','saved'))", 'channel_members' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'group')", 'channels' => "type IN ('group','direct','saved')" ), '' ),
 		'client_groups'=> array( 'گفت‌وگوها', 'گروه‌های مشتری و لینک پرتال (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'client')", 'client_contacts' => '1=1', 'channels' => "type = 'client'" ), '' ),
 		'clients'      => array( 'مشتریان', 'مشتریان (پرونده مشتری، پروژه‌ها و شماره‌های ورود به پرتال)', array( 'clients', 'client_projects', 'client_contacts' ), array(), '' ),
 		'designs'      => array( 'مشتریان', 'طرح‌ها و فایل‌های تحویلی پرتال (با نظرها)', array( 'client_items', 'design_pins' ), array(), '' ),

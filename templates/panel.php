@@ -304,15 +304,40 @@ $mp_nav = array(
 				<section class="card chat-pane">
 					<header class="chat-head">
 						<button type="button" class="icon-btn chat-back" id="chat-back" aria-label="بازگشت به فهرست"><?php echo $mp_i( 'right' ); // phpcs:ignore ?></button>
-						<div class="chat-head-copy"><strong id="chat-title">گفت‌وگویی انتخاب نشده</strong><small id="chat-sub"></small><small class="chat-activity" id="chat-activity" hidden></small></div>
+						<button type="button" class="chat-head-who" id="chat-who" aria-label="اطلاعات گفت‌وگو">
+							<span class="chat-head-av" id="chat-avatar"></span>
+							<span class="chat-head-copy"><strong id="chat-title">گفت‌وگویی انتخاب نشده</strong><small id="chat-sub"></small><small class="chat-activity" id="chat-activity" hidden></small></span>
+						</button>
 						<div id="chat-tools" class="chat-tools"></div>
+						<div class="chat-find" id="chat-find" hidden>
+							<button type="button" class="icon-btn" id="chat-find-close" aria-label="بستن جستجو"><?php echo $mp_i( 'right' ); // phpcs:ignore ?></button>
+							<input type="search" id="chat-find-q" placeholder="جستجو در این گفت‌وگو…" aria-label="جستجو در این گفت‌وگو" autocomplete="off">
+							<span class="chat-find-n" id="chat-find-n"></span>
+							<button type="button" class="icon-btn" id="chat-find-up" aria-label="نتیجه قبلی"><?php echo $mp_i( 'arrow-up' ); // phpcs:ignore ?></button>
+							<button type="button" class="icon-btn" id="chat-find-down" aria-label="نتیجه بعدی"><?php echo $mp_i( 'arrow-down' ); // phpcs:ignore ?></button>
+						</div>
+						<div class="chat-select" id="chat-select" hidden>
+							<button type="button" class="icon-btn" id="sel-close" aria-label="لغو انتخاب"><?php echo $mp_i( 'close' ); // phpcs:ignore ?></button>
+							<strong id="sel-count"></strong>
+							<button type="button" class="icon-btn" id="sel-copy" aria-label="کپی"><?php echo $mp_i( 'file' ); // phpcs:ignore ?></button>
+							<button type="button" class="icon-btn" id="sel-forward" aria-label="فوروارد"><?php echo $mp_i( 'send' ); // phpcs:ignore ?></button>
+							<button type="button" class="icon-btn danger" id="sel-delete" aria-label="حذف"><?php echo $mp_i( 'trash' ); // phpcs:ignore ?></button>
+						</div>
 					</header>
+					<button type="button" class="chat-pinbar" id="chat-pinbar" hidden><span class="pb-ico"><?php echo $mp_i( 'pin' ); // phpcs:ignore ?></span><span class="pb-copy"><b>پیام سنجاق‌شده</b><small id="chat-pin-text"></small></span><span class="pb-x" id="chat-pin-x" role="button" aria-label="برداشتن سنجاق"><?php echo $mp_i( 'close' ); // phpcs:ignore ?></span></button>
+					<div class="chat-find-list" id="chat-find-list" hidden></div>
 					<div class="chat-messages" id="chat-messages"></div>
+					<button type="button" class="chat-down" id="chat-down" hidden aria-label="رفتن به آخرین پیام"><?php echo $mp_i( 'down' ); // phpcs:ignore ?><i class="badge" id="chat-down-n" hidden></i></button>
 					<form class="composer" id="composer" hidden>
-						<label class="icon-btn" title="پیوست فایل" aria-label="پیوست فایل"><?php echo $mp_i( 'clip' ); // phpcs:ignore ?><input type="file" id="composer-file" class="visually-hidden"></label>
-						<div class="composer-input"><div class="composer-attach" id="composer-attach" hidden></div><textarea id="composer-text" rows="1" placeholder="پیام خود را بنویسید… (Enter ارسال، Shift+Enter خط جدید)" maxlength="4000" aria-label="متن پیام"></textarea></div>
-						<button type="button" class="icon-btn lg composer-mic" id="composer-mic" aria-label="ضبط پیام صوتی" title="پیام صوتی"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?></button>
-						<button type="submit" class="icon-btn accent lg" aria-label="ارسال"><?php echo $mp_i( 'send' ); // phpcs:ignore ?></button>
+						<div class="compose-ctx" id="compose-ctx" hidden><span class="cc-ico" id="cc-ico"></span><span class="cc-copy"><b id="cc-title"></b><small id="cc-text"></small></span><button type="button" class="icon-btn sm" id="cc-x" aria-label="لغو"><?php echo $mp_i( 'close' ); // phpcs:ignore ?></button></div>
+						<div class="mention-pop" id="mention-pop" hidden></div>
+						<div class="emoji-pop" id="emoji-pop" hidden></div>
+						<div class="composer-row">
+							<label class="icon-btn composer-clip" title="پیوست عکس یا فایل" aria-label="پیوست عکس یا فایل"><?php echo $mp_i( 'clip' ); // phpcs:ignore ?><input type="file" id="composer-file" class="visually-hidden" multiple></label>
+							<div class="composer-input"><textarea id="composer-text" rows="1" placeholder="پیام… (Enter ارسال، Shift+Enter خط جدید)" maxlength="4000" aria-label="متن پیام"></textarea><button type="button" class="composer-emoji" id="composer-emoji" aria-label="ایموجی">😊</button></div>
+							<button type="button" class="icon-btn lg composer-mic" id="composer-mic" aria-label="ضبط پیام صوتی" title="پیام صوتی"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?></button>
+							<button type="submit" class="icon-btn accent lg composer-send" aria-label="ارسال"><?php echo $mp_i( 'send' ); // phpcs:ignore ?></button>
+						</div>
 						<div class="rec-bar" id="rec-bar" hidden>
 							<button type="button" class="icon-btn danger" id="rec-cancel" aria-label="لغو ضبط"><?php echo $mp_i( 'trash' ); // phpcs:ignore ?></button>
 							<span class="rec-dot" aria-hidden="true"></span><span class="rec-time" id="rec-time">۰:۰۰</span>

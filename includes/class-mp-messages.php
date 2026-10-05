@@ -108,6 +108,7 @@ class MP_Messages {
 			'project_shifted'    => $n( 'team', 'جابه‌جایی زمان‌بندی پروژه', 'کسانی که تسکشان جابه‌جا شد', 'project', '#ACTOR# تسک‌های پروژه «#PROJECT#» را #DAYS# روز #DIRECTION#', '#COUNT# تسک شما جابه‌جا شد؛ تقویم را ببینید', array( 'ACTOR', 'PROJECT', 'DAYS', 'DIRECTION', 'COUNT' ), array( 'important' => 'مهم (اگر کارمند اعلان مهم را خاموش نکرده باشد)' ) ),
 			'group_added'        => $n( 'team', 'افزوده شدن به گروه', 'عضو جدید', 'message', 'شما به گروه «#GROUP#» اضافه شدید', '', array( 'GROUP' ) ),
 			'message_direct'     => $n( 'team', 'پیام خصوصی جدید', 'طرف گفت‌وگو', 'message', 'پیام جدید از #ACTOR#', '#PREVIEW#', array( 'ACTOR', 'PREVIEW' ) ),
+			'message_mention'    => $n( 'team', 'منشن در گفت‌وگو (@نام)', 'فردی که صدا زده شده', 'message', '#ACTOR# در «#GROUP#» شما را صدا زد', '#PREVIEW#', array( 'ACTOR', 'GROUP', 'PREVIEW' ) ),
 			'message_client'     => $n( 'team', 'پیام جدید مشتری', 'اعضای گروه مشتری', 'message', 'پیام جدید مشتری در «#GROUP#»', '#PREVIEW#', array( 'GROUP', 'PREVIEW' ) ),
 			'meet_invite'        => $n( 'meetings', 'دعوت به جلسه', 'شرکت‌کنندگان', 'meeting', '#ACTOR# شما را به جلسه «#TITLE#» دعوت کرد', '#WHEN#', array( 'ACTOR', 'TITLE', 'WHEN' ), array( 'important' => 'مهم (اگر کارمند اعلان مهم را خاموش نکرده باشد)' ) ),
 			'meet_moved'         => $n( 'meetings', 'تغییر زمان جلسه', 'شرکت‌کنندگان', 'meeting', 'زمان جلسه «#TITLE#» تغییر کرد', '#WHEN#', array( 'TITLE', 'WHEN' ), array( 'important' => 'مهم (اگر کارمند اعلان مهم را خاموش نکرده باشد)' ) ),

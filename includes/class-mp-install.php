@@ -220,6 +220,7 @@ class MP_Install {
 			auth_required tinyint(1) NOT NULL DEFAULT 0,
 			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			pinned_at datetime DEFAULT NULL,
+			pinned_msg bigint(20) unsigned NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
 			KEY token (token),
@@ -417,8 +418,23 @@ class MP_Install {
 			created_at datetime NOT NULL,
 			deleted_at datetime NULL,
 			deleted_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			reply_to bigint(20) unsigned NOT NULL DEFAULT 0,
+			fwd_from varchar(120) NOT NULL DEFAULT '',
+			album varchar(24) NOT NULL DEFAULT '',
+			as_file tinyint(1) NOT NULL DEFAULT 0,
+			edited_at datetime NULL,
+			updated_at datetime NULL,
 			PRIMARY KEY  (id),
-			KEY channel_id (channel_id)
+			KEY channel_id (channel_id),
+			KEY updated (channel_id,updated_at)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'reactions' ) . " (
+			message_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			emoji varchar(16) NOT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (message_id,user_id)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'reads' ) . " (

@@ -32,6 +32,11 @@ class MP_Util {
 		return $sup && $emp ? 'ناظر و کارمند' : ( $sup ? 'ناظر' : 'کارمند' );
 	}
 
+	/** 'Y-m-d H:i:s' */
+	public static function valid_datetime( $value ) {
+		return is_string( $value ) && preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value ) && self::valid_date( substr( $value, 0, 10 ) );
+	}
+
 	public static function valid_date( $value ) {
 		if ( ! is_string( $value ) || ! preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m ) ) {
 			return false;

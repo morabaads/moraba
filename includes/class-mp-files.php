@@ -215,7 +215,8 @@ class MP_Files {
 		}
 		if ( 'message' === $file->context && $client_token ) {
 			$ch = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . MP_Install::table( 'channels' ) . " WHERE type = 'client' AND token = %s", $client_token ) );
-			if ( $ch && (int) $ch->id === (int) $file->context_id ) {
+			// Its own group, or a group it was forwarded into.
+			if ( $ch && ( (int) $ch->id === (int) $file->context_id || $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . MP_Install::table( 'messages' ) . ' WHERE file_id = %d AND channel_id = %d AND deleted_at IS NULL LIMIT 1', $file->id, $ch->id ) ) ) ) {
 				return true;
 			}
 		}
@@ -230,7 +231,16 @@ class MP_Files {
 			return MP_Rest::can_view_task_id( $task_id );
 		}
 		if ( 'message' === $file->context ) {
-			return MP_Rest::can_read_channel( $file->context_id );
+			if ( MP_Rest::can_read_channel( $file->context_id ) ) {
+				return true;
+			}
+			// A forwarded copy in another chat the person can read.
+			foreach ( $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT channel_id FROM ' . MP_Install::table( 'messages' ) . ' WHERE file_id = %d', $file->id ) ) as $cid ) {
+				if ( MP_Rest::can_read_channel( $cid ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 		if ( 'client_item' === $file->context ) {
 			return MP_Util::can_see_project( $file->context_id );

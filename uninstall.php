@@ -5,7 +5,7 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 global $wpdb;
-$tables = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates', 'shortlinks' );
+$tables = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'reactions', 'meetings', 'meeting_people', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates', 'shortlinks' );
 foreach ( $tables as $name ) {
 	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'mp_' . $name ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 }
