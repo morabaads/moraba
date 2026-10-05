@@ -67,8 +67,13 @@
       busy(f, false, 'x'); loginMobile = r.mobile;
       $('cp-step-mobile').hidden = true; $('cp-step-code').hidden = false;
       $('cp-code-label').textContent = 'کد ۵ رقمی ارسال‌شده به ' + fa(r.mobile);
-      $('cp-step-code').elements.code.value = ''; $('cp-step-code').elements.code.focus();
+      var code = $('cp-step-code').elements.code;
+      code.value = ''; code.focus();
       countdown(r.wait || 60);
+      // Android Chrome reads the code straight from the SMS (its last line is «@site #code»).
+      if ('OTPCredential' in window) {
+        navigator.credentials.get({ otp: { transport: ['sms'] } }).then(function (o) { if (o && o.code && !$('cp-step-code').hidden) { code.value = fa(o.code); $('cp-step-code').requestSubmit(); } }).catch(function () {});
+      }
     }).catch(function (e) { busy(f, false, 'x'); loginError(e.message); });
   }
   // Digits shown in Persian as they are typed (sent in Latin).

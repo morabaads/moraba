@@ -305,6 +305,7 @@ class MP_Messages_Admin {
 					<label class="mp-switch"><input type="checkbox" name="<?php echo esc_attr( $name ); ?>[on]" value="1" <?php checked( $m['on'] ); ?>> <?php echo $notify ? 'این اعلان فعال باشد (خاموش = نه در پنل، نه تلگرام/بله، نه پیامک)' : 'این پیامک فعال باشد'; ?></label>
 				<?php else : ?>
 					<p class="description">کد ورود همیشه فعال است؛ فقط متن و پترن آن قابل تغییر است.</p>
+					<p class="description">برای اینکه کد روی گوشی خودکار پر شود (اندروید و آیفون)، <b>خط آخر</b> پیامک باید دقیقاً این باشد: <code dir="ltr"><?php echo esc_html( MP_Messages::origin_line() ); ?></code> (به شکل <code dir="ltr">@<?php echo esc_html( wp_parse_url( home_url(), PHP_URL_HOST ) ); ?> #12345</code> می‌رسد) — در متن عادی خودکار اضافه می‌شود؛ اگر پترن sms.ir دارید، همین خط را آخر متن پترن هم بگذارید.</p>
 				<?php endif; ?>
 				<div class="mp-cols">
 					<?php if ( $notify ) : ?>

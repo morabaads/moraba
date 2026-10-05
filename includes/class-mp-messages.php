@@ -128,7 +128,7 @@ class MP_Messages {
 			'proforma_accepted'  => $n( 'clients', 'تأیید پیش‌فاکتور', 'ناظرها', 'invoice', '#CLIENT# پیش‌فاکتور #NUMBER# را تأیید کرد', '#TITLE#', array( 'CLIENT', 'NUMBER', 'TITLE' ), array( 'important' => 'مهم' ) ),
 			'digest_morning'     => $n( 'digest', 'خلاصه صبحگاهی', 'هر کارمند', 'digest', 'صبح بخیر #FIRST#! امروز #SUMMARY#', '#ITEMS#', array( 'FIRST', 'SUMMARY', 'ITEMS' ), array( 'sms' => 'صبح بخیر #FIRST#! امروز #SUMMARY#', 'sms_fixed' => 'پیامک این خلاصه از «تنظیمات خلاصه روزانه» در پنل روشن/خاموش می‌شود.' ) ),
 			'digest_weekly'      => $n( 'digest', 'گزارش هفتگی', 'ناظرها', 'weekly', 'گزارش هفتگی: #DONE# تسک انجام، #OVERDUE# عقب‌افتاده، دخل #INCOME#', 'خرج #EXPENSE# · حضور تیم #HOURS# ساعت', array( 'DONE', 'OVERDUE', 'INCOME', 'EXPENSE', 'HOURS' ) ),
-			'otp'                => $s( 'کد ورود (کارمند، پرتال مشتری، امضای قرارداد)', 'هر کسی که با موبایل وارد می‌شود', 'کد ورود پنل #SITE#: #CODE#', array( 'CODE' ), array( 'locked' => true, 'group' => 'login' ) ),
+			'otp'                => $s( 'کد ورود (کارمند، پرتال مشتری، امضای قرارداد)', 'هر کسی که با موبایل وارد می‌شود', 'کد ورود پنل #SITE#: #CODE#' . "\n\n" . self::origin_line(), array( 'CODE' ), array( 'locked' => true, 'group' => 'login' ) ),
 			'portal_link'        => $s( 'لینک گروه مشتری (پرتال) — هنگام اضافه شدن مشتری به گروه', 'مشتری‌ای که به گروه اضافه می‌شود', '#NAME# عزیز، پرتال پروژه «#GROUP#» در #SITE#: #LINK#', array( 'NAME', 'GROUP', 'LINK' ) ),
 			'contract_send'      => $s( 'ارسال قرارداد برای امضا', 'مشتری', '#NAME# عزیز، قرارداد «#TITLE#» از #STUDIO# آماده امضاست: #LINK#', array( 'NAME', 'TITLE', 'LINK' ), array( 'group' => 'c_contract' ) ),
 			'contract_remind'    => $s( 'یادآوری امضای قرارداد', 'امضاکننده بعدی', '#NAME# عزیز، قرارداد «#TITLE#» از #STUDIO# منتظر امضای شماست #DEADLINE#: #LINK#', array( 'NAME', 'TITLE', 'DEADLINE', 'LINK' ), array( 'group' => 'c_contract' ) ),
@@ -279,8 +279,19 @@ class MP_Messages {
 		return $out;
 	}
 
+	/**
+	 * Last line of the login SMS: «@example.com #12345» (written ##CODE# so the # stays before the code). With it Android Chrome fills the code by itself
+	 * (WebOTP) and iPhone offers it above the keyboard only on this site.
+	 */
+	public static function origin_line() {
+		return '@' . wp_parse_url( home_url(), PHP_URL_HOST ) . ' ##CODE#';
+	}
+
 	/** Plain text of the SMS, links shortened. */
 	public static function sms_text( $m, array $vars ) {
+		if ( 'otp' === $m['key'] && false === strpos( $m['sms'], '@' . wp_parse_url( home_url(), PHP_URL_HOST ) ) ) {
+			$m['sms'] = rtrim( $m['sms'] ) . "\n\n" . self::origin_line(); // an older custom text still gets the code line
+		}
 		foreach ( $vars as $k => $v ) {
 			if ( isset( self::VARS[ $k ] ) && 'link' === self::VARS[ $k ][2] && '' !== (string) $v ) {
 				$vars[ $k ] = self::short_url( $v );
