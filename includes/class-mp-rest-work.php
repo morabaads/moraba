@@ -322,7 +322,7 @@ class MP_Rest_Work {
 		}
 		foreach ( array_unique( $targets ) as $target ) {
 			if ( $target && $target !== self::uid() ) {
-				MP_Notify::send( $target, 'comment', wp_get_current_user()->display_name . ' روی «' . $task->title . '» نظر گذاشت', wp_trim_words( '' !== $body ? $body : 'فایل', 14 ), 'task', $task->id );
+				MP_Notify::event( 'task_comment', $target, array( 'ACTOR' => wp_get_current_user()->display_name, 'TASK' => $task->title, 'PREVIEW' => wp_trim_words( '' !== $body ? $body : 'فایل', 14 ) ), 'task', $task->id );
 			}
 		}
 		return self::task_detail( $r );
@@ -355,7 +355,7 @@ class MP_Rest_Work {
 		if ( ! $task->seen_at ) {
 			$wpdb->update( self::t( 'tasks' ), array( 'seen_at' => MP_Util::now() ), array( 'id' => $task->id ) );
 			if ( $task->assigned_by && (int) $task->assigned_by !== self::uid() ) {
-				MP_Notify::send( $task->assigned_by, 'task', wp_get_current_user()->display_name . ' تسک را دید', $task->title, 'task', $task->id );
+				MP_Notify::event( 'task_seen', $task->assigned_by, array( 'ACTOR' => wp_get_current_user()->display_name, 'TASK' => $task->title ), 'task', $task->id );
 			}
 		}
 		return MP_Rest::task_payload( MP_Rest::get_task( $task->id ) );
@@ -539,7 +539,7 @@ class MP_Rest_Work {
 		MP_Audit::log( 'create', 'leave', $id, 'درخواست مرخصی ' . $when );
 		foreach ( MP_Util::panel_users() as $u ) {
 			if ( $u !== self::uid() && MP_Util::is_manager( $u ) ) {
-				MP_Notify::send( $u, 'leave', wp_get_current_user()->display_name . ' درخواست مرخصی داد', $when, 'attendance', $id, MP_Rest::wants_email( $u ) );
+				MP_Notify::event( 'leave_request', $u, array( 'ACTOR' => wp_get_current_user()->display_name, 'WHEN' => $when ), 'attendance', $id, MP_Rest::wants_email( $u ) );
 			}
 		}
 		return self::list_leaves( new WP_REST_Request( 'GET' ) );
@@ -562,7 +562,7 @@ class MP_Rest_Work {
 		$wpdb->update( self::t( 'leaves' ), array( 'status' => $status, 'reviewed_by' => self::uid(), 'review_note' => $note, 'reviewed_at' => MP_Util::now() ), array( 'id' => $l->id ) );
 		$label = self::LEAVE_STATUS[ $status ];
 		MP_Audit::log( $status, 'leave', $l->id, 'مرخصی ' . self::name( $l->user_id ) . ' (' . MP_Jalali::format( $l->start_date ) . '): ' . $label );
-		MP_Notify::send( $l->user_id, 'leave', 'درخواست مرخصی شما ' . $label, MP_Jalali::format( $l->start_date ) . ( $note ? ' · ' . $note : '' ), 'attendance', $l->id, MP_Rest::wants_email( $l->user_id ) );
+		MP_Notify::event( 'leave_decision', $l->user_id, array( 'STATUS' => $label, 'DATE' => MP_Jalali::format( $l->start_date ), 'NOTE' => $note ), 'attendance', $l->id, MP_Rest::wants_email( $l->user_id ) );
 		$r2 = new WP_REST_Request( 'GET' );
 		$r2->set_param( 'scope', $r['scope'] );
 		return self::list_leaves( $r2 );

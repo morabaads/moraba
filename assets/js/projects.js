@@ -49,6 +49,7 @@
         el('div', { class: 'card-tools' },
           el('span', { class: 'chip', text: J.format(p.start, false) + ' تا ' + J.format(p.end, false) }),
           el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال مشتری', onclick: function () { MP.portal(p.id); } }),
+          S.manager ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('clock') + 'جابه‌جایی زمان‌بندی', onclick: function () { shiftForm(p); } }) : null,
           S.manager ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('edit') + 'ویرایش پروژه', onclick: function () { projectForm(p); } }) : null)),
       p.sections.length || S.manager ? cards : el('div', { class: 'card' }, MP.empty('list', 'بخشی تعریف نشده', 'ناظر پروژه بخش‌ها را اضافه می‌کند.', null, true))));
 
@@ -109,7 +110,7 @@
     box.replaceChildren();
     if (!list.length) { box.append(MP.empty('tasks', taskFilter === 'done' ? 'تسک انجام‌شده‌ای نیست' : 'تسکی در این پروژه نیست', taskFilter === 'done' ? null : 'هنگام ساخت تسک، این پروژه را انتخاب کنید یا از دکمه بالا تسک بسازید.', null, true)); return; }
     var stack = el('div', { class: 'task-stack', style: { maxHeight: '420px' } });
-    list.forEach(function (t) { stack.append(MP.taskRow(t, { owner: true })); });
+    list.forEach(function (t) { stack.append(MP.taskRow(t, { owner: true, project: false })); });
     box.append(stack);
   }
   // A task added or changed anywhere (form, calendar, voice…) shows up here without reloading.
@@ -219,6 +220,78 @@
     };
     MP.dialog.open('افزودن عضو به ' + p.name, f, { wide: true });
   }
+  /* Postpone (or bring forward) the unfinished part of a project: tasks on everyone's calendar, milestones, end date. */
+  function shiftForm(p) {
+    var days = el('input', { name: 'days', type: 'number', min: 1, max: 365, value: 7, required: true, inputmode: 'numeric', style: { maxWidth: '120px' } });
+    var dir = el('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'جهت' },
+      el('label', null, el('input', { type: 'radio', name: 'dir', value: '1', checked: true }), el('span', { text: 'عقب‌تر (دیرتر)' })),
+      el('label', null, el('input', { type: 'radio', name: 'dir', value: '-1' }), el('span', { text: 'جلوتر (زودتر)' })));
+    var scope = el('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'کدام تسک‌ها' },
+      el('label', null, el('input', { type: 'radio', name: 'scope', value: 'all', checked: true }), el('span', { text: 'همه کارهای باقی‌مانده' })),
+      el('label', null, el('input', { type: 'radio', name: 'scope', value: 'from' }), el('span', { text: 'فقط از یک تاریخ به بعد' })));
+    var fromWrap = MP.dateField('from', S.today, 'از تاریخ', function () { preview(); });
+    fromWrap.hidden = true;
+    var skip = el('input', { type: 'checkbox', name: 'skip_off', checked: true });
+    var box = el('div', { class: 'card', style: { padding: '12px 14px', background: 'var(--surface-2)', boxShadow: 'none' } }, el('p', { class: 'muted', text: 'در حال محاسبه…' }));
+    var f = el('form', { class: 'form' },
+      el('div', { class: 'row', style: { alignItems: 'end' } }, MP.field('چند روز', days), el('div', { class: 'field' }, el('span', { text: 'جهت' }), dir)),
+      el('div', { class: 'field' }, el('span', { text: 'کدام تسک‌ها' }), scope),
+      fromWrap,
+      el('label', { class: 'check' }, skip, el('span', { text: 'تسکی که به جمعه یا تعطیلی (تقویم حقوق) بیفتد، به روز کاری بعد برود' })),
+      box,
+      el('p', { class: 'hint', text: 'تسک‌های انجام‌شده و آرشیوشده جابه‌جا نمی‌شوند. مراحل انجام‌نشده و تاریخ پروژه هم همراه تسک‌ها جابه‌جا می‌شوند و به هر کسی که تسکش جابه‌جا شد اعلان می‌رسد. تا یک ساعت بعد قابل بازگردانی است.' }),
+      MP.actions('جابه‌جا کن'));
+    function body() {
+      var n = parseInt(J.latinDigits(days.value), 10) || 0;
+      var sign = $('input[name="dir"]:checked', f).value === '-1' ? -1 : 1;
+      var useFrom = $('input[name="scope"]:checked', f).value === 'from';
+      return { days: n * sign, from: useFrom ? $('input[name="from"]', f).value : '', skip_off: skip.checked ? 1 : 0 };
+    }
+    function range(pair) { return pair && pair[0] ? J.format(pair[0], false) + (pair[1] !== pair[0] ? ' ← ' + J.format(pair[1], false) : '') : '—'; }
+    var timer, seq = 0;
+    function preview() {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        var b = body(), my = ++seq;
+        if (!b.days || Math.abs(b.days) > 365) { box.replaceChildren(el('p', { class: 'muted', text: 'تعداد روز را بین ۱ تا ۳۶۵ وارد کنید.' })); return; }
+        MP.api('projects/' + p.id + '/shift', { method: 'POST', body: Object.assign({ preview: 1 }, b) }).then(function (s) {
+          if (my !== seq) return;
+          var lines = [
+            el('strong', { text: s.tasks ? fa(s.tasks) + ' تسک از ' + fa(s.people) + ' نفر' + (s.milestones ? ' و ' + fa(s.milestones) + ' مرحله' : '') + ' جابه‌جا می‌شود' : (s.milestones ? fa(s.milestones) + ' مرحله جابه‌جا می‌شود (تسک انجام‌نشده‌ای در این بازه نیست)' : 'تسک یا مرحله‌ای برای جابه‌جایی نیست') }),
+            s.first ? el('div', { class: 'muted', text: 'اولین تسک: ' + range(s.first) + (s.last && s.last[0] !== s.first[0] ? ' · آخرین: ' + range(s.last) : '') }) : null,
+            el('div', { class: 'muted', text: 'شروع پروژه: ' + range(s.start) + ' · پایان: ' + range(s.end) }),
+            s.skipped ? el('div', { class: 'muted', text: fa(s.skipped) + ' تسک به‌خاطر جمعه یا تعطیلی به روز کاری بعد رفت.' }) : null
+          ];
+          box.replaceChildren.apply(box, lines.filter(Boolean));
+        }).catch(function (err) { if (my === seq) box.replaceChildren(el('p', { class: 'muted', text: err.message || 'پیش‌نمایش ممکن نشد.' })); });
+      }, 250);
+    }
+    f.addEventListener('input', preview);
+    f.addEventListener('change', function (e) {
+      if (e.target.name === 'scope') fromWrap.hidden = e.target.value !== 'from';
+      preview();
+    });
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      var b = body();
+      if (!b.days || Math.abs(b.days) > 365) { MP.toast('تعداد روز را بین ۱ تا ۳۶۵ وارد کنید', { error: true }); return; }
+      MP.busy(f, true);
+      MP.api('projects/' + p.id + '/shift', { method: 'POST', body: b }).then(function (d) {
+        MP.applyProjects(d.list); MP.loadTasks(); MP.dialog.close(); MP.audit();
+        MP.toast(fa(d.summary.tasks) + ' تسک ' + fa(Math.abs(b.days)) + ' روز ' + (b.days > 0 ? 'عقب' : 'جلو') + ' رفت', {
+          icon: 'check', action: 'بازگردانی', duration: 9000,
+          onAction: function () {
+            MP.api('projects/' + p.id + '/shift/undo', { method: 'POST' }).then(function (u) {
+              MP.applyProjects(u.list); MP.loadTasks(); MP.audit(); MP.toast('زمان‌بندی برگشت (' + fa(u.restored) + ' تسک)');
+            }).catch(MP.soft);
+          }
+        });
+      }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
+    };
+    MP.dialog.open('جابه‌جایی زمان‌بندی «' + p.name + '»', f);
+    preview();
+  }
+
   function projectForm(p) {
     var iconIn = el('input', { type: 'hidden', name: 'icon', value: p ? p.icon : 'grid' });
     var picker = el('div', { class: 'icon-picker', role: 'radiogroup', 'aria-label': 'آیکون' });
@@ -236,8 +309,9 @@
       el('div', { class: 'row' }, MP.dateField('start', p ? p.start : S.today, 'شروع'), MP.dateField('end', p ? p.end : J.addDays(S.today, 60), 'پایان')),
       p ? null : el('div', { class: 'field' }, el('span', { text: 'اعضای تیم' }), MP.peoplePicker('people', [], [S.me.id])),
       MP.actions(p ? 'ذخیره' : 'ساخت پروژه', p ? el('button', { type: 'button', class: 'btn btn-danger', text: 'حذف پروژه', onclick: function () {
-        MP.confirm('حذف پروژه', 'پروژه «' + p.name + '» با بخش‌ها، یادداشت‌ها و گروه گفت‌وگویش حذف شود؟ تسک‌ها در تقویم افراد باقی می‌مانند.', 'حذف پروژه').then(function (ok) {
-          if (ok) MP.api('projects/' + p.id, { method: 'DELETE' }).then(function (d) { MP.applyProjects(d); MP.toast('پروژه حذف شد'); MP.loadChannels(); MP.audit(); }).catch(MP.soft);
+        var n = S.tasks.filter(function (t) { return t.project_id === p.id; }).length;
+        MP.confirm('حذف پروژه', 'پروژه «' + p.name + '» با بخش‌ها، یادداشت‌ها، گروه گفت‌وگو و ' + (n ? fa(n) + ' تسک' : 'همه تسک‌هایش') + ' (از تقویم همه افراد، همراه چک‌لیست، نظرها و فایل‌ها) برای همیشه حذف شود؟ ساعت‌های کارکرد ثبت‌شده برای حقوق و گزارش‌ها می‌ماند. این کار برگشت‌پذیر نیست.', 'حذف پروژه', true).then(function (ok) {
+          if (ok) MP.api('projects/' + p.id, { method: 'DELETE' }).then(function (d) { MP.applyProjects(d); MP.loadTasks(); MP.toast('پروژه و تسک‌هایش حذف شد'); MP.loadChannels(); MP.audit(); }).catch(MP.soft);
         });
       } }) : null));
     f.onsubmit = function (e) {

@@ -30,6 +30,7 @@ class MP_Rest {
 			array( "channels/$id/restore", 'POST', 'restore_channel', $auth ),
 			array( "channels/$id/members", 'POST', 'set_channel_members', $auth ),
 			array( "channels/$id/logo", 'POST', 'set_channel_logo', $auth ),
+			array( "channels/$id/pin", 'POST', 'pin_channel', $auth ),
 
 			array( 'goals', 'GET', 'get_goal', $auth ),
 			array( 'goals', 'POST', 'save_goal', $auth ),
@@ -38,6 +39,8 @@ class MP_Rest {
 			array( 'projects', 'POST', 'create_project', $manager ),
 			array( "projects/$id", 'POST', 'update_project', $manager ),
 			array( "projects/$id", 'DELETE', 'delete_project', $manager ),
+			array( "projects/$id/shift", 'POST', 'shift_project', $manager ),
+			array( "projects/$id/shift/undo", 'POST', 'undo_shift', $manager ),
 			array( "projects/$id/members", 'POST', 'add_members', $manager ),
 			array( "projects/$id/members/(?P<user>\d+)", 'DELETE', 'remove_member', $manager ),
 			array( "projects/$id/sections", 'POST', 'create_section', $manager ),
@@ -508,7 +511,7 @@ class MP_Rest {
 			}
 			if ( $by_manager && $owner !== $uid ) {
 				$when = MP_Jalali::format( $dates[0] ) . ( count( $dates ) > 1 ? ' (' . MP_Jalali::digits( count( $dates ) ) . ' بار تکرار)' : '' );
-				MP_Notify::send( $owner, 'task', wp_get_current_user()->display_name . ' برای شما تسک تعیین کرد', $f['title'] . ' · ' . $when, 'calendar', $parent ? $parent : $id, self::wants_email( $owner ) );
+				MP_Notify::event( 'task_assigned', $owner, array( 'ACTOR' => wp_get_current_user()->display_name, 'TASK' => $f['title'], 'WHEN' => $when ), 'calendar', $parent ? $parent : $id, self::wants_email( $owner ) );
 			}
 		}
 		$who = implode( '، ', array_map( function ( $o ) { $u = get_userdata( $o ); return $u ? $u->display_name : $o; }, $owners ) );
@@ -576,9 +579,9 @@ class MP_Rest {
 		}
 		if ( 'manager' === $new->source ) {
 			if ( (int) $new->user_id !== $uid && $full && array_diff( $changes, array( 'وضعیت' ) ) ) {
-				MP_Notify::send( $new->user_id, 'task', 'تسک «' . $new->title . '» توسط ناظر به‌روز شد', MP_Jalali::format( $new->task_date ), 'calendar', $new->id );
+				MP_Notify::event( 'task_updated', $new->user_id, array( 'TASK' => $new->title, 'DATE' => MP_Jalali::format( $new->task_date ) ), 'calendar', $new->id );
 			} elseif ( isset( $f['status'] ) && 'done' === $f['status'] && $new->assigned_by && (int) $new->assigned_by !== $uid ) {
-				MP_Notify::send( $new->assigned_by, 'task', wp_get_current_user()->display_name . ' تسک را انجام داد', $new->title, 'calendar', $new->id );
+				MP_Notify::event( 'task_done', $new->assigned_by, array( 'ACTOR' => wp_get_current_user()->display_name, 'TASK' => $new->title ), 'calendar', $new->id );
 			}
 		}
 		return self::task_payload( $new );
@@ -606,7 +609,7 @@ class MP_Rest {
 		}
 		MP_Audit::log( 'archive', 'task', $task->id, '«' . $task->title . '»' . ( count( $ids ) > 1 ? ' و ' . MP_Jalali::digits( count( $ids ) - 1 ) . ' تکرار بعدی' : '' ) . ' از تقویم ' . ( get_userdata( $task->user_id ) ? get_userdata( $task->user_id )->display_name : '' ) );
 		if ( 'manager' === $task->source && (int) $task->user_id !== self::uid() ) {
-			MP_Notify::send( $task->user_id, 'task', 'تسک «' . $task->title . '» توسط ناظر آرشیو شد', MP_Jalali::format( $task->task_date ), 'calendar' );
+			MP_Notify::event( 'task_archived', $task->user_id, array( 'TASK' => $task->title, 'DATE' => MP_Jalali::format( $task->task_date ) ), 'calendar' );
 		}
 		return array( 'deleted' => count( $ids ), 'archived' => count( $ids ), 'ids' => $ids );
 	}
@@ -839,11 +842,151 @@ class MP_Rest {
 		foreach ( array( 'channels', 'project_members', 'sections', 'milestones', 'notes' ) as $table ) {
 			$wpdb->delete( self::t( $table ), array( 'project_id' => $pid ) );
 		}
-		// Tasks stay on people's calendars, detached from the project.
-		$wpdb->update( self::t( 'tasks' ), array( 'project_id' => 0, 'section_id' => 0 ), array( 'project_id' => $pid ) );
-		MP_Audit::log( 'delete', 'project', $pid, 'پروژه «' . $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $pid ) ) . '»' );
+		// Its tasks go too (archived ones included), with their checklists, comments and files.
+		// Hours already worked stay in the time log (it keeps the task title) for payroll and reports.
+		$tids = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'tasks' ) . ' WHERE project_id = %d', $pid ) ) );
+		foreach ( $tids as $tid ) {
+			self::purge_task( $tid );
+		}
+		// Notifications that would open a task or project that no longer exists.
+		$wpdb->query( $wpdb->prepare( 'DELETE FROM ' . self::t( 'notifications' ) . " WHERE target = 'projects' AND ref_id = %d", $pid ) ); // phpcs:ignore
+		if ( $tids ) {
+			$wpdb->query( 'DELETE FROM ' . self::t( 'notifications' ) . " WHERE target IN ('task','calendar') AND ref_id IN (" . implode( ',', $tids ) . ')' ); // phpcs:ignore -- integers
+		}
+		MP_Audit::log( 'delete', 'project', $pid, 'پروژه «' . $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $pid ) ) . '»' . ( $tids ? ' با ' . MP_Jalali::digits( count( $tids ) ) . ' تسک' : '' ) );
 		$wpdb->delete( self::t( 'projects' ), array( 'id' => $pid ) );
 		return self::list_projects();
+	}
+
+	/**
+	 * POST projects/{id}/shift {days, from?, skip_off?, preview?}
+	 * Moves the unfinished part of a project by N days (negative = earlier): its open tasks on everyone's
+	 * calendar, unfinished milestones and the project's dates. With «from», only what lies on/after that date.
+	 * skip_off: a task that lands on a Friday or a holiday (payroll calendar) goes on to the next working day.
+	 * preview returns what would move without changing anything; the last shift can be undone for an hour.
+	 */
+	public static function shift_project( WP_REST_Request $r ) {
+		global $wpdb;
+		$pid  = (int) $r['id'];
+		$proj = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $pid ) );
+		if ( ! $proj ) {
+			return self::err( 'پروژه پیدا نشد.', 404 );
+		}
+		$days = (int) J_latin( (string) $r['days'] );
+		if ( ! $days || abs( $days ) > 365 ) {
+			return self::err( 'تعداد روز باید بین ۱ تا ۳۶۵ باشد.' );
+		}
+		$from = (string) $r['from'];
+		if ( '' !== $from && ! MP_Util::valid_date( $from ) ) {
+			return self::err( 'تاریخ شروع جابه‌جایی معتبر نیست.' );
+		}
+		$skip = null === $r['skip_off'] || ! empty( $r['skip_off'] );
+
+		$sql   = 'SELECT id, user_id, task_date FROM ' . self::t( 'tasks' ) . " WHERE project_id = %d AND status <> 'done' AND archived_at IS NULL";
+		$tasks = '' !== $from
+			? $wpdb->get_results( $wpdb->prepare( $sql . ' AND task_date >= %s ORDER BY task_date, id', $pid, $from ) ) // phpcs:ignore
+			: $wpdb->get_results( $wpdb->prepare( $sql . ' ORDER BY task_date, id', $pid ) ); // phpcs:ignore
+		$off = array();
+		if ( $skip ) {
+			foreach ( (array) get_option( 'mp_payroll_holidays', array() ) as $month ) {
+				$off = array_merge( $off, (array) $month );
+			}
+			$off = array_flip( $off );
+		}
+		$moves  = array(); // task id => [old date, new date, user]
+		$people = array(); // user => tasks moved
+		foreach ( $tasks as $t ) {
+			$new = MP_Util::add_days( $t->task_date, $days );
+			// Fridays and holidays: on to the next working day in the same direction.
+			for ( $i = 0; $skip && $i < 14 && ( 5 === (int) gmdate( 'w', strtotime( $new . ' UTC' ) ) || isset( $off[ $new ] ) ); $i++ ) {
+				$new = MP_Util::add_days( $new, $days > 0 ? 1 : -1 );
+			}
+			$moves[ (int) $t->id ]       = array( $t->task_date, $new, (int) $t->user_id );
+			$people[ (int) $t->user_id ] = ( isset( $people[ (int) $t->user_id ] ) ? $people[ (int) $t->user_id ] : 0 ) + 1;
+		}
+		$miles = array(); // milestone id => [old start, old end, new start, new end]
+		$msql  = 'SELECT id, start_date, end_date FROM ' . self::t( 'milestones' ) . " WHERE project_id = %d AND status <> 'done'";
+		$mrows = '' !== $from
+			? $wpdb->get_results( $wpdb->prepare( $msql . ' AND end_date >= %s', $pid, $from ) ) // phpcs:ignore
+			: $wpdb->get_results( $wpdb->prepare( $msql, $pid ) ); // phpcs:ignore
+		foreach ( $mrows as $m ) {
+			// A stage already under way when «from» falls inside it keeps its start and only ends later.
+			$start                 = '' === $from || $m->start_date >= $from ? MP_Util::add_days( $m->start_date, $days ) : $m->start_date;
+			$end                   = max( $start, MP_Util::add_days( $m->end_date, $days ) );
+			$miles[ (int) $m->id ] = array( $m->start_date, $m->end_date, $start, $end );
+		}
+		$pstart = $proj->start_date && ( '' === $from || $proj->start_date >= $from ) ? MP_Util::add_days( $proj->start_date, $days ) : $proj->start_date;
+		$pend   = $proj->end_date && ( '' === $from || $proj->end_date >= $from ) ? MP_Util::add_days( $proj->end_date, $days ) : $proj->end_date;
+		if ( $pstart && $pend && $pend < $pstart ) {
+			$pend = $pstart;
+		}
+
+		$first   = $moves ? reset( $moves ) : null;
+		$last    = $moves ? end( $moves ) : null;
+		$summary = array(
+			'tasks'      => count( $moves ),
+			'people'     => count( $people ),
+			'milestones' => count( $miles ),
+			'first'      => $first ? array( $first[0], $first[1] ) : null,
+			'last'       => $last ? array( $last[0], $last[1] ) : null,
+			'start'      => array( $proj->start_date, $pstart ),
+			'end'        => array( $proj->end_date, $pend ),
+			'skipped'    => count(
+				array_filter(
+					$moves,
+					function ( $m ) use ( $days ) {
+						return MP_Util::add_days( $m[0], $days ) !== $m[1];
+					}
+				)
+			),
+		);
+		if ( ! empty( $r['preview'] ) ) {
+			return $summary;
+		}
+		if ( ! $moves && ! $miles && $pstart === $proj->start_date && $pend === $proj->end_date ) {
+			return self::err( 'چیزی برای جابه‌جایی نیست: تسک انجام‌نشده یا مرحله‌ای در این بازه وجود ندارد.' );
+		}
+
+		$now = MP_Util::now();
+		foreach ( $moves as $id => $m ) {
+			$wpdb->update( self::t( 'tasks' ), array( 'task_date' => $m[1], 'updated_at' => $now ), array( 'id' => $id ) );
+		}
+		foreach ( $miles as $id => $m ) {
+			$wpdb->update( self::t( 'milestones' ), array( 'start_date' => $m[2], 'end_date' => $m[3] ), array( 'id' => $id ) );
+		}
+		$wpdb->update( self::t( 'projects' ), array( 'start_date' => $pstart, 'end_date' => $pend ), array( 'id' => $pid ) );
+		set_transient( 'mp_shift_' . self::uid() . '_' . $pid, array( 'tasks' => $moves, 'miles' => $miles, 'project' => array( $proj->start_date, $proj->end_date ) ), HOUR_IN_SECONDS );
+
+		$dir = $days > 0 ? 'عقب انداخت' : 'جلو انداخت';
+		foreach ( $people as $uid => $n ) {
+			if ( $uid !== self::uid() ) {
+				MP_Notify::event( 'project_shifted', $uid, array( 'ACTOR' => wp_get_current_user()->display_name, 'PROJECT' => $proj->name, 'DAYS' => MP_Jalali::digits( abs( $days ) ), 'DIRECTION' => $dir, 'COUNT' => MP_Jalali::digits( $n ) ), 'calendar', 0, self::wants_email( $uid ) );
+			}
+		}
+		MP_Audit::log( 'update', 'project', $pid, 'زمان‌بندی «' . $proj->name . '» ' . MP_Jalali::digits( abs( $days ) ) . ' روز ' . ( $days > 0 ? 'عقب' : 'جلو' ) . ' رفت: ' . MP_Jalali::digits( count( $moves ) ) . ' تسک، ' . MP_Jalali::digits( count( $miles ) ) . ' مرحله' . ( '' !== $from ? ' (از ' . MP_Jalali::format( $from ) . ')' : '' ) );
+		return array( 'summary' => $summary, 'list' => self::list_projects() );
+	}
+
+	/** POST projects/{id}/shift/undo — puts back the last shift (within an hour); items edited since then stay as they are. */
+	public static function undo_shift( WP_REST_Request $r ) {
+		global $wpdb;
+		$pid  = (int) $r['id'];
+		$key  = 'mp_shift_' . self::uid() . '_' . $pid;
+		$snap = get_transient( $key );
+		if ( ! $snap ) {
+			return self::err( 'جابه‌جایی قابل بازگردانی پیدا نشد (فقط تا یک ساعت بعد ممکن است).', 404 );
+		}
+		delete_transient( $key );
+		$back = 0;
+		foreach ( $snap['tasks'] as $id => $m ) {
+			$back += (int) $wpdb->update( self::t( 'tasks' ), array( 'task_date' => $m[0], 'updated_at' => MP_Util::now() ), array( 'id' => (int) $id, 'task_date' => $m[1] ) );
+		}
+		foreach ( $snap['miles'] as $id => $m ) {
+			$wpdb->update( self::t( 'milestones' ), array( 'start_date' => $m[0], 'end_date' => $m[1] ), array( 'id' => (int) $id, 'start_date' => $m[2], 'end_date' => $m[3] ) );
+		}
+		$wpdb->update( self::t( 'projects' ), array( 'start_date' => $snap['project'][0], 'end_date' => $snap['project'][1] ), array( 'id' => $pid ) );
+		MP_Audit::log( 'update', 'project', $pid, 'بازگردانی جابه‌جایی زمان‌بندی: ' . MP_Jalali::digits( $back ) . ' تسک' );
+		return array( 'restored' => $back, 'list' => self::list_projects() );
 	}
 
 	private static function insert_members( $pid, array $ids, $name ) {
@@ -856,7 +999,7 @@ class MP_Rest {
 			$wpdb->insert( self::t( 'project_members' ), array( 'project_id' => $pid, 'user_id' => $uid ) );
 			MP_Audit::log( 'add', 'member', $pid, get_userdata( $uid )->display_name . ' به پروژه «' . $name . '»' );
 			if ( $uid !== self::uid() ) {
-				MP_Notify::send( $uid, 'project', 'شما به پروژه «' . $name . '» اضافه شدید', '', 'projects', $pid );
+				MP_Notify::event( 'project_added', $uid, array( 'PROJECT' => $name ), 'projects', $pid );
 			}
 		}
 	}
@@ -1064,7 +1207,7 @@ class MP_Rest {
 				'SELECT * FROM ' . self::t( 'channels' ) . " WHERE (type IN ('project','client') AND project_id IN ($in))
 				OR (type = 'client' AND project_id = 0 AND created_by = %d)
 				OR (type = 'direct' AND (user_a = %d OR user_b = %d))
-				OR (type = 'group' AND id IN (SELECT channel_id FROM " . self::t( 'channel_members' ) . ' WHERE user_id = %d)) ORDER BY id',
+				OR (type IN ('group','client') AND id IN (SELECT channel_id FROM " . self::t( 'channel_members' ) . ' WHERE user_id = %d)) ORDER BY id',
 				$uid,
 				$uid,
 				$uid,
@@ -1094,10 +1237,9 @@ class MP_Rest {
 			global $wpdb;
 			return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'channel_members' ) . ' WHERE channel_id = %d', $ch->id ) ) );
 		}
-		if ( $ch->project_id ) {
-			return MP_Util::project_members( $ch->project_id );
-		}
-		return array( (int) $ch->created_by );
+		// Client groups: the project's members (or the maker) plus colleagues added to the group.
+		$base = $ch->project_id ? MP_Util::project_members( $ch->project_id ) : array( (int) $ch->created_by );
+		return 'client' === $ch->type ? array_values( array_unique( array_merge( $base, MP_Client::extra_staff( $ch->id ) ) ) ) : $base;
 	}
 
 	private static function unread( $channel_id, $uid ) {
@@ -1122,6 +1264,7 @@ class MP_Rest {
 			'title'       => $title,
 			'project_id'  => (int) $ch->project_id,
 			'client_name' => $ch->client_name,
+			'client_id'   => (int) $ch->client_id,
 			'token'       => 'client' === $ch->type ? $ch->token : '',
 			'other'       => $other,
 			'unread'      => self::unread( $ch->id, $uid ),
@@ -1133,7 +1276,47 @@ class MP_Rest {
 			'archived'    => ! empty( $ch->archived_at ),
 			'logo'        => MP_Client::logo_url( $ch ),
 			'can_logo'    => 'direct' !== $ch->type && ( MP_Util::is_manager() || (int) $ch->created_by === $uid ),
+			// «all» = a manager pinned it for everyone; «me» = pinned in my own list only.
+			'pinned'      => ! empty( $ch->pinned_at ) ? 'all' : ( in_array( (int) $ch->id, self::my_pins( $uid ), true ) ? 'me' : '' ),
+			'pinned_at'   => ! empty( $ch->pinned_at ) ? $ch->pinned_at : '',
 		);
+	}
+
+	/** Conversations a person pinned for themselves (newest pin last). */
+	private static function my_pins( $uid ) {
+		$p = get_user_meta( $uid, 'mp_pins', true );
+		return is_array( $p ) ? array_values( array_map( 'intval', $p ) ) : array();
+	}
+
+	/**
+	 * POST channels/{id}/pin {scope: me|all, on: bool}
+	 * Anyone can pin a conversation at the top of their own list; managers can also pin a group for everyone.
+	 */
+	public static function pin_channel( WP_REST_Request $r ) {
+		global $wpdb;
+		$uid = self::uid();
+		$ch  = self::channel_for( (int) $r['id'], $uid );
+		if ( ! $ch ) {
+			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
+		}
+		$on = ! empty( $r['on'] ) && 'false' !== $r['on'];
+		if ( 'all' === $r['scope'] ) {
+			if ( ! MP_Util::is_manager() ) {
+				return self::err( 'فقط ناظر می‌تواند برای همه سنجاق کند.', 403 );
+			}
+			if ( 'direct' === $ch->type ) {
+				return self::err( 'گفت‌وگوی خصوصی را فقط برای خودتان می‌توانید سنجاق کنید.' );
+			}
+			$wpdb->update( self::t( 'channels' ), array( 'pinned_at' => $on ? MP_Util::now() : null ), array( 'id' => $ch->id ) );
+			MP_Audit::log( 'update', 'channel', $ch->id, '«' . $ch->title . '» ' . ( $on ? 'برای همه سنجاق شد' : 'از سنجاق همه برداشته شد' ) );
+		} else {
+			$pins = array_values( array_diff( self::my_pins( $uid ), array( (int) $ch->id ) ) );
+			if ( $on ) {
+				$pins[] = (int) $ch->id;
+			}
+			update_user_meta( $uid, 'mp_pins', array_slice( $pins, -30 ) );
+		}
+		return self::channel_payload( self::channel_for( $ch->id, $uid ), $uid );
 	}
 
 	public static function message_payload( $m, $uid, $reads = array() ) {
@@ -1260,7 +1443,21 @@ class MP_Rest {
 					'created_at'  => MP_Util::now(),
 				)
 			);
-			return self::channel_payload( self::channel_for( $wpdb->insert_id, $uid ), $uid );
+			$new = (int) $wpdb->insert_id;
+			// The customer's mobile: their portal login, and the group's link goes to it right away.
+			$sms    = null;
+			$error  = '';
+			$mobile = MP_Auth::normalize( $r['mobile'] );
+			if ( $mobile ) {
+				$row   = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $new ) );
+				$res   = MP_Client::add_person( $row, $client, $mobile );
+				$sms   = $res['sms'];
+				$error = $res['error'];
+				if ( $cust && '' === trim( (string) $cust->phone ) ) {
+					$wpdb->update( self::t( 'clients' ), array( 'phone' => $mobile ), array( 'id' => $cust->id ) );
+				}
+			}
+			return self::channel_payload( self::channel_for( $new, $uid ), $uid ) + array( 'sms_sent' => $sms, 'sms_error' => $error );
 		}
 		if ( 'group' === $r['type'] ) {
 			if ( ! MP_Util::is_manager() ) {
@@ -1297,7 +1494,7 @@ class MP_Rest {
 		foreach ( array_diff( $want, $old ) as $u ) {
 			$wpdb->insert( self::t( 'channel_members' ), array( 'channel_id' => $id, 'user_id' => $u ) );
 			if ( $u !== self::uid() ) {
-				MP_Notify::send( $u, 'message', 'شما به گروه «' . $title . '» اضافه شدید', '', 'messages', $id );
+				MP_Notify::event( 'group_added', $u, array( 'GROUP' => $title ), 'messages', $id );
 			}
 		}
 	}
@@ -1396,7 +1593,8 @@ class MP_Rest {
 		}
 		// Deletions of already-loaded messages, and who is typing / recording right now.
 		$deleted = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND deleted_at IS NOT NULL AND deleted_at >= %s', $ch->id, gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) - 20 * MINUTE_IN_SECONDS ) ) ) ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp
-		return array( 'messages' => $out, 'seen' => (object) $seen, 'members' => count( self::channel_members( $ch ) ), 'deleted' => $deleted, 'activity' => self::activity_of( $ch->id, $uid ) );
+		$purged  = get_transient( 'mp_purged_' . $ch->id );
+		return array( 'messages' => $out, 'seen' => (object) $seen, 'members' => count( self::channel_members( $ch ) ), 'deleted' => $deleted, 'removed' => is_array( $purged ) ? array_map( 'intval', array_keys( $purged ) ) : array(), 'activity' => self::activity_of( $ch->id, $uid ) );
 	}
 
 	/** POST channels/{id}/activity {state: typing|recording|idle} — kept for 6 seconds. */
@@ -1439,8 +1637,33 @@ class MP_Rest {
 		if ( ! $m || ! self::channel_for( (int) $m->channel_id, $uid ) ) {
 			return self::err( 'پیام پیدا نشد.', 404 );
 		}
-		if ( (int) $m->user_id !== $uid ) {
-			return self::err( 'فقط پیام‌های خودتان را می‌توانید حذف کنید.', 403 );
+		$manager = MP_Util::is_manager();
+		// {hard: 1} — a manager erases it for good (with its file); everyone's screen drops it on the next poll.
+		if ( ! empty( $r['hard'] ) && 'false' !== $r['hard'] ) {
+			if ( ! $manager ) {
+				return self::err( 'فقط ناظر می‌تواند پیام را برای همیشه پاک کند.', 403 );
+			}
+			$u = $m->user_id ? get_userdata( $m->user_id ) : null;
+			if ( $m->file_id ) {
+				MP_Files::delete( (int) $m->file_id );
+			}
+			$wpdb->delete( self::t( 'messages' ), array( 'id' => $m->id ) );
+			$key  = 'mp_purged_' . (int) $m->channel_id;
+			$list = get_transient( $key );
+			$list = array_filter(
+				is_array( $list ) ? $list : array(),
+				function ( $t ) {
+					return $t > time() - 20 * MINUTE_IN_SECONDS;
+				}
+			);
+			$list[ (int) $m->id ] = time();
+			set_transient( $key, $list, 20 * MINUTE_IN_SECONDS );
+			MP_Audit::log( 'delete', 'message', $m->id, 'پاک کردن کامل پیام ' . ( $u ? $u->display_name : ( $m->guest_name ? $m->guest_name : 'مشتری' ) ) . ': ' . wp_trim_words( $m->body ? $m->body : '(فایل/ویس)', 10 ) );
+			return array( 'id' => (int) $m->id, 'removed' => true );
+		}
+		// Archiving: your own messages, or anyone's for a manager.
+		if ( (int) $m->user_id !== $uid && ! $manager ) {
+			return self::err( 'فقط پیام‌های خودتان را می‌توانید آرشیو کنید.', 403 );
 		}
 		if ( empty( $m->deleted_at ) ) {
 			$wpdb->update( self::t( 'messages' ), array( 'deleted_at' => MP_Util::now(), 'deleted_by' => $uid ), array( 'id' => $m->id ) );
@@ -1479,7 +1702,7 @@ class MP_Rest {
 		$preview = '' !== trim( $body ) ? wp_trim_words( $body, 12 ) : ( $fo && 0 === strpos( $fo->mime, 'audio/' ) ? 'پیام صوتی' : 'فایل' );
 		if ( 'direct' === $ch->type ) {
 			$other = (int) $ch->user_a === $uid ? (int) $ch->user_b : (int) $ch->user_a;
-			MP_Notify::send( $other, 'message', 'پیام جدید از ' . wp_get_current_user()->display_name, $preview, 'messages', $ch->id );
+			MP_Notify::event( 'message_direct', $other, array( 'ACTOR' => wp_get_current_user()->display_name, 'PREVIEW' => $preview ), 'messages', $ch->id );
 		}
 		return self::message_payload( $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d', $mid ) ), $uid );
 	}
@@ -1547,6 +1770,9 @@ class MP_Rest {
 		if ( $gate ) {
 			return $gate;
 		}
+		if ( MP_Client::is_preview( $ch ) ) {
+			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
+		}
 		if ( ! self::client_rate_ok( $ch->id ) ) {
 			return self::err( 'تعداد پیام‌ها زیاد است؛ چند دقیقه بعد دوباره تلاش کنید.', 429 );
 		}
@@ -1560,7 +1786,7 @@ class MP_Rest {
 			array( 'channel_id' => $ch->id, 'user_id' => 0, 'guest_name' => $name, 'body' => $body, 'created_at' => MP_Util::now() )
 		);
 		foreach ( self::channel_members( $ch ) as $member ) {
-			MP_Notify::send( $member, 'message', 'پیام جدید مشتری در «' . $ch->title . '»', wp_trim_words( $body, 12 ), 'messages', $ch->id );
+			MP_Notify::event( 'message_client', $member, array( 'GROUP' => $ch->title, 'PREVIEW' => wp_trim_words( $body, 12 ) ), 'messages', $ch->id );
 		}
 		return array( 'sent' => true );
 	}

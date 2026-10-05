@@ -219,6 +219,7 @@ class MP_Install {
 			logo_file_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			auth_required tinyint(1) NOT NULL DEFAULT 0,
 			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			pinned_at datetime DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
 			KEY token (token),
@@ -673,6 +674,18 @@ class MP_Install {
 			KEY task (task_id),
 			KEY project (project_id,work_date),
 			KEY person (user_id,work_date)
+		) $c;";
+
+		// Short links for SMS (/s/{code}): sms.ir pattern values may only be 25 characters.
+		$t[] = 'CREATE TABLE ' . self::table( 'shortlinks' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			code varchar(12) NOT NULL,
+			url_hash char(32) NOT NULL,
+			url text NOT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY code (code),
+			KEY url_hash (url_hash)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'audit' ) . " (

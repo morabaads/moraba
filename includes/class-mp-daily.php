@@ -103,7 +103,7 @@ class MP_Daily {
 			// Supervisors hear about new reports (not about edits).
 			foreach ( MP_Util::panel_users() as $m ) {
 				if ( (int) $m !== $uid && MP_Util::is_manager( $m ) ) {
-					MP_Notify::send( $m, 'report', wp_get_current_user()->display_name . ' گزارش روزانه را ثبت کرد', MP_Jalali::format( $date ) . ' · ' . MP_Jalali::digits( $row['progress'] ) . '٪', 'daily', $id );
+					MP_Notify::event( 'daily_report', $m, array( 'ACTOR' => wp_get_current_user()->display_name, 'DATE' => MP_Jalali::format( $date ), 'PROGRESS' => MP_Jalali::digits( $row['progress'] ) ), 'daily', $id );
 				}
 			}
 		}
@@ -141,7 +141,7 @@ class MP_Daily {
 		$have = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t() . ' WHERE report_date = %s', $today ) ) );
 		foreach ( self::staff() as $id ) {
 			if ( ! in_array( (int) $id, $have, true ) && ! self::on_leave( $id, $today ) ) {
-				MP_Notify::send( $id, 'report', 'وقت ثبت گزارش روزانه است', 'کارهای امروز، درصد پیشرفت، مشکلات، نیاز به تصمیم و برنامه فردا', 'daily', 0, true );
+				MP_Notify::event( 'daily_remind', $id, array(), 'daily', 0, true );
 			}
 		}
 	}

@@ -10,6 +10,7 @@ class MP_Admin {
 		add_action( 'admin_post_mp_save_roles', array( __CLASS__, 'save_roles' ) );
 		add_action( 'admin_post_mp_add_employee', array( __CLASS__, 'add_employee' ) );
 		add_action( 'admin_post_mp_test_sms', array( __CLASS__, 'test_sms' ) );
+		MP_Messages_Admin::init();
 		// Panel access + mobile right on WordPress's own "Add user" and profile screens.
 		foreach ( array( 'user_new_form', 'show_user_profile', 'edit_user_profile' ) as $hook ) {
 			add_action( $hook, array( __CLASS__, 'user_fields' ) );
@@ -29,6 +30,7 @@ class MP_Admin {
 	public static function menu() {
 		add_menu_page( 'پنل کارمندان مربع', 'پنل مربع', 'manage_options', 'moraba-panel', array( __CLASS__, 'page' ), 'dashicons-calendar-alt', 58 );
 		add_submenu_page( 'moraba-panel', 'تنظیمات پنل مربع', 'تنظیمات', 'manage_options', 'moraba-panel', array( __CLASS__, 'page' ) );
+		add_submenu_page( 'moraba-panel', 'اعلان‌ها و پیامک‌ها', 'اعلان‌ها و پیامک‌ها', 'manage_options', MP_Messages_Admin::SLUG, array( 'MP_Messages_Admin', 'page' ) );
 		add_submenu_page( 'moraba-panel', 'پیام‌های حذف‌شده', 'پیام‌های حذف‌شده', 'manage_options', 'moraba-panel-deleted', array( __CLASS__, 'deleted_page' ) );
 	}
 
@@ -82,7 +84,8 @@ class MP_Admin {
 						<td><input id="mp_bale_token" name="mp_bale_token" class="regular-text" dir="ltr" autocomplete="off" value="<?php echo esc_attr( get_option( 'mp_bale_token', '' ) ); ?>">
 						<p class="description">از @botfather در بله بگیرید.</p></td>
 					</tr>
-					<tr><th colspan="2"><h2 style="margin:0">پیامک و ورود با موبایل</h2></th></tr>
+					<tr><th colspan="2"><h2 style="margin:0">پیامک و ورود با موبایل</h2>
+						<p style="font-weight:400;margin:6px 0 0">متن اعلان‌ها و پیامک‌ها، روشن/خاموش کردن هرکدام و پترن‌های sms.ir: <a href="<?php echo esc_url( MP_Messages_Admin::url() ); ?>">اعلان‌ها و پیامک‌ها</a></p></th></tr>
 					<tr>
 						<th>سرویس پیامک</th>
 						<td>
@@ -97,10 +100,8 @@ class MP_Admin {
 						<th>sms.ir</th>
 						<td>
 							<p><label>کلید API (X-API-KEY)<br><input name="mp_smsir_key" class="regular-text" dir="ltr" autocomplete="off" value="<?php echo esc_attr( get_option( 'mp_smsir_key', '' ) ); ?>"></label></p>
-							<p><label>شناسه قالب ارسال سریع (کد ورود)<br><input name="mp_smsir_template" dir="ltr" inputmode="numeric" value="<?php echo esc_attr( get_option( 'mp_smsir_template', '' ) ); ?>"></label>
-							&nbsp;<label>نام متغیر قالب<br><input name="mp_smsir_param" dir="ltr" value="<?php echo esc_attr( get_option( 'mp_smsir_param', 'CODE' ) ); ?>"></label></p>
-							<p><label>شماره خط (برای پیامک اعلان‌ها)<br><input name="mp_smsir_line" dir="ltr" inputmode="numeric" value="<?php echo esc_attr( get_option( 'mp_smsir_line', '' ) ); ?>"></label></p>
-							<p class="description">در پنل sms.ir بخش «ارسال سریع» یک قالب بسازید، مثلاً: <code>کد ورود پنل مربع: #CODE#</code> و شناسه آن را اینجا بگذارید. کلید API را از «برنامه‌نویسان ← لیست کلیدها» بگیرید. اگر قالب نسازید، کد با شماره خط و متن عادی ارسال می‌شود.</p>
+							<p><label>شماره خط (برای پیامک‌های بدون پترن)<br><input name="mp_smsir_line" dir="ltr" inputmode="numeric" value="<?php echo esc_attr( get_option( 'mp_smsir_line', '' ) ); ?>"></label></p>
+							<p class="description">کلید API را از «برنامه‌نویسان ← لیست کلیدها» در sms.ir بگیرید. متن همه پیامک‌ها، ساخت پترن (قالب ارسال سریع) و شناسه پترن هر پیامک — از جمله کد ورود — در صفحه <a href="<?php echo esc_url( MP_Messages_Admin::url() ); ?>">اعلان‌ها و پیامک‌ها</a> است. پیامکی که پترن نداشته باشد با شماره خط و متن عادی ارسال می‌شود.</p>
 						</td>
 					</tr>
 					<tr>
@@ -140,7 +141,7 @@ class MP_Admin {
 
 			<h2 id="mp-sms-test">آزمایش پیامک ورود</h2>
 			<?php if ( ! MP_Auth::otp_enabled() ) : ?>
-				<div class="notice notice-warning inline"><p>ورود با موبایل هنوز فعال نیست: در بخش «پیامک و ورود با موبایل» بالا، sms.ir را انتخاب کنید، کلید API و شناسه قالب را وارد و ذخیره کنید.</p></div>
+				<div class="notice notice-warning inline"><p>ورود با موبایل هنوز فعال نیست: در بخش «پیامک و ورود با موبایل» بالا، sms.ir را انتخاب کنید، کلید API را وارد و ذخیره کنید؛ سپس در <a href="<?php echo esc_url( MP_Messages_Admin::url( 'msg-otp' ) ); ?>">اعلان‌ها و پیامک‌ها ← کد ورود</a> پترن آن را ثبت کنید (یا شماره خط بدهید).</p></div>
 			<?php endif; ?>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<?php wp_nonce_field( 'mp_test_sms' ); ?>
@@ -200,10 +201,10 @@ class MP_Admin {
 		$slug = isset( $_POST['mp_slug'] ) ? sanitize_title( wp_unslash( $_POST['mp_slug'] ) ) : 'panel';
 		update_option( 'mp_slug', $slug ? $slug : 'panel' );
 		update_option( 'mp_email_notifications', empty( $_POST['mp_email_notifications'] ) ? '' : '1' );
-		foreach ( array( 'mp_support', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_param', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_ai_key', 'mp_ai_url', 'mp_ai_model' ) as $key ) {
+		foreach ( array( 'mp_support', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_ai_key', 'mp_ai_url', 'mp_ai_model' ) as $key ) {
 			update_option( $key, isset( $_POST[ $key ] ) ? trim( sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) ) : '' );
 		}
-		foreach ( array( 'mp_smsir_template', 'mp_smsir_line' ) as $key ) {
+		foreach ( array( 'mp_smsir_line' ) as $key ) {
 			update_option( $key, isset( $_POST[ $key ] ) ? preg_replace( '/\D/', '', J_latin( wp_unslash( $_POST[ $key ] ) ) ) : '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 		}
 		$prov = isset( $_POST['mp_sms_provider'] ) ? sanitize_key( wp_unslash( $_POST['mp_sms_provider'] ) ) : '';

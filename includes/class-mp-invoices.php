@@ -382,7 +382,7 @@ class MP_Invoices {
 			self::mark_paid( $x, $gw, $ref );
 			foreach ( MP_Util::panel_users() as $m ) {
 				if ( MP_Util::is_manager( $m ) ) {
-					MP_Notify::send( $m, 'invoice', $x->client_name . ' فاکتور ' . $x->number . ' را آنلاین پرداخت کرد', MP_Jalali::digits( number_format( $p['total'] ) ) . ' تومان · ' . self::GATEWAYS[ $gw ] . ( $ref ? ' · کد پیگیری ' . $ref : '' ), 'invoices', $x->id, true );
+					MP_Notify::event( 'invoice_paid', $m, array( 'CLIENT' => $x->client_name, 'NUMBER' => $x->number, 'AMOUNT' => MP_Jalali::digits( number_format( $p['total'] ) ), 'GATEWAY' => self::GATEWAYS[ $gw ], 'REF' => $ref ), 'invoices', $x->id, true );
 				}
 			}
 			MP_Audit::log( 'update', 'invoice', $x->id, $x->number . ' پرداخت آنلاین ' . $gw . ' ' . $ref );
@@ -541,7 +541,7 @@ class MP_Invoices {
 			MP_Client::system( 0, (int) $x->project_id, 'پیش‌فاکتور ' . MP_Jalali::digits( (string) $x->number ) . ' توسط ' . $x->client_name . ' تأیید شد.', array( 't' => 'invoice', 'k' => 'proforma', 'id' => (int) $x->id, 'url' => self::url( $x->token ) ) );
 			foreach ( MP_Util::panel_users() as $m ) {
 				if ( MP_Util::is_manager( $m ) ) {
-					MP_Notify::send( $m, 'invoice', $x->client_name . ' پیش‌فاکتور ' . $x->number . ' را تأیید کرد', $x->title, 'invoices', $x->id, true );
+					MP_Notify::event( 'proforma_accepted', $m, array( 'CLIENT' => $x->client_name, 'NUMBER' => $x->number, 'TITLE' => $x->title ), 'invoices', $x->id, true );
 				}
 			}
 			wp_safe_redirect( self::url( $token ) );

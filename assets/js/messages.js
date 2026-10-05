@@ -1,7 +1,7 @@
 /* Messages: project groups, direct chats and client groups; files, read receipts, fast polling while open. */
 (function () {
   'use strict';
-  var MP = window.MP, S = MP.S, J = MP.J, el = MP.el, $ = MP.$, fa = MP.fa, icon = MP.icon;
+  var MP = window.MP, S = MP.S, J = MP.J, el = MP.el, $ = MP.$, $$ = MP.$$, fa = MP.fa, icon = MP.icon;
   var chatLayer = null;
   function closeChat() { finishRecording(false); stopSpeaking();
     layout.classList.remove('open'); document.body.classList.remove('chat-full');
@@ -58,12 +58,16 @@
     var all = S.channels.filter(function (c) { return inTab(c, listTab) && (!q || MP.norm(c.title + ' ' + (c.client_name || '')).indexOf(q) >= 0); });
     var quiet = all.filter(function (c) { return c.type === 'project' && !c.last && c.id !== current; });
     var items = (q || showQuiet) ? all : all.filter(function (c) { return quiet.indexOf(c) < 0; });
-    items.sort(function (a, b) { return (b.unread ? 1 : 0) - (a.unread ? 1 : 0) || (b.last ? b.last.id : 0) - (a.last ? a.last.id : 0); });
+    var rank = function (c) { return c.pinned === 'all' ? 2 : c.pinned === 'me' ? 1 : 0; };
+    items.sort(function (a, b) { return rank(b) - rank(a) || (b.unread ? 1 : 0) - (a.unread ? 1 : 0) || (b.last ? b.last.id : 0) - (a.last ? a.last.id : 0); });
     items.forEach(function (c) {
-      list.append(el('button', { type: 'button', class: 'chat-item' + (c.id === current ? ' active' : ''), onclick: function () { select(c.id); } },
+      var item = el('button', { type: 'button', class: 'chat-item' + (c.id === current ? ' active' : '') + (c.pinned ? ' pinned' : ''), onclick: function () { select(c.id); } },
         channelIcon(c),
         el('span', { class: 'ci-copy' }, el('strong', { text: c.title }), preview(c)),
-        c.unread ? el('span', { class: 'badge', text: fa(c.unread) }) : null));
+        c.pinned ? el('span', { class: 'ci-pin', title: c.pinned === 'all' ? 'سنجاق برای همه' : 'سنجاق برای من', 'aria-label': c.pinned === 'all' ? 'سنجاق برای همه' : 'سنجاق برای من', html: icon('pin') }) : null,
+        c.unread ? el('span', { class: 'badge', text: fa(c.unread) }) : null);
+      longPress(item, function () { chatMenu(c, item); });
+      list.append(item);
     });
     if (!items.length) list.append(MP.empty(q ? 'search' : 'chat', q ? 'چیزی پیدا نشد' : 'گفت‌وگویی نیست', q ? null : 'با «پیام جدید» گفت‌وگو را شروع کنید.', q ? null : { text: 'پیام جدید', onclick: newDirect }, true));
     if (quiet.length && !q) list.append(el('button', { type: 'button', class: 'chat-archive-link', html: icon(showQuiet ? 'eye' : 'folder') + (showQuiet ? 'پنهان کردن گروه‌های بی‌پیام' : fa(quiet.length) + ' گروه پروژه بدون پیام'), onclick: function () { showQuiet = !showQuiet; renderList(); } }));
@@ -102,6 +106,7 @@
     if (c.can_logo && c.type !== 'client') tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('image') + 'لوگو', onclick: function () { groupLogo(c); } }));
     if (c.can_delete) tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'آرشیو گروه', title: 'آرشیو گروه', html: icon('folder'), onclick: function () { deleteClient(c); } }));
     if (c.type === 'direct') tools.append(el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'پروفایل', html: icon('user'), onclick: function () { MP.openProfile(c.other); } }));
+    tools.append(el('button', { type: 'button', class: 'icon-btn sm' + (c.pinned ? ' is-on' : ''), 'aria-label': 'سنجاق', title: c.pinned ? 'سنجاق شده' : 'سنجاق کردن', html: icon('pin'), onclick: function (e) { chatMenu(c, e.currentTarget); } }));
     $('#composer').hidden = false;
     c.unread = 0; renderList();
     fetchNew(true).then(function () { if (!MP.isMobile()) $('#composer-text').focus(); });
@@ -116,7 +121,9 @@
       var sys = el('div', { class: 'sys-msg' + (fresh ? ' b-new' : '') }, el('span', { class: 'sys-ico', html: icon(SYS_ICON[m.meta && m.meta.t] || 'bell') }), el('p', { text: m.body }),
         m.meta && m.meta.url ? el('a', { class: 'sys-link', href: m.meta.url, target: '_blank', rel: 'noopener', text: 'مشاهده' }) : null,
         el('time', { text: MP.timeFa(m.created_at.slice(11, 16)) }));
-      rowsById[m.id] = sys; out.push(sys); return out;
+      rowsById[m.id] = sys;
+      if (S.manager) sys.addEventListener('contextmenu', function (e) { e.preventDefault(); askDelete(m); });
+      out.push(sys); return out;
     }
     var content = el('div', { class: 'bubble' + (m.deleted ? ' b-deleted' : '') + (m.archived ? ' b-archived' : '') });
     if (m.archived) content.append(el('span', { class: 'b-arch', html: icon('folder') + 'آرشیو شده (فقط ناظر می‌بیند)' }));
@@ -139,11 +146,12 @@
     if (fresh) setTimeout(function () { row.classList.remove('b-new'); }, 1600);
     rowsById[m.id] = row; row.dataset.time = MP.timeFa(m.created_at.slice(11, 16));
     if (m.pending) { row.classList.add('b-pending'); out.push(row); return out; }
-    if (m.mine && !m.archived) { swipeToDelete(row, m); row.addEventListener('contextmenu', function (e) { e.preventDefault(); askDelete(m); }); }
+    // Your own messages; a manager can also archive or erase anyone's.
+    if ((m.mine && !m.archived) || S.manager) { swipeToDelete(row, m); row.addEventListener('contextmenu', function (e) { e.preventDefault(); askDelete(m); }); }
     out.push(row);
     return out;
   }
-  /* ------------------------------------------------------------ Delete (swipe left on your own message) */
+  /* ------------------------------------------------------------ Delete (swipe left or right-click; managers: any message) */
 
   function markDeleted(id) {
     var row = rowsById[id]; if (!row || row.classList.contains('gone')) return;
@@ -153,11 +161,33 @@
     b.className = 'bubble b-deleted';
     b.replaceChildren(el('p', { class: 'b-del' }, MP.iconEl('ban'), mine ? 'این پیام را آرشیو کردید' : 'این پیام آرشیو شد'), el('span', { class: 'b-meta', text: row.dataset.time || '' }));
   }
-  function askDelete(m) {
-    MP.confirm('آرشیو پیام', 'این پیام از گفت‌وگو برداشته و آرشیو می‌شود (پاک نمی‌شود و ناظر همچنان آن را می‌بیند).', 'آرشیو').then(function (ok) {
+  function archiveMsg(m) {
+    MP.api('messages/' + m.id, { method: 'DELETE' }).then(function () { if (S.manager) { lastId = 0; lastDay = ''; fetchNew(false); } else markDeleted(m.id); MP.loadChannels(); MP.toast('پیام آرشیو شد'); }).catch(MP.soft);
+  }
+  /** Gone for good (managers): the row leaves this screen now and everyone else's on their next refresh. */
+  function removeRow(id) {
+    var row = rowsById[id]; if (!row) return;
+    delete rowsById[id]; delete mineRows[id];
+    row.style.transition = 'opacity .2s, transform .2s'; row.style.opacity = '0'; row.style.transform = 'scale(.96)';
+    setTimeout(function () { row.remove(); }, 200);
+  }
+  function eraseMsg(m) {
+    MP.confirm('پاک کردن برای همیشه', 'این پیام' + (m.file ? ' و فایل آن' : '') + ' برای همه اعضا و برای همیشه پاک می‌شود و قابل بازگرداندن نیست؛ در «پیام‌های حذف‌شده» پیشخوان هم نمی‌ماند.', 'پاک کن', true).then(function (ok) {
       if (!ok) return;
-      MP.api('messages/' + m.id, { method: 'DELETE' }).then(function () { if (S.manager) { lastId = 0; lastDay = ''; fetchNew(false); } else markDeleted(m.id); MP.loadChannels(); MP.toast('پیام آرشیو شد'); }).catch(MP.soft);
+      MP.api('messages/' + m.id, { method: 'DELETE', body: { hard: 1 } }).then(function () { removeRow(m.id); MP.loadChannels(); MP.toast('پیام برای همیشه پاک شد'); }).catch(MP.soft);
     });
+  }
+  function askDelete(m) {
+    if (!S.manager) {
+      MP.confirm('آرشیو پیام', 'این پیام از گفت‌وگو برداشته و آرشیو می‌شود (پاک نمی‌شود و ناظر همچنان آن را می‌بیند).', 'آرشیو').then(function (ok) { if (ok) archiveMsg(m); });
+      return;
+    }
+    // Managers: archive (hide, keep a copy) or erase for good.
+    var who = m.mine ? 'پیام شما' : 'پیام ' + (m.author || 'این فرد');
+    MP.dialog.open('مدیریت پیام', el('div', { class: 'form' },
+      el('p', { class: 'hint', text: who + (m.body ? ': «' + (m.body.length > 80 ? m.body.slice(0, 80) + '…' : m.body) + '»' : '') }),
+      m.archived || m.kind ? null : el('button', { type: 'button', class: 'btn btn-secondary', html: icon('folder') + 'آرشیو پیام (از گفت‌وگو برداشته می‌شود، ناظر همچنان می‌بیند)', onclick: function () { MP.dialog.close(); archiveMsg(m); } }),
+      el('button', { type: 'button', class: 'btn btn-danger', html: icon('trash') + 'پاک کردن برای همیشه', onclick: function () { MP.dialog.close(); eraseMsg(m); } })));
   }
   function swipeToDelete(row, m) {
     var st = null, LIMIT = 80;
@@ -233,6 +263,7 @@
       if (fresh && d.messages.some(function (m) { return !m.mine; })) MP.haptic && MP.haptic(8);
       Object.keys(d.seen || {}).forEach(function (mid) { if (mineRows[mid]) setSeen(mineRows[mid], d.seen[mid]); });
       if (!S.manager) (d.deleted || []).forEach(markDeleted);
+      (d.removed || []).forEach(removeRow);
       showActivity(d.activity);
       if (!box.children.length) box.append(MP.empty('chat', 'اولین پیام را بفرستید', 'پیام‌ها برای همه اعضای گفت‌وگو نمایش داده می‌شود.', null, true));
       else { var e = $('.empty', box); if (e) e.remove(); }
@@ -550,7 +581,12 @@
       add.onsubmit = function (e) {
         e.preventDefault();
         MP.api('channels/' + c.id + '/contacts', { method: 'POST', body: { name: name.value, mobile: J.latinDigits(mobile.value), sms: sms.checked } })
-          .then(function (n) { MP.toast(name.value + ' اضافه شد' + (sms.checked ? ' و لینک برایش پیامک شد' : '')); draw(n); if (c.id === current) fetchNew(true); }).catch(MP.soft);
+          .then(function (n) {
+            var who = name.value;
+            if (n.sms_sent === false) MP.toast(who + ' اضافه شد، ولی پیامک ارسال نشد: ' + (n.sms_error || 'خطای سرویس پیامک'), { error: true, duration: 9000 });
+            else MP.toast(who + ' اضافه شد' + (n.sms_sent ? ' و لینک برایش پیامک شد' : ''));
+            draw(n); if (c.id === current) fetchNew(true);
+          }).catch(MP.soft);
       };
       var list = el('div', { class: 'tio-history' });
       list.classList.add('cs-people');
@@ -561,6 +597,7 @@
           el('div', { class: 'tpl-copy' }, el('strong', { text: x.name }), el('small', { dir: 'ltr', class: 'cs-mob', text: J.faDigits(x.mobile) })),
           el('span', { class: 'chip ' + (x.last_login ? 'ok' : ''), text: x.last_login ? 'ورود ' + MP.relTime(x.last_login) : 'هنوز وارد نشده' }),
           el('div', { class: 'tpl-actions' },
+            el('button', { type: 'button', class: 'icon-btn sm', title: 'دیدن پرتال مثل ' + x.name, 'aria-label': 'دیدن پرتال مثل ' + x.name, html: icon('eye'), onclick: function () { viewAs(x.id); } }),
             d.sms ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('send') + 'پیامک لینک', onclick: function () { MP.api('client-contacts/' + x.id + '/sms', { method: 'POST' }).then(function () { MP.toast('لینک پیامک شد'); }).catch(MP.soft); } }) : null,
             el('button', { type: 'button', class: 'icon-btn sm', title: 'حذف', 'aria-label': 'حذف', html: icon('close'), onclick: function () {
               MP.confirm('حذف از گروه', x.name + ' دیگر نمی‌تواند وارد پرتال شود.', 'حذف').then(function (ok) { if (ok) MP.api('client-contacts/' + x.id, { method: 'DELETE' }).then(draw).catch(MP.soft); });
@@ -574,6 +611,13 @@
         }).catch(MP.soft);
       }
       proj.onchange = function () { save({ project_id: +proj.value }, +proj.value ? 'گروه به پروژه «' + proj.options[proj.selectedIndex].text + '» وصل شد' : 'اتصال به پروژه برداشته شد'); };
+      // Opens the portal in a new tab as this person (or as «a client»); view only, two hours.
+      var viewAs = function (contactId) {
+        var w = window.open('', '_blank');
+        MP.api('channels/' + c.id + '/client/preview', { method: 'POST', body: { contact_id: contactId || 0 } })
+          .then(function (r) { if (w) w.location = r.url; else location.href = r.url; })
+          .catch(function (err) { if (w) w.close(); MP.soft(err); });
+      };
       var copyLink = function () { (navigator.clipboard ? navigator.clipboard.writeText(d.url) : Promise.reject()).then(function () { MP.toast('لینک پرتال کپی شد'); }, function () { MP.toast('لینک را انتخاب و کپی کنید'); }); };
       var p = MP.project(+d.project_id);
       var locked = d.sms || d.auth_required;
@@ -597,7 +641,7 @@
             el('input', { value: d.url, readonly: true, dir: 'ltr', onfocus: function (e) { e.target.select(); } }),
             el('div', { class: 'cs-link-actions' },
               el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('clip') + 'کپی لینک', onclick: copyLink }),
-              el('a', { class: 'btn btn-secondary btn-sm', href: d.url, target: '_blank', rel: 'noopener', html: icon('eye') + 'باز کردن' })))),
+              el('button', { type: 'button', class: 'btn btn-secondary btn-sm', title: 'پرتال را همان‌طور که مشتری می‌بیند باز می‌کند (فقط مشاهده)', html: icon('eye') + 'دیدن مثل مشتری', onclick: function () { viewAs(d.contacts.length ? d.contacts[0].id : 0); } })))),
         d.sms && !d.contacts.length ? el('div', { class: 'cs-alert' }, el('span', { html: icon('alarm') }), el('div', null, el('b', { text: 'هنوز هیچ شماره‌ای ثبت نشده' }), el('small', { text: 'ورود پرتال فقط با کد پیامکی است؛ تا شماره مشتری را اضافه نکنید، کسی نمی‌تواند وارد لینک شود.' }))) : null,
         el('div', { class: 'cs-grid' },
           el('section', { class: 'cs-card' },
@@ -612,13 +656,158 @@
               el('header', null, el('span', { class: 'cs-ico', html: icon('folder') }), el('div', null, el('h3', { text: 'پروژه و نام‌ها' }), el('small', { text: 'پرتال، پیشرفت و طرح‌ها و فاکتورهای همین پروژه را نشان می‌دهد.' }))),
               MP.field('پروژه', proj), MP.field('نام مشتری', client), MP.field('نام گروه', title),
               el('button', { type: 'button', class: 'btn btn-secondary btn-sm cs-save', text: 'ذخیره نام‌ها', onclick: function () { save({ title: title.value, client_name: client.value }, 'ذخیره شد'); } })),
+            staffCard(d),
             el('section', { class: 'cs-card' },
               el('header', null, el('span', { class: 'cs-ico', html: icon('lock') }), el('div', null, el('h3', { text: 'امنیت ورود' }))),
               d.sms ? el('p', { class: 'cs-note', text: 'ورود همیشه با شماره موبایل و کد یک‌بارمصرف است؛ فقط شماره‌های ثبت‌شده وارد می‌شوند و ۳۰ روز وارد می‌مانند.' })
                 : el('div', null, el('label', { class: 'check' }, auth, el('span', { text: 'ورود با شماره موبایل و کد پیامک الزامی باشد' })), el('p', { class: 'hint', text: 'سرویس پیامک فعال نیست؛ تا فعال نشود ورود با کد ممکن نیست.' })))))].filter(Boolean));
+      if (d.manager) body.append(brandCard());
       var dlg = body.closest('.dialog'); if (dlg) dlg.classList.add('cs-dialog');
     }
+    /* Colleagues: the project's members always see the group; others can be added here. */
+    function staffCard(d) {
+      var card = el('section', { class: 'cs-card' },
+        el('header', null, el('span', { class: 'cs-ico', html: icon('chat') }), el('div', null, el('h3', { text: 'همکاران این گروه' }), el('small', { text: 'پیام‌های مشتری را می‌بینند و اعلانش را می‌گیرند.' }))));
+      var chips = el('div', { class: 'cs-staff' }, d.staff.map(function (s) {
+        return el('span', { class: 'chip' + (s.fixed ? '' : ' brand'), title: s.fixed ? 'عضو پروژه' : 'اضافه‌شده به همین گروه' }, MP.avatar(MP.user(s.id), 'sm'), el('span', { text: s.name }),
+          !s.fixed && d.can_staff ? el('button', { type: 'button', class: 'cs-x', 'aria-label': 'برداشتن ' + s.name, text: '×', onclick: function () { saveStaff(d.staff.filter(function (y) { return !y.fixed && y.id !== s.id; }).map(function (y) { return y.id; })); } }) : null);
+      }));
+      card.append(chips);
+      if (d.can_staff) card.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm cs-save', html: icon('plus') + 'افزودن همکار', onclick: function () {
+        var extra = d.staff.filter(function (y) { return !y.fixed; }).map(function (y) { return y.id; });
+        var fixed = d.staff.filter(function (y) { return y.fixed; }).map(function (y) { return y.id; });
+        var f = el('form', { class: 'form' }, el('div', { class: 'field' }, el('span', { text: 'همکارانی که این گروه را ببینند' }), MP.peoplePicker('staff', extra, null, fixed)), MP.actions('ذخیره'));
+        f.onsubmit = function (e) { e.preventDefault(); MP.dialog.close(); saveStaff(MP.checked(f, 'staff')); };
+        MP.dialog.open('همکاران گروه «' + d.title + '»', f);
+      } }));
+      function saveStaff(ids) {
+        MP.api('channels/' + c.id + '/staff', { method: 'POST', body: { user_ids: ids } }).then(function (n) { MP.toast('همکاران گروه ذخیره شد'); if (document.body.contains(body)) draw(n); else clientSettings(c); MP.loadChannels(); }).catch(MP.soft);
+      }
+      return card;
+    }
+    /* Managers: the studio's logo, icon and team name in every client portal. */
+    function brandCard() {
+      var card = el('section', { class: 'cs-card cs-brand-card' },
+        el('header', null, el('span', { class: 'cs-ico', html: icon('image') }), el('div', null, el('h3', { text: 'ظاهر استودیو در پرتال‌ها' }), el('small', { text: 'برای همه پرتال‌های مشتری؛ جای لوگو و نام مربع.' }))), MP.skeleton(1));
+      MP.api('portal-brand').then(function (b) {
+        var name = el('input', { class: 'input', value: b.name, maxlength: 60 });
+        function pick(kind, label, url, isDefault) {
+          var input = el('input', { type: 'file', accept: 'image/*', hidden: true });
+          var box = el('button', { type: 'button', class: 'cs-brand-img ' + kind, title: 'تغییر ' + label, onclick: function () { input.click(); } }, el('img', { src: url, alt: '' }));
+          input.onchange = function () {
+            var f = input.files[0]; if (!f) return;
+            box.classList.add('loading');
+            MP.upload('files', f, { context: 'client_logo', context_id: c.id }).then(function (up) { var body2 = {}; body2[kind + '_file_id'] = up.id; return MP.api('portal-brand', { method: 'POST', body: body2 }); })
+              .then(function () { MP.toast(label + ' عوض شد'); card.replaceWith(brandCard()); }).catch(function (e) { box.classList.remove('loading'); MP.soft(e); });
+          };
+          return el('div', { class: 'cs-brand-pick' }, box, input, el('small', { text: label }),
+            !isDefault ? el('button', { type: 'button', class: 'cs-mini-link', text: 'برگرداندن پیش‌فرض', onclick: function () { var b2 = {}; b2[kind + '_file_id'] = 0; MP.api('portal-brand', { method: 'POST', body: b2 }).then(function () { card.replaceWith(brandCard()); }).catch(MP.soft); } }) : null);
+        }
+        card.replaceChildren(card.firstChild,
+          el('div', { class: 'cs-brand-row' }, pick('logo', 'لوگو (افقی)', b.logo, !b.logo_id), pick('icon', 'آیکون گفت‌وگو (مربع)', b.icon, !b.icon_id)),
+          MP.field('نام تیم در پرتال', name),
+          el('button', { type: 'button', class: 'btn btn-secondary btn-sm cs-save', text: 'ذخیره نام', onclick: function () { MP.api('portal-brand', { method: 'POST', body: { name: name.value } }).then(function () { MP.toast('نام تیم ذخیره شد'); }).catch(MP.soft); } }));
+      }).catch(function () { card.remove(); });
+      return card;
+    }
     MP.api('channels/' + c.id + '/client').then(draw).catch(MP.soft);
+  }
+
+  /**
+   * Hold a conversation (about half a second, finger or mouse) or right-click it: a menu opens beside it,
+   * like Telegram. The click that ends a long press does not open the chat.
+   */
+  function longPress(node, fire) {
+    var timer = 0, x = 0, y = 0, fired = false;
+    function cancel() { clearTimeout(timer); timer = 0; node.classList.remove('pressing'); }
+    node.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      fired = false; x = e.clientX; y = e.clientY;
+      node.classList.add('pressing');
+      timer = setTimeout(function () { timer = 0; fired = true; node.classList.remove('pressing'); MP.haptic(15); fire(); }, 480);
+    });
+    node.addEventListener('pointermove', function (e) { if (timer && (Math.abs(e.clientX - x) > 10 || Math.abs(e.clientY - y) > 10)) cancel(); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) { node.addEventListener(ev, cancel); });
+    node.addEventListener('click', function (e) { if (fired) { e.preventDefault(); e.stopImmediatePropagation(); fired = false; } }, true);
+    node.addEventListener('contextmenu', function (e) { e.preventDefault(); cancel(); fired = false; fire(); });
+  }
+
+  function setPin(c, scope, on) {
+    MP.api('channels/' + c.id + '/pin', { method: 'POST', body: { scope: scope, on: on } }).then(function (n) {
+      S.channels = S.channels.map(function (x) { return x.id === n.id ? n : x; });
+      renderList();
+      if (current === c.id) select(c.id);
+      MP.toast(on ? (scope === 'all' ? 'برای همه سنجاق شد' : 'برای شما سنجاق شد') : 'سنجاق برداشته شد', { icon: 'pin' });
+    }).catch(MP.soft);
+  }
+
+  /** The conversation's menu, floating beside it: pin (for me / for everyone), open, members, profile, archive. */
+  var openMenu = null;
+  function chatMenu(c, anchor) {
+    if (openMenu) openMenu();
+    var forAll = S.manager && c.type !== 'direct', items = [], sep = null;
+    if (current !== c.id) items.push(['chat', 'باز کردن گفت‌وگو', function () { select(c.id); }]);
+    // Pin
+    if (c.pinned === 'all') {
+      if (forAll) items.push(['pin', 'برداشتن سنجاق برای همه', function () { setPin(c, 'all', false); }]);
+    } else {
+      items.push(c.pinned === 'me' ? ['pin', 'برداشتن سنجاق', function () { setPin(c, 'me', false); }] : ['pin', 'سنجاق برای خودم', function () { setPin(c, 'me', true); }]);
+      if (forAll) items.push(['pin', 'سنجاق برای همه اعضا', function () { setPin(c, 'all', true); }]);
+    }
+    items.push(sep);
+    // The same settings as the buttons above an open conversation.
+    if (c.type === 'client') {
+      items.push(['send', 'لینک مشتری', function () { shareLink(c); }]);
+      items.push(['user', 'مشتریان و ظاهر', function () { clientSettings(c); }]);
+      if (c.project_id) items.push(['eye', 'پرتال پروژه', function () { MP.portal(c.project_id); }]);
+      items.push(['video', 'جلسه آنلاین', function () { MP.meetingForm({ channelId: c.id, projectId: c.project_id, title: 'جلسه با ' + (c.client_name || c.title) }); }]);
+    }
+    if (c.type === 'direct') items.push(['user', 'پروفایل', function () { MP.openProfile(c.other); }]);
+    if (c.type === 'group' && c.can_manage) items.push(['user', 'اعضای گروه', function () { groupForm(c); }]);
+    if (c.can_logo && c.type !== 'client') items.push(['image', 'لوگوی گروه', function () { groupLogo(c); }]);
+    if (c.can_delete) { items.push(sep); items.push(['folder', 'آرشیو گروه', function () { deleteClient(c); }, true]); }
+    // No separators at the ends or twice in a row.
+    items = items.filter(function (it, i, a) { return it || (i > 0 && i < a.length - 1 && a[i - 1]); });
+    while (items.length && !items[items.length - 1]) items.pop();
+
+    var menu = el('div', { class: 'ctx-menu', role: 'menu', 'aria-label': c.title },
+      c.pinned === 'all' && !forAll ? el('div', { class: 'ctx-note', text: 'ناظر این گفت‌وگو را برای همه سنجاق کرده' }) : null,
+      el('div', { class: 'ctx-title', text: c.title }),
+      items.map(function (it) {
+        if (!it) return el('hr', { class: 'ctx-sep', role: 'separator' });
+        var b = el('button', { type: 'button', role: 'menuitem', class: it[3] ? 'danger' : '', html: icon(it[0]), onclick: function () { close(); it[2](); } });
+        b.append(el('span', { text: it[1] }));
+        return b;
+      }));
+    var shade = el('div', { class: 'ctx-shade', onclick: function () { close(); } });
+    if (anchor) anchor.classList.add('ctx-lifted');
+    document.body.append(shade, menu);
+    // Beside the conversation, kept on screen (below it, or above when there is no room).
+    var r = anchor ? anchor.getBoundingClientRect() : { left: innerWidth / 2, right: innerWidth / 2, top: innerHeight / 2, bottom: innerHeight / 2, width: 0 };
+    var w = menu.offsetWidth, h = menu.offsetHeight, pad = 8;
+    var left = Math.min(Math.max(pad, r.right - w), innerWidth - w - pad);
+    var top = r.bottom + 6 + h > innerHeight - pad ? Math.max(pad, r.top - h - 6) : r.bottom + 6;
+    menu.style.left = left + 'px'; menu.style.top = top + 'px';
+    void menu.offsetWidth; // start the pop-in now (no requestAnimationFrame: it does not run in background tabs)
+    menu.classList.add('in');
+    var first = $('button', menu); if (first) first.focus({ preventScroll: true });
+    function key(e) {
+      var btns = $$('button', menu), i = btns.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); close(); if (anchor) anchor.focus(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); btns[(i + 1) % btns.length].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); btns[(i - 1 + btns.length) % btns.length].focus(); }
+    }
+    document.addEventListener('keydown', key, true);
+    window.addEventListener('resize', close);
+    function close() {
+      if (openMenu !== close) return;
+      openMenu = null;
+      document.removeEventListener('keydown', key, true);
+      window.removeEventListener('resize', close);
+      if (anchor) anchor.classList.remove('ctx-lifted');
+      shade.remove(); menu.remove();
+    }
+    openMenu = close;
   }
 
   function archivedGroups() {
@@ -665,11 +854,17 @@
     var name = el('input', { name: 'client', maxlength: 120, placeholder: 'نام مشتری (شخص یا شرکت)' });
     var nameWrap = MP.field('نام مشتری جدید', name);
     var proj = MP.projectSelect('project_id', o.project_id || S.projectId);
+    var mobile = el('input', { name: 'mobile', inputmode: 'tel', dir: 'ltr', maxlength: 20, placeholder: '۰۹۱۲ ۱۲۳ ۴۵۶۷' });
+    mobile.addEventListener('input', function () { mobile.value = J.faDigits(J.latinDigits(mobile.value).replace(/[^\d ]/g, '')); });
     var list = [];
     cust.onchange = function () {
       nameWrap.hidden = cust.value !== 'new'; name.required = cust.value === 'new';
       var c = list.filter(function (q) { return String(q.id) === cust.value; })[0];
       if (c && !+proj.value && c.projects.length === 1) proj.value = c.projects[0];
+      // The customer's own mobile, when their file has one.
+      var m = c ? J.latinDigits(c.phone || '').replace(/\D/g, '') : '';
+      if (c && /^(98|0)?9\d{9}$/.test(m)) mobile.value = J.faDigits(m.replace(/^98/, '0').replace(/^9/, '09'));
+      else if (cust.value === 'new' || c) mobile.value = '';
     };
     MP.api('customers').then(function (l) {
       list = l;
@@ -682,12 +877,20 @@
       nameWrap,
       MP.field('پروژه', proj, 'پرتال همین پروژه را نشان می‌دهد و اعضای آن پیام‌های مشتری را می‌گیرند.'),
       MP.field('نام گروه', el('input', { name: 'title', maxlength: 160, placeholder: 'خالی بماند، نام مشتری گذاشته می‌شود' })),
+      MP.field('موبایل مشتری', mobile, 'برای ورود به پرتال؛ لینک گروه همین حالا برایش پیامک می‌شود. افراد بیشتر را بعداً از «مشتریان و ظاهر» اضافه کنید.'),
       MP.actions('ساخت و دریافت لینک'));
     cust.onchange();
     f.onsubmit = function (e) {
       e.preventDefault(); MP.busy(f, true);
-      MP.api('channels', { method: 'POST', body: { type: 'client', title: f.elements.title.value, client_id: cust.value === 'new' ? 0 : +cust.value, client_name: name.value, project_id: +proj.value } })
-        .then(function (c) { S.channels.push(c); select(c.id); shareLink(c); }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
+      MP.api('channels', { method: 'POST', body: { type: 'client', title: f.elements.title.value, client_id: cust.value === 'new' ? 0 : +cust.value, client_name: name.value, project_id: +proj.value, mobile: J.latinDigits(mobile.value) } })
+        .then(function (c) {
+          S.channels.push(c); select(c.id);
+          if (c.sms_sent) { MP.dialog.close(); MP.toast('گروه ساخته شد و لینک آن برای مشتری پیامک شد', { icon: 'check', duration: 6000 }); }
+          else {
+            shareLink(c);
+            if (c.sms_sent === false) MP.toast('گروه ساخته شد، ولی پیامک ارسال نشد: ' + (c.sms_error || 'خطای سرویس پیامک'), { error: true, duration: 10000 });
+          }
+        }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
     };
     MP.dialog.open('گروه اختصاصی مشتری', f);
   };

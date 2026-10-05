@@ -102,7 +102,6 @@ class MP_Digest {
 		}
 		$u      = get_userdata( $uid );
 		$first  = $u ? explode( ' ', trim( $u->display_name ) )[0] : '';
-		$title  = 'صبح بخیر' . ( $first ? ' ' . $first : '' ) . '! امروز ' . implode( '، ', $bits );
 		$detail = array();
 		foreach ( $meet as $m ) {
 			$detail[] = 'جلسه ' . MP_Jalali::digits( $m->meeting_time ) . ': ' . $m->title;
@@ -110,7 +109,10 @@ class MP_Digest {
 		foreach ( array_slice( $tasks, 0, 3 ) as $t ) {
 			$detail[] = '• ' . $t;
 		}
-		return array( 'title' => $title, 'detail' => implode( ' | ', $detail ), 'count' => count( $tasks ) + count( $meet ) + $overdue );
+		// Texts are editable in «اعلان‌ها و پیامک‌ها».
+		$vars = array( 'FIRST' => $first, 'SUMMARY' => implode( '، ', $bits ), 'ITEMS' => implode( ' | ', $detail ) );
+		$m    = MP_Messages::get( 'digest_morning' );
+		return array( 'title' => MP_Messages::fill( $m['title'], $vars ), 'detail' => MP_Messages::fill( $m['detail'], $vars ), 'count' => count( $tasks ) + count( $meet ) + $overdue, 'vars' => $vars );
 	}
 
 	private static function on_leave( $uid, $date ) {
@@ -121,12 +123,12 @@ class MP_Digest {
 	private static function send_morning( $uid, $today, $sms ) {
 		$b = self::morning_for( $uid, $today );
 		// In the panel + push + Telegram/Bale; SMS only when turned on (it costs per message).
-		MP_Notify::send( $uid, 'digest', $b['title'], $b['detail'], 'calendar', 0, false );
+		MP_Notify::event( 'digest_morning', $uid, $b['vars'], 'calendar', 0, false );
 		if ( $sms ) {
 			$phone = (string) get_user_meta( $uid, 'mp_phone', true );
 			$prefs = get_user_meta( $uid, 'mp_prefs', true );
 			if ( $phone && ( ! is_array( $prefs ) || ! isset( $prefs['sms'] ) || $prefs['sms'] ) ) {
-				MP_Auth::text( $phone, $b['title'] );
+				MP_Messages::send_sms( 'digest_morning', $phone, $b['vars'] );
 			}
 		}
 	}
@@ -246,13 +248,14 @@ class MP_Digest {
 
 	private static function send_weekly() {
 		$w     = self::weekly( MP_Util::today() );
-		$title = 'گزارش هفتگی: ' . MP_Jalali::digits( $w['totals']['done'] ) . ' تسک انجام، ' . MP_Jalali::digits( $w['totals']['overdue'] ) . ' عقب‌افتاده، دخل ' . self::toman( $w['money']['income'] );
+		$vars  = array( 'DONE' => MP_Jalali::digits( $w['totals']['done'] ), 'OVERDUE' => MP_Jalali::digits( $w['totals']['overdue'] ), 'INCOME' => self::toman( $w['money']['income'] ), 'EXPENSE' => self::toman( $w['money']['expense'] ), 'HOURS' => MP_Jalali::digits( $w['totals']['hours'] ) );
+		$title = MP_Messages::fill( MP_Messages::get( 'digest_weekly' )['title'], $vars );
 		$text  = self::weekly_text( $w );
 		foreach ( MP_Util::panel_users() as $uid ) {
 			if ( ! MP_Util::is_manager( $uid ) ) {
 				continue;
 			}
-			MP_Notify::send( $uid, 'weekly', $title, 'خرج ' . self::toman( $w['money']['expense'] ) . ' · حضور تیم ' . MP_Jalali::digits( $w['totals']['hours'] ) . ' ساعت', 'weekly', 0, false );
+			MP_Notify::event( 'digest_weekly', $uid, $vars, 'weekly', 0, false );
 			$u = get_userdata( $uid );
 			if ( $u && is_email( $u->user_email ) && get_option( 'mp_email_notifications', '1' ) ) {
 				wp_mail( $u->user_email, '[' . get_bloginfo( 'name' ) . '] ' . $title, $text . "\n\n" . MP_Frontend::panel_url() );

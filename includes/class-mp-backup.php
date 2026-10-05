@@ -13,9 +13,9 @@ class MP_Backup {
 
 	const FORMAT  = 'moraba-panel-backup';
 	const KEEP    = 10;
-	const TABLES  = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'meeting_peers', 'meeting_invites', 'meeting_chat', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates' );
-	const OPTIONS = array( 'mp_slug', 'mp_page_id', 'mp_support', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_daily_report', 'mp_invoice_settings', 'mp_digest', 'mp_ai_url', 'mp_ai_model', 'mp_contract_settings', 'mp_meet_settings' );
-	const META    = array( 'mp_prefs', 'mp_job_title', 'mp_phone', 'mp_avatar_public', 'mp_avatar_file', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs', 'mp_last_seen', 'mp_hourly_rate', 'mp_pay' );
+	const TABLES  = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'meeting_peers', 'meeting_invites', 'meeting_chat', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates', 'shortlinks' );
+	const OPTIONS = array( 'mp_slug', 'mp_page_id', 'mp_support', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_daily_report', 'mp_invoice_settings', 'mp_digest', 'mp_ai_url', 'mp_ai_model', 'mp_contract_settings', 'mp_meet_settings', 'mp_messages' );
+	const META    = array( 'mp_pins', 'mp_prefs', 'mp_job_title', 'mp_phone', 'mp_avatar_public', 'mp_avatar_file', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs', 'mp_last_seen', 'mp_hourly_rate', 'mp_pay' );
 	/**
 	 * Sections that can be exported, imported or wiped on their own: key => [label, tables].
 	 * «settings» and «staff» are not tables: panel options, and staff roles/meta.
@@ -31,7 +31,7 @@ class MP_Backup {
 		'ledger'    => array( 'حسابداری (دخل و خرج)', array( 'ledger' ) ),
 		'attendance'=> array( 'حضور و مرخصی', array( 'attendance', 'leaves' ) ),
 		'calendar'  => array( 'جلسات و یادآوری‌ها', array( 'meetings', 'meeting_people', 'meeting_peers', 'meeting_invites', 'meeting_chat', 'reminders' ) ),
-		'activity'  => array( 'اعلان‌ها و گزارش فعالیت', array( 'notifications', 'audit' ) ),
+		'activity'  => array( 'اعلان‌ها، لینک‌های کوتاه پیامک و گزارش فعالیت', array( 'notifications', 'audit', 'shortlinks' ) ),
 		'files'     => array( 'فایل‌ها و پیوست‌ها', array( 'files' ) ),
 		'settings'  => array( 'تنظیمات پنل (پیامک، ربات‌ها، حقوق، فاکتور…)', array() ),
 		'staff'     => array( 'کارمندان (نقش، شماره، عکس، تنظیمات شخصی)', array() ),
@@ -53,7 +53,7 @@ class MP_Backup {
 		'messages'     => array( 'گفت‌وگوها', 'پیام‌ها (گروه‌ها می‌مانند)', array( 'messages', 'reads' ), array(), '' ),
 		'team_groups'  => array( 'گفت‌وگوها', 'گروه‌های تیم و گفت‌وگوهای خصوصی (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type IN ('group','direct'))", 'channel_members' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'group')", 'channels' => "type IN ('group','direct')" ), '' ),
 		'client_groups'=> array( 'گفت‌وگوها', 'گروه‌های مشتری و لینک پرتال (با پیام‌ها)', array(), array( 'messages' => "channel_id IN (SELECT id FROM {channels} WHERE type = 'client')", 'client_contacts' => '1=1', 'channels' => "type = 'client'" ), '' ),
-		'clients'      => array( 'مشتریان', 'مشتریان (پرونده مشتری و پروژه‌هایش)', array( 'clients', 'client_projects' ), array(), '' ),
+		'clients'      => array( 'مشتریان', 'مشتریان (پرونده مشتری، پروژه‌ها و شماره‌های ورود به پرتال)', array( 'clients', 'client_projects', 'client_contacts' ), array(), '' ),
 		'designs'      => array( 'مشتریان', 'طرح‌ها و فایل‌های تحویلی پرتال (با نظرها)', array( 'client_items', 'design_pins' ), array(), '' ),
 		'pins'         => array( 'مشتریان', 'فقط نظرهای روی طرح‌ها', array( 'design_pins' ), array(), '' ),
 		'invoices'     => array( 'مالی', 'فاکتورها', array(), array( 'invoices' => "kind = 'invoice'" ), '' ),

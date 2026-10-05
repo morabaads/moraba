@@ -25,6 +25,10 @@ class MP_Client {
 			array( 'customers', 'POST', 'save_customer', $auth ),
 			array( "customers/$id", 'POST', 'save_customer', $auth ),
 			array( "customers/$id", 'DELETE', 'archive_customer', array( 'MP_Rest', 'can_manage' ) ),
+			array( 'portal-brand', 'GET', 'get_brand', $auth ),
+			array( 'portal-brand', 'POST', 'save_brand', array( 'MP_Rest', 'can_manage' ) ),
+			array( "channels/$id/client/preview", 'POST', 'start_preview', $auth ),
+			array( "channels/$id/staff", 'POST', 'save_staff', $auth ),
 			array( "channels/$id/client", 'GET', 'settings', $auth ),
 			array( "channels/$id/client", 'POST', 'save_settings', $auth ),
 			array( "channels/$id/contacts", 'POST', 'add_contact', $auth ),
@@ -127,6 +131,40 @@ class MP_Client {
 
 	/** Logged-in client contact for this group, or null. */
 	public static function session( $ch ) {
+		$s = self::real_session( $ch );
+		if ( $s ) {
+			return $s;
+		}
+		$p = self::preview( $ch );
+		if ( ! $p ) {
+			return null;
+		}
+		return $p['contact'] ? $p['contact'] : (object) array( 'id' => 0, 'channel_id' => (int) $ch->id, 'name' => 'مشتری', 'mobile' => '' );
+	}
+
+	/** True when this browser sees the portal through a staff «دیدن مثل مشتری» (view only). */
+	public static function is_preview( $ch ) {
+		return ! self::real_session( $ch ) && (bool) self::preview( $ch );
+	}
+
+	private static function preview_cookie( $ch ) {
+		return 'mp_clp_' . (int) $ch->id;
+	}
+
+	/** @return array{uid:int,contact:?object}|null A valid staff preview of this group, if any. */
+	private static function preview( $ch ) {
+		global $wpdb;
+		$c = isset( $_COOKIE[ self::preview_cookie( $ch ) ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ self::preview_cookie( $ch ) ] ) ) : '';
+		$p = explode( '|', $c );
+		if ( 4 !== count( $p ) || (int) $p[2] < time() || ! hash_equals( self::sign( 'pv|' . $ch->id . '|' . $p[0] . '|' . $p[1] . '|' . $p[2] . '|' . $ch->token ), $p[3] ) ) {
+			return null;
+		}
+		$contact = (int) $p[1] ? $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'client_contacts' ) . ' WHERE id = %d AND channel_id = %d', (int) $p[1], $ch->id ) ) : null;
+		return array( 'uid' => (int) $p[0], 'contact' => $contact );
+	}
+
+	/** Logged-in client contact for this group (their own mobile + code login), or null. */
+	private static function real_session( $ch ) {
 		global $wpdb;
 		$c = isset( $_COOKIE[ self::cookie_name( $ch ) ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ self::cookie_name( $ch ) ] ) ) : '';
 		$p = explode( '|', $c );
@@ -170,10 +208,13 @@ class MP_Client {
 		if ( ! $ch ) {
 			return self::err( 'این لینک معتبر نیست یا غیرفعال شده است.', 404 );
 		}
-		$s = self::session( $ch );
+		$s  = self::session( $ch );
+		$pv = $s && self::is_preview( $ch );
 		return array(
 			'title'         => $ch->title,
 			'client'        => $ch->client_name,
+			'team'          => self::brand()['name'],
+			'preview'       => $pv,
 			'logo'          => self::logo_url( $ch ),
 			'auth_required' => self::login_required( $ch ),
 			'logged_in'     => (bool) $s,
@@ -264,7 +305,9 @@ class MP_Client {
 	public static function logout( WP_REST_Request $r ) {
 		$ch = self::channel( $r['token'] );
 		if ( $ch ) {
-			setcookie( self::cookie_name( $ch ), '', array( 'expires' => time() - 3600, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
+			foreach ( array( self::cookie_name( $ch ), self::preview_cookie( $ch ) ) as $name ) {
+				setcookie( $name, '', array( 'expires' => time() - 3600, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
+			}
 		}
 		return array( 'logged_out' => true );
 	}
@@ -284,6 +327,9 @@ class MP_Client {
 			'auth_required' => self::login_required( $ch ),
 			'sms'           => MP_Auth::otp_enabled(),
 			'contacts'      => self::contacts( $ch->id ),
+			'staff'         => self::staff_payload( $ch ),
+			'can_staff'     => MP_Util::is_manager() || (int) $ch->created_by === get_current_user_id(),
+			'manager'       => MP_Util::is_manager(),
 		);
 	}
 
@@ -392,7 +438,49 @@ class MP_Client {
 			}
 		}
 		MP_Audit::log( $r['id'] ? 'update' : 'create', 'client', $id, $name );
-		return self::customer_payload( self::customer( $id ) );
+		// With a mobile, the customer can always open a portal: they join the client group of each chosen
+		// project (made if missing) and every client group they already have; with none at all, a group of
+		// their own (no project) is made. Each new membership texts them that group's link; groups they are
+		// already in are left alone (no repeated SMS).
+		$portal = array();
+		$mobile = MP_Auth::normalize( $r['phone'] );
+		if ( $mobile ) {
+			$cust   = self::customer( $id );
+			$groups = array();
+			foreach ( isset( $keep ) ? $keep : array() as $pid ) {
+				$ch = self::group_for( $cust, $pid );
+				if ( $ch ) {
+					$groups[ (int) $ch->id ] = $ch;
+				}
+			}
+			foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND client_id = %d AND archived_at IS NULL ORDER BY id", $id ) ) as $ch ) {
+				$groups[ (int) $ch->id ] = $ch;
+			}
+			// Existing client groups picked in the form: the customer joins them too (a group with no customer becomes theirs).
+			foreach ( is_array( $r['group_ids'] ) ? $r['group_ids'] : array() as $gid ) {
+				$ch = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE id = %d AND type = 'client' AND archived_at IS NULL", (int) $gid ) );
+				if ( ! $ch || ! MP_Rest::can_read_channel( $ch->id ) ) {
+					continue;
+				}
+				if ( ! (int) $ch->client_id ) {
+					$wpdb->update( self::t( 'channels' ), array( 'client_id' => $id ), array( 'id' => $ch->id ) );
+				}
+				$groups[ (int) $ch->id ] = $ch;
+			}
+			if ( ! $groups ) {
+				$ch = self::group_for( $cust, 0 );
+				if ( $ch ) {
+					$groups[ (int) $ch->id ] = $ch;
+				}
+			}
+			foreach ( $groups as $ch ) {
+				$res = self::add_person( $ch, $cust->name, $mobile );
+				if ( $res['added'] ) {
+					$portal[] = array( 'group' => $ch->title, 'project' => $ch->project_id ? (string) $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $ch->project_id ) ) : '', 'sms' => $res['sms'], 'error' => $res['error'] );
+				}
+			}
+		}
+		return self::customer_payload( self::customer( $id ) ) + array( 'portal' => $portal, 'mobile_ok' => (bool) $mobile || '' === trim( (string) $r['phone'] ) );
 	}
 
 	/** DELETE customers/{id} — archive (groups and invoices stay). */
@@ -403,8 +491,11 @@ class MP_Client {
 			return self::err( 'مشتری پیدا نشد.', 404 );
 		}
 		$wpdb->update( self::t( 'clients' ), array( 'archived_at' => MP_Util::now() ), array( 'id' => $c->id ) );
-		MP_Audit::log( 'archive', 'client', $c->id, $c->name );
-		return array( 'archived' => true );
+		// Their client groups go to the archive with them: the portal links stop and everyone logged in is out.
+		// Messages and invoices stay; a group can be brought back from «گروه‌های آرشیو‌شده».
+		$groups = (int) $wpdb->query( $wpdb->prepare( 'UPDATE ' . self::t( 'channels' ) . " SET archived_at = %s WHERE type = 'client' AND client_id = %d AND archived_at IS NULL", MP_Util::now(), $c->id ) ); // phpcs:ignore
+		MP_Audit::log( 'archive', 'client', $c->id, $c->name . ( $groups ? ' (با ' . MP_Jalali::digits( $groups ) . ' گروه و لینک پرتال)' : '' ) );
+		return array( 'archived' => true, 'groups' => $groups );
 	}
 
 	/** One client group for the «مشتریان» page. */
@@ -562,6 +653,136 @@ class MP_Client {
 		return self::settings_payload( self::team_channel( $ch->id ) );
 	}
 
+	/**
+	 * POST channels/{id}/client/preview {contact_id?} — this browser sees the portal as that client person
+	 * (or as a client in general) for two hours. View only: sending, comments and decisions are refused.
+	 */
+	public static function start_preview( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch = self::team_channel( $r['id'] );
+		if ( ! $ch || $ch->archived_at ) {
+			return self::err( 'گروه مشتری پیدا نشد.', 404 );
+		}
+		$cid = (int) $r['contact_id'];
+		if ( $cid && ! $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'client_contacts' ) . ' WHERE id = %d AND channel_id = %d', $cid, $ch->id ) ) ) {
+			$cid = 0;
+		}
+		$uid = get_current_user_id();
+		$exp = time() + 2 * HOUR_IN_SECONDS;
+		$val = $uid . '|' . $cid . '|' . $exp . '|' . self::sign( 'pv|' . $ch->id . '|' . $uid . '|' . $cid . '|' . $exp . '|' . $ch->token );
+		// A real client login in this browser would win over the preview; it is cleared first.
+		setcookie( self::cookie_name( $ch ), '', array( 'expires' => time() - 3600, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
+		setcookie( self::preview_cookie( $ch ), $val, array( 'expires' => $exp, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
+		MP_Audit::log( 'view', 'channel', $ch->id, 'دیدن پرتال «' . $ch->title . '» مثل مشتری' );
+		return array( 'url' => self::url( $ch->token ) );
+	}
+
+	/** Panel people who always see a client group: the project's members (or its maker when it has none). */
+	private static function base_staff( $ch ) {
+		return $ch->project_id ? MP_Util::project_members( $ch->project_id ) : array( (int) $ch->created_by );
+	}
+
+	/** Colleagues added to a client group on top of the project's members. */
+	public static function extra_staff( $channel_id ) {
+		global $wpdb;
+		return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'channel_members' ) . ' WHERE channel_id = %d', (int) $channel_id ) ) );
+	}
+
+	private static function staff_payload( $ch ) {
+		$base = self::base_staff( $ch );
+		$out  = array();
+		foreach ( array_unique( array_merge( $base, self::extra_staff( $ch->id ) ) ) as $u ) {
+			$user = get_userdata( $u );
+			if ( $user ) {
+				$out[] = array( 'id' => (int) $u, 'name' => $user->display_name, 'fixed' => in_array( (int) $u, $base, true ) );
+			}
+		}
+		return $out;
+	}
+
+	/** POST channels/{id}/staff {user_ids[]} — colleagues of this client group besides the project's members. */
+	public static function save_staff( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch = self::team_channel( $r['id'] );
+		if ( ! $ch ) {
+			return self::err( 'گروه مشتری پیدا نشد.', 404 );
+		}
+		if ( ! MP_Util::is_manager() && (int) $ch->created_by !== get_current_user_id() ) {
+			return self::err( 'فقط ناظر یا سازنده گروه می‌تواند همکار اضافه کند.', 403 );
+		}
+		$base = self::base_staff( $ch );
+		$want = array();
+		foreach ( is_array( $r['user_ids'] ) ? $r['user_ids'] : array() as $u ) {
+			$u = (int) $u;
+			if ( MP_Util::is_panel_user( $u ) && ! in_array( $u, $base, true ) ) {
+				$want[] = $u;
+			}
+		}
+		$old = self::extra_staff( $ch->id );
+		foreach ( array_diff( $old, $want ) as $u ) {
+			$wpdb->delete( self::t( 'channel_members' ), array( 'channel_id' => $ch->id, 'user_id' => $u ) );
+		}
+		foreach ( array_diff( array_unique( $want ), $old ) as $u ) {
+			$wpdb->insert( self::t( 'channel_members' ), array( 'channel_id' => $ch->id, 'user_id' => $u ) );
+			if ( $u !== get_current_user_id() ) {
+				MP_Notify::event( 'group_added', $u, array( 'GROUP' => $ch->title ), 'messages', $ch->id );
+			}
+			MP_Audit::log( 'add', 'member', $ch->id, get_userdata( $u )->display_name . ' به گروه مشتری «' . $ch->title . '»' );
+		}
+		return self::settings_payload( $ch );
+	}
+
+	/* ------------------------------------------------------------------ Studio look of the portals */
+
+	const BRAND = 'mp_portal_brand';
+
+	/** Logo, square icon and team name shown in every client portal (defaults: Moraba's own). */
+	public static function brand() {
+		$b   = get_option( self::BRAND, array() );
+		$b   = is_array( $b ) ? $b : array();
+		$url = function ( $fid ) {
+			$p = $fid ? MP_Files::payload( MP_Files::get( (int) $fid ) ) : null;
+			return $p ? $p['url'] : '';
+		};
+		$logo = $url( isset( $b['logo'] ) ? $b['logo'] : 0 );
+		$icon = $url( isset( $b['icon'] ) ? $b['icon'] : 0 );
+		return array(
+			'name'        => ! empty( $b['name'] ) ? (string) $b['name'] : 'تیم مربع استودیو',
+			'logo'        => $logo ? $logo : MP_URL . 'assets/img/logo.png',
+			'icon'        => $icon ? $icon : MP_URL . 'assets/img/symbol.png',
+			'logo_id'     => $logo ? (int) $b['logo'] : 0,
+			'icon_id'     => $icon ? (int) $b['icon'] : 0,
+			'custom_logo' => (bool) $logo,
+		);
+	}
+
+	public static function get_brand() {
+		return self::brand();
+	}
+
+	/** POST portal-brand {name?, logo_file_id?, icon_file_id?} — 0 brings back the default. */
+	public static function save_brand( WP_REST_Request $r ) {
+		$b = get_option( self::BRAND, array() );
+		$b = is_array( $b ) ? $b : array();
+		if ( null !== $r['name'] ) {
+			$b['name'] = MP_Util::text( $r['name'], 60 );
+		}
+		foreach ( array( 'logo' => 'logo_file_id', 'icon' => 'icon_file_id' ) as $k => $in ) {
+			if ( null === $r[ $in ] ) {
+				continue;
+			}
+			$fid = (int) $r[ $in ];
+			$f   = $fid ? MP_Files::get( $fid ) : null;
+			if ( $fid && ( ! $f || 'client_logo' !== $f->context || 0 !== strpos( $f->mime, 'image/' ) ) ) {
+				return self::err( 'فایل تصویر معتبر نیست.' );
+			}
+			$b[ $k ] = $fid;
+		}
+		update_option( self::BRAND, $b, false );
+		MP_Audit::log( 'update', 'channel', 0, 'ظاهر استودیو در پرتال مشتری' );
+		return self::brand();
+	}
+
 	/** POST channels/{id}/contacts {name, mobile, sms?} — also works in the middle of a conversation. */
 	public static function add_contact( WP_REST_Request $r ) {
 		global $wpdb;
@@ -577,15 +798,58 @@ class MP_Client {
 		if ( $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'client_contacts' ) . ' WHERE channel_id = %d AND mobile = %s', $ch->id, $mobile ) ) ) {
 			return self::err( 'این شماره در این گروه هست.' );
 		}
+		// The link goes by SMS unless the box was unticked.
+		$res = self::add_person( $ch, $name, $mobile, null === $r['sms'] || ( ! empty( $r['sms'] ) && 'false' !== $r['sms'] ) );
+		return self::settings_payload( $ch ) + array( 'sms_sent' => $res['sms'], 'sms_error' => $res['error'] );
+	}
+
+	/**
+	 * Puts a person into a client group (they can then log into its portal with their mobile) and texts
+	 * them the group's link. Someone already in the group is left alone and not texted again.
+	 * @return array{added:bool, sms:?bool, error:string} sms: null = not sent (off / already there).
+	 */
+	public static function add_person( $ch, $name, $mobile, $sms = true ) {
+		global $wpdb;
+		if ( $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'client_contacts' ) . ' WHERE channel_id = %d AND mobile = %s', $ch->id, $mobile ) ) ) {
+			return array( 'added' => false, 'sms' => null, 'error' => '' );
+		}
 		$wpdb->insert( self::t( 'client_contacts' ), array( 'channel_id' => $ch->id, 'name' => $name, 'mobile' => $mobile, 'created_at' => MP_Util::now() ) );
-		$cid = (int) $wpdb->insert_id;
 		// Everyone in the conversation sees who joined.
 		self::system( $ch->id, 0, $name . ' به گفت‌وگو اضافه شد.', array( 't' => 'join' ) );
 		MP_Audit::log( 'add', 'member', $ch->id, $name . ' به گروه مشتری «' . $ch->title . '»' );
-		if ( ! empty( $r['sms'] ) ) {
-			self::send_link( $ch, $mobile, $name );
+		if ( ! $sms ) {
+			return array( 'added' => true, 'sms' => null, 'error' => '' );
 		}
-		return self::settings_payload( $ch );
+		if ( ! MP_Auth::otp_enabled() ) {
+			return array( 'added' => true, 'sms' => false, 'error' => 'سرویس پیامک در تنظیمات افزونه روشن نیست.' );
+		}
+		$ok = self::send_link( $ch, $mobile, $name );
+		return array( 'added' => true, 'sms' => $ok, 'error' => $ok ? '' : MP_Messages::$last_error );
+	}
+
+	/** The customer's client group for a project; made when there is none yet. */
+	public static function group_for( $customer, $project_id ) {
+		global $wpdb;
+		$ch = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND client_id = %d AND project_id = %d AND archived_at IS NULL ORDER BY id LIMIT 1", $customer->id, $project_id ) );
+		if ( $ch ) {
+			return $ch;
+		}
+		$wpdb->insert(
+			self::t( 'channels' ),
+			array(
+				'type'        => 'client',
+				'project_id'  => (int) $project_id,
+				'title'       => MP_Util::text( $customer->name, 160 ),
+				'client_name' => MP_Util::text( $customer->name, 120 ),
+				'client_id'   => (int) $customer->id,
+				'token'       => wp_generate_password( 32, false, false ),
+				'created_by'  => get_current_user_id(),
+				'created_at'  => MP_Util::now(),
+			)
+		);
+		$id = (int) $wpdb->insert_id; // read before the audit log's own insert replaces it
+		MP_Audit::log( 'create', 'channel', $id, 'گروه مشتری «' . $customer->name . '» (خودکار)' );
+		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $id ) );
 	}
 
 	public static function remove_contact( WP_REST_Request $r ) {
@@ -601,7 +865,7 @@ class MP_Client {
 	}
 
 	private static function send_link( $ch, $mobile, $name ) {
-		return MP_Auth::text( $mobile, $name . ' عزیز، پرتال پروژه «' . $ch->title . '» در مربع استودیو: ' . self::url( $ch->token ) );
+		return MP_Messages::send_sms( 'portal_link', $mobile, array( 'NAME' => $name, 'GROUP' => $ch->title, 'LINK' => self::url( $ch->token ) ) );
 	}
 
 	public static function sms_link( WP_REST_Request $r ) {

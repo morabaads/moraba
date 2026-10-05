@@ -45,16 +45,16 @@ $mp_nav = array(
 		</div>
 		<nav class="nav" aria-label="بخش‌ها">
 			<?php foreach ( $mp_nav as $view => $item ) : ?>
-				<button type="button" class="nav-item<?php echo ! empty( $item[3] ) ? ' manager-only' : ''; ?>" data-view="<?php echo esc_attr( $view ); ?>" title="<?php echo esc_attr( $item[1] ); ?>">
+				<button type="button" class="nav-item<?php echo ! empty( $item[3] ) ? ' manager-only' : ''; ?>" data-view="<?php echo esc_attr( $view ); ?>">
 					<?php echo $mp_i( $item[0] ); // phpcs:ignore ?><span class="nav-label"><?php echo esc_html( $item[1] ); ?></span>
 					<?php if ( $item[2] ) : ?><span class="badge" data-count="<?php echo esc_attr( $item[2] ); ?>" hidden></span><?php endif; ?>
 				</button>
 			<?php endforeach; ?>
 		</nav>
 		<nav class="nav nav-bottom" aria-label="تنظیمات">
-			<button type="button" class="nav-item" data-action="settings" title="تنظیمات"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?><span class="nav-label">تنظیمات</span></button>
-			<button type="button" class="nav-item" data-action="help" title="راهنما"><?php echo $mp_i( 'help' ); // phpcs:ignore ?><span class="nav-label">راهنما</span></button>
-			<button type="button" class="nav-item" data-action="logout" title="خروج"><?php echo $mp_i( 'logout' ); // phpcs:ignore ?><span class="nav-label">خروج</span></button>
+			<button type="button" class="nav-item" data-action="settings"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?><span class="nav-label">تنظیمات</span></button>
+			<button type="button" class="nav-item" data-action="help"><?php echo $mp_i( 'help' ); // phpcs:ignore ?><span class="nav-label">راهنما</span></button>
+			<button type="button" class="nav-item" data-action="logout"><?php echo $mp_i( 'logout' ); // phpcs:ignore ?><span class="nav-label">خروج</span></button>
 		</nav>
 		<button type="button" class="collapse" aria-label="جمع کردن منو" aria-expanded="true"><?php echo $mp_i( 'right' ); // phpcs:ignore ?></button>
 	</aside>

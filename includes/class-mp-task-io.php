@@ -736,7 +736,7 @@ class MP_Task_IO {
 		MP_Audit::log( 'import', 'task', 0, 'ورود از اکسل «' . $data['file'] . '»: ' . MP_Jalali::digits( count( $batch['created'] ) ) . ' تسک جدید، ' . MP_Jalali::digits( count( $batch['updated'] ) ) . ' به‌روزرسانی برای ' . $who );
 		foreach ( $per_user as $uid => $n ) {
 			if ( $uid !== $me ) {
-				MP_Notify::send( $uid, 'task', wp_get_current_user()->display_name . ' برنامه کاری شما را از اکسل وارد کرد', MP_Jalali::digits( $n ) . ' تسک جدید در تقویم شما', 'calendar', 0, MP_Rest::wants_email( $uid ) );
+				MP_Notify::event( 'task_import', $uid, array( 'ACTOR' => wp_get_current_user()->display_name, 'COUNT' => MP_Jalali::digits( $n ) ), 'calendar', 0, MP_Rest::wants_email( $uid ) );
 			}
 		}
 		return array( 'batch' => self::summary( $batch ), 'history' => self::history() );

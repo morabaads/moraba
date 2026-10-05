@@ -527,9 +527,9 @@ class MP_Meet {
 					continue;
 				}
 				if ( $new ) {
-					MP_Notify::send( $p, 'meeting', wp_get_current_user()->display_name . ' شما را به جلسه «' . $title . '» دعوت کرد', $when, 'meetings', $id, MP_Rest::wants_email( $p ) );
+					MP_Notify::event( 'meet_invite', $p, array( 'ACTOR' => wp_get_current_user()->display_name, 'TITLE' => $title, 'WHEN' => $when ), 'meetings', $id, MP_Rest::wants_email( $p ) );
 				} elseif ( $moved ) {
-					MP_Notify::send( $p, 'meeting', 'زمان جلسه «' . $title . '» تغییر کرد', $when, 'meetings', $id, MP_Rest::wants_email( $p ) );
+					MP_Notify::event( 'meet_moved', $p, array( 'TITLE' => $title, 'WHEN' => $when ), 'meetings', $id, MP_Rest::wants_email( $p ) );
 				}
 			}
 		}
@@ -567,7 +567,7 @@ class MP_Meet {
 		if ( 'ended' !== $m->status && ! $m->permanent ) {
 			foreach ( self::people( $m->id ) as $p ) {
 				if ( $p !== get_current_user_id() ) {
-					MP_Notify::send( $p, 'meeting', 'جلسه «' . $m->title . '» لغو شد', MP_Jalali::format( $m->meeting_date ) . ' · ' . MP_Jalali::digits( $m->meeting_time ), 'meetings' );
+					MP_Notify::event( 'meet_cancel', $p, array( 'TITLE' => $m->title, 'DATE' => MP_Jalali::format( $m->meeting_date ), 'TIME' => MP_Jalali::digits( $m->meeting_time ) ), 'meetings' );
 				}
 			}
 		}
@@ -611,7 +611,7 @@ class MP_Meet {
 		$sent = false;
 		if ( $phone ) {
 			$when = $m->permanent ? '' : ' ' . MP_Jalali::format( $m->meeting_date ) . ' ساعت ' . MP_Jalali::digits( $m->meeting_time );
-			$sent = (bool) MP_Auth::text( $phone, ( '' !== $name ? $name . ' عزیز، ' : '' ) . 'دعوت به جلسه آنلاین «' . $m->title . '»' . $when . ': ' . $link );
+			$sent = MP_Messages::send_sms( 'meet_guest_invite', $phone, array( 'NAME' => '' !== $name ? $name : 'مهمان', 'TITLE' => $m->title, 'WHEN' => trim( $when ), 'LINK' => $link ) );
 		}
 		return array( 'link' => $link, 'sms' => $sent, 'phone' => $phone );
 	}
@@ -656,7 +656,7 @@ class MP_Meet {
 		if ( ! $old ) {
 			foreach ( array_unique( array_merge( self::people( $m->id ), array( (int) $m->created_by ) ) ) as $p ) {
 				if ( $p !== get_current_user_id() ) {
-					MP_Notify::send( $p, 'meeting', 'صورتجلسه «' . $m->title . '» ثبت شد', '', 'meetings', $m->id );
+					MP_Notify::event( 'meet_minutes', $p, array( 'TITLE' => $m->title ), 'meetings', $m->id );
 				}
 			}
 		}
@@ -882,10 +882,10 @@ class MP_Meet {
 			$link   = self::link( $m->token );
 			$people = array_unique( array_merge( self::people( $m->id ), array( (int) $m->created_by ) ) );
 			foreach ( $people as $p ) {
-				MP_Notify::send( $p, 'meeting', 'جلسه «' . $m->title . '» ساعت ' . MP_Jalali::digits( $m->meeting_time ) . ' شروع می‌شود', 'ورود: ' . $link, 'meetings', $m->id, true );
+				MP_Notify::event( 'meet_remind', $p, array( 'TITLE' => $m->title, 'TIME' => MP_Jalali::digits( $m->meeting_time ), 'LINK' => $link ), 'meetings', $m->id, true );
 			}
 			foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'meeting_invites' ) . " WHERE meeting_id = %d AND phone <> ''", $m->id ) ) as $i ) {
-				MP_Auth::text( $i->phone, 'یادآوری: جلسه آنلاین «' . $m->title . '» ساعت ' . MP_Jalali::digits( $m->meeting_time ) . ' شروع می‌شود: ' . add_query_arg( 'i', $i->code, $link ) );
+				MP_Messages::send_sms( 'meet_guest_remind', $i->phone, array( 'TITLE' => $m->title, 'TIME' => MP_Jalali::digits( $m->meeting_time ), 'LINK' => add_query_arg( 'i', $i->code, $link ) ) );
 			}
 		}
 	}
@@ -1068,7 +1068,7 @@ class MP_Meet {
 			if ( 'scheduled' === $m->status && ! $m->permanent ) {
 				foreach ( self::people( $m->id ) as $p ) {
 					if ( $p !== $uid ) {
-						MP_Notify::send( $p, 'meeting', 'جلسه «' . $m->title . '» شروع شد', 'ورود: ' . self::link( $m->token ), 'meetings', $m->id );
+						MP_Notify::event( 'meet_started', $p, array( 'TITLE' => $m->title, 'LINK' => self::link( $m->token ) ), 'meetings', $m->id );
 					}
 				}
 			}

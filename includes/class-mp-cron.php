@@ -35,7 +35,7 @@ class MP_Cron {
 			$wpdb->prepare( "SELECT * FROM $table WHERE fired_at IS NULL AND CONCAT(remind_date, ' ', remind_time) <= %s LIMIT 200", $now )
 		);
 		foreach ( $due as $r ) {
-			MP_Notify::send( $r->user_id, 'reminder', 'یادآوری: ' . $r->title, (string) $r->note, 'reminders', $r->id, true );
+			MP_Notify::event( 'reminder', $r->user_id, array( 'TITLE' => $r->title, 'NOTE' => (string) $r->note ), 'reminders', $r->id, true );
 			if ( 'none' === $r->repeat_every ) {
 				$wpdb->update( $table, array( 'fired_at' => MP_Util::now() ), array( 'id' => $r->id ) );
 				continue;

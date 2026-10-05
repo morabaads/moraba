@@ -1,6 +1,8 @@
 <?php
 defined( 'ABSPATH' ) || exit;
 $mp_ch = MP_Client::channel( $token );
+$mp_b  = MP_Client::brand();
+$mp_lc = $mp_b['custom_logo'] ? ' custom' : '';
 $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 ?><!doctype html>
 <html lang="fa" dir="rtl">
@@ -23,7 +25,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <main class="cp-login" id="cp-login" hidden>
 	<div class="cp-login-card">
 		<div class="cp-logos">
-			<img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="مربع استودیو" class="cp-studio-logo">
+			<img src="<?php echo esc_url( $mp_b['logo'] ); ?>" alt="<?php echo esc_attr( $mp_b['name'] ); ?>" class="cp-studio-logo<?php echo esc_attr( $mp_lc ); ?>">
 			<span class="cp-x" id="cp-login-x" hidden>×</span>
 			<img id="cp-login-client" alt="" hidden>
 		</div>
@@ -45,7 +47,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <!-- Portal -->
 <div class="app cp-app" id="cp-app" hidden>
 	<aside class="sidebar cp-side" aria-label="منوی پرتال">
-		<div class="brand"><img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="MORABA" class="brand-logo"></div>
+		<div class="brand"><img src="<?php echo esc_url( $mp_b['logo'] ); ?>" alt="<?php echo esc_attr( $mp_b['name'] ); ?>" class="brand-logo<?php echo esc_attr( $mp_lc ); ?>"></div>
 		<div class="cp-client">
 			<span class="cp-client-logo" id="cp-client-logo"></span>
 			<div><strong id="cp-client-name"></strong><small id="cp-project-name"></small></div>
@@ -56,10 +58,11 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 		</nav>
 	</aside>
 	<main class="main cp-main" id="main">
+		<div class="cp-preview" id="cp-preview" hidden role="status"><span class="cp-preview-dot"></span><div><strong id="cp-preview-who"></strong><small>فقط مشاهده؛ پیام، نظر و تأیید در این حالت ثبت نمی‌شود.</small></div><button type="button" class="cp-preview-end" id="cp-preview-end">پایان</button></div>
 		<header class="topbar cp-topbar">
-			<div class="cp-top-mobile"><img src="<?php echo MP_Frontend::asset( 'img/logo.png' ); // phpcs:ignore ?>" alt="مربع" class="cp-studio-logo sm"></div>
+			<div class="cp-top-mobile"><img src="<?php echo esc_url( $mp_b['logo'] ); ?>" alt="<?php echo esc_attr( $mp_b['name'] ); ?>" class="cp-studio-logo sm<?php echo esc_attr( $mp_lc ); ?>"></div>
 			<div class="hello"><strong id="cp-hello"></strong><span id="cp-hello-sub"></span></div>
-			<div class="topbar-tools"><time class="today-label" id="cp-today"></time><span class="cp-client-logo sm" id="cp-client-logo-m"></span><span class="cp-avatar" id="cp-me-avatar" hidden></span></div>
+			<div class="topbar-tools"><time class="today-label" id="cp-today"></time><button type="button" class="cp-me-btn" id="cp-me-btn" aria-haspopup="menu" aria-expanded="false" aria-label="حساب کاربری"><span class="cp-client-logo sm" id="cp-client-logo-m"></span><span class="cp-avatar" id="cp-me-avatar" hidden></span></button></div>
 		</header>
 		<div class="page-head cp-top"><div><h1 id="cp-page-title"></h1><p id="cp-page-sub"></p></div></div>
 		<section class="cp-pane" id="pane-progress" hidden></section>
@@ -72,8 +75,8 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 			<div class="cp-chat-card">
 				<header class="cp-chat-head">
 					<button type="button" class="icon-btn cp-chat-back" id="cp-chat-back" aria-label="بازگشت"><svg class="icon" aria-hidden="true"><use href="#right"></use></svg></button>
-					<span class="cp-chat-avatar"><img src="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>" alt=""></span>
-					<div class="cp-chat-title"><strong>تیم مربع استودیو</strong><small id="cp-chat-sub">گفت‌وگوی پروژه</small></div>
+					<span class="cp-chat-avatar"><img src="<?php echo esc_url( $mp_b['icon'] ); ?>" alt=""></span>
+					<div class="cp-chat-title"><strong><?php echo esc_html( $mp_b['name'] ); ?></strong><small id="cp-chat-sub">گفت‌وگوی پروژه</small></div>
 					<span class="cp-client-logo sm" id="cp-chat-client"></span>
 				</header>
 				<div id="chat-messages" class="chat-messages cp-messages"></div>

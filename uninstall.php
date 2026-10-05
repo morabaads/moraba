@@ -5,17 +5,19 @@
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 global $wpdb;
-$tables = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates' );
+$tables = array( 'folders', 'projects', 'project_members', 'sections', 'milestones', 'tasks', 'goals', 'notes', 'channels', 'messages', 'reads', 'meetings', 'meeting_people', 'reminders', 'notifications', 'ledger', 'task_items', 'task_comments', 'files', 'attendance', 'leaves', 'templates', 'timelog', 'audit', 'channel_members', 'daily_reports', 'invoices', 'client_items', 'design_pins', 'client_contacts', 'clients', 'client_projects', 'contracts', 'contract_templates', 'shortlinks' );
 foreach ( $tables as $name ) {
 	$wpdb->query( 'DROP TABLE IF EXISTS ' . $wpdb->prefix . 'mp_' . $name ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 }
-foreach ( array( 'mp_db_version', 'mp_slug', 'mp_support', 'mp_templates_seeded', 'mp_timelog_migrated', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_page_id', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_ai_key', 'mp_ai_url', 'mp_ai_model', 'mp_digest', 'mp_daily_report', 'mp_invoice_settings' ) as $option ) {
+foreach ( array( 'mp_db_version', 'mp_slug', 'mp_support', 'mp_templates_seeded', 'mp_timelog_migrated', 'mp_payroll', 'mp_payroll_holidays', 'mp_payroll_adj', 'mp_page_id', 'mp_email_notifications', 'mp_telegram_token', 'mp_bale_token', 'mp_sms_provider', 'mp_sms_key', 'mp_sms_sender', 'mp_smsir_key', 'mp_smsir_line', 'mp_smsir_template', 'mp_smsir_param', 'mp_vapid_private', 'mp_vapid_public', 'mp_speech_key', 'mp_speech_url', 'mp_speech_stt_model', 'mp_speech_tts_model', 'mp_speech_voice', 'mp_ai_key', 'mp_ai_url', 'mp_ai_model', 'mp_digest', 'mp_daily_report', 'mp_invoice_settings', 'mp_messages', 'mp_sms_log' ) as $option ) {
 	delete_option( $option );
 }
 delete_metadata( 'user', 0, 'mp_prefs', '', true );
 delete_metadata( 'user', 0, 'mp_last_seen', '', true );
 delete_metadata( 'user', 0, 'mp_job_title', '', true );
 delete_metadata( 'user', 0, 'mp_phone', '', true );
+delete_metadata( 'user', 0, 'mp_sms_test_phone', '', true );
+delete_metadata( 'user', 0, 'mp_pins', '', true );
 foreach ( array( 'mp_avatar_file', 'mp_avatar_public', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs' ) as $meta ) {
 	delete_metadata( 'user', 0, $meta, '', true );
 }

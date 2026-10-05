@@ -83,7 +83,34 @@
   $('cp-step-code').elements.code.addEventListener('input', function () { var v = latin(this.value).replace(/\D/g, ''); this.value = fa(v); if (v.length === 5) $('cp-step-code').requestSubmit(); });
   $('cp-change').onclick = function () { $('cp-step-code').hidden = true; $('cp-step-mobile').hidden = false; loginError(''); };
   $('cp-resend').onclick = function () { requestCode(loginMobile); };
-  $('cp-logout').onclick = function () { api('/logout', {}).then(function () { location.reload(); }); };
+  function logout() { api('/logout', {}).then(function () { location.reload(); }).catch(function () { location.reload(); }); }
+  $('cp-logout').onclick = logout;
+  /* Header circle: who is logged in, the project, and «خروج از حساب». */
+  var meMenu = null;
+  function closeMe() { if (!meMenu) return; meMenu.remove(); meMenu = null; $('cp-me-btn').setAttribute('aria-expanded', 'false'); document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escMe, true); }
+  function outside(e) { if (meMenu && !meMenu.contains(e.target) && !$('cp-me-btn').contains(e.target)) closeMe(); }
+  function escMe(e) { if (e.key === 'Escape') { closeMe(); $('cp-me-btn').focus(); } }
+  $('cp-me-btn').onclick = function () {
+    if (meMenu) { closeMe(); return; }
+    if (!me) return;
+    var b = this.getBoundingClientRect();
+    meMenu = h('div', { class: 'cp-me-menu', role: 'menu' }, [
+      h('div', { class: 'cp-me-head' }, [
+        me.logged_in ? h('span', { class: 'cp-avatar', text: initials(me.name) }) : h('span', { class: 'cp-client-logo sm' }),
+        h('div', null, [h('strong', { text: me.logged_in ? me.name : (me.client || me.title) }), h('small', { text: (me.client || '') + (me.client && me.title ? ' · ' : '') + me.title })])]),
+      me.logged_in ? h('button', { type: 'button', role: 'menuitem', class: 'cp-me-out', html: icon('logout') + '<span>' + (me.preview ? 'پایان نمای مشتری' : 'خروج از حساب') + '</span>', onclick: function () { closeMe(); logout(); } })
+        : h('p', { class: 'cp-me-note', text: 'برای این پرتال ورود با شماره موبایل لازم نیست.' })
+    ]);
+    if (!me.logged_in) logoInto(meMenu.querySelector('.cp-client-logo'), me.logo, me.client || me.title);
+    meMenu.style.top = (b.bottom + 8) + 'px';
+    meMenu.style.left = Math.max(8, Math.min(b.left, innerWidth - Math.min(280, innerWidth - 16) - 8)) + 'px';
+    document.body.append(meMenu);
+    this.setAttribute('aria-expanded', 'true');
+    var out = meMenu.querySelector('.cp-me-out'); if (out) out.focus({ preventScroll: true });
+    document.addEventListener('pointerdown', outside, true);
+    document.addEventListener('keydown', escMe, true);
+  };
+  window.addEventListener('resize', closeMe);
 
   /* ------------------------------------------------------------ shell */
   function badge(k) {
@@ -104,10 +131,16 @@
       side.append(h('button', { type: 'button', class: 'nav-item' + (t[0] === tab ? ' active' : ''), 'aria-current': t[0] === tab ? 'page' : null, onclick: function () { go(t[0]); } }, [
         h('span', { class: 'cp-ni', html: icon(t[2]) }), h('span', { class: 'nav-label', text: t[1] }), n ? h('span', { class: 'badge', text: fa(n) }) : null]));
     });
-    var bar = $('cp-tabbar'); bar.replaceChildren();
+    // Same tabs as before: only move «on», so the pill animates instead of being redrawn.
+    var bar = $('cp-tabbar'), key = list.map(function (t) { return t[0] + ':' + badge(t[0]); }).join(',');
+    if (bar.dataset.key === key) {
+      Array.prototype.forEach.call(bar.children, function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
+      return;
+    }
+    bar.dataset.key = key; bar.replaceChildren();
     list.forEach(function (t) {
       var n = badge(t[0]);
-      bar.append(h('button', { type: 'button', class: 'cp-tab' + (t[0] === tab ? ' on' : ''), onclick: function () { go(t[0]); } }, [
+      bar.append(h('button', { type: 'button', 'data-tab': t[0], class: 'cp-tab' + (t[0] === tab ? ' on' : ''), onclick: function () { go(t[0]); } }, [
         h('span', { class: 'cp-tab-ico', html: icon(t[2]) }), h('span', { class: 'cp-tab-label', text: t[0] === 'files' ? 'فایل‌ها' : t[0] === 'progress' ? 'پیشرفت' : t[1] }), n ? h('i', { text: fa(n) }) : null]));
     });
   }
@@ -126,8 +159,10 @@
     tab = k; tabs();
     // Like the team's panel: an open conversation takes the whole screen.
     document.body.classList.toggle('cp-chat-full', k === 'chat');
+    document.body.dataset.tab = k;
     $('cp-chat-back').hidden = !(data && data.project);
     TABS.forEach(function (t) { $('pane-' + t[0]).hidden = t[0] !== k; });
+    if (k !== 'chat') enter($('pane-' + k));
     $('cp-page-title').textContent = TABS.filter(function (t) { return t[0] === k; })[0][1];
     $('cp-page-sub').textContent = SUB[k]();
     try { history.replaceState(null, '', '#' + k); } catch (e) { /* file: */ }
@@ -140,40 +175,171 @@
     var r = 52, c = 2 * Math.PI * r;
     return '<svg viewBox="0 0 120 120" class="cp-ring"><circle cx="60" cy="60" r="' + r + '" class="bg"/><circle cx="60" cy="60" r="' + r + '" class="fg" stroke-dasharray="' + c + '" stroke-dashoffset="' + (c * (1 - pct / 100)) + '"/></svg>';
   }
+  /* ------------------------------------------------------------ motion helpers */
+  var calm = function () { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; };
+  /** Children of a pane enter one after another (CSS reads --i). */
+  function enter(pane) {
+    if (!pane || calm()) return;
+    Array.prototype.forEach.call(pane.children, function (c, i) { c.style.setProperty('--i', Math.min(i, 8)); });
+    pane.classList.remove('cp-in'); void pane.offsetWidth; pane.classList.add('cp-in');
+  }
+  /** A number that counts up to its value once. */
+  function countUp(node, to, suffix) {
+    if (calm() || !to) { node.textContent = fa(to) + (suffix || ''); return; }
+    var t0 = Date.now(), dur = 900;
+    (function step() {
+      var k = Math.min(1, (Date.now() - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      node.textContent = fa(Math.round(to * e)) + (suffix || '');
+      if (k < 1) setTimeout(step, 16);
+    })();
+  }
+
+  /* ------------------------------------------------------------ project home */
+  var homeShown = false;
   function progress() {
-    var p = data.project, pane = $('pane-progress'), t = today();
+    var p = data.project, pane = $('pane-progress'), t = today(), first = !homeShown;
+    homeShown = true;
     var left = p.end ? daysBetween(t, p.end) : null;
-    var pend = data.designs.filter(function (d) { return d.status === 'pending'; }).length;
-    var unpaid = data.invoices.filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; });
-    pane.replaceChildren(
-      h('div', { class: 'cp-hero' }, [
-        h('div', { class: 'cp-ring-wrap', html: ring(p.progress) + '<div class="cp-ring-num"><b>' + fa(p.progress) + '٪</b><small>انجام شده</small></div>' }),
-        h('div', { class: 'cp-hero-copy' }, [
-          h('span', { class: 'chip ' + (p.status === 'done' ? 'ok' : 'brand'), text: PST[p.status] || '' }),
-          h('h2', { text: p.name }),
-          h('p', { text: jal(p.start) + ' تا ' + jal(p.end) }),
-          left !== null ? h('div', { class: 'cp-left' + (left < 0 && p.status !== 'done' ? ' late' : '') }, [h('b', { text: p.status === 'done' ? 'تحویل شد 🎉' : left >= 0 ? fa(left) : fa(-left) }), h('span', { text: p.status === 'done' ? '' : left >= 0 ? 'روز تا تحویل' : 'روز از موعد گذشته' })]) : null
-        ])
-      ]),
-      h('div', { class: 'kpis cp-stats' }, [
-        stat('eye', 'طرح منتظر نظر شما', fa(pend), pend ? function () { go('designs'); } : null, pend ? 'warn' : ''),
-        stat('download', 'فایل تحویلی', fa(data.files.length), data.files.length ? function () { go('files'); } : null),
-        stat('file', 'فاکتور منتظر پرداخت', unpaid.length ? money(unpaid.reduce(function (s, x) { return s + x.total; }, 0)) : '—', unpaid.length ? function () { go('invoices'); } : null, unpaid.length ? 'warn' : ''),
-        stat('pie', 'مرحله‌های انجام‌شده', fa(p.milestones.filter(function (m) { return m.status === 'done'; }).length) + ' از ' + fa(p.milestones.length))
-      ])
-    );
+    var span = p.start && p.end ? Math.max(1, daysBetween(p.start, p.end)) : 0;
+    var elapsed = span ? Math.min(100, Math.max(0, Math.round(daysBetween(p.start, t) / span * 100))) : 0;
+    var tasks = p.tasks || [], doneT = tasks.filter(function (x) { return x.status === 'done'; }).length;
+    var late = left !== null && left < 0 && p.status !== 'done';
+
+    // Hero: name, ring, days left, the road from start to delivery.
+    var r = 46, c = 2 * Math.PI * r;
+    var ring = h('div', { class: 'cp-ring2', html: '<svg viewBox="0 0 108 108"><defs><linearGradient id="cpg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb35c"/><stop offset="1" stop-color="#f28a24"/></linearGradient></defs><circle cx="54" cy="54" r="' + r + '" class="bg"/><circle cx="54" cy="54" r="' + r + '" class="fg" stroke-dasharray="' + c + '" stroke-dashoffset="' + (first && !calm() ? c : c * (1 - p.progress / 100)) + '"/></svg>' });
+    var pct = h('b', { text: first ? fa(0) + '٪' : fa(p.progress) + '٪' });
+    ring.append(h('div', { class: 'cp-ring2-num' }, [pct, h('small', { text: 'پیشرفت' })]));
+    var hero = h('section', { class: 'cp-hero2' + (p.status === 'done' ? ' done' : '') }, [
+      h('div', { class: 'cp-h2-top' }, [
+        h('span', { class: 'cp-h2-kicker', text: 'پروژه شما' }),
+        h('span', { class: 'cp-h2-status ' + (p.status || ''), text: p.status === 'done' ? 'تحویل شد' : PST[p.status] || '' })]),
+      h('h2', { text: p.name }),
+      h('div', { class: 'cp-h2-body' }, [ring, h('div', { class: 'cp-h2-facts' }, [
+        h('div', { class: 'cp-fact' + (late ? ' late' : '') }, [h('b', { text: p.status === 'done' ? '✓' : left === null ? '—' : fa(Math.abs(left)) }), h('small', { text: p.status === 'done' ? 'تحویل شده' : left === null ? 'بدون موعد' : late ? 'روز از موعد گذشته' : left === 0 ? 'امروز روز تحویل است' : 'روز تا تحویل' })]),
+        tasks.length ? h('div', { class: 'cp-fact' }, [h('b', { text: fa(doneT) + '/' + fa(tasks.length) }), h('small', { text: 'کار انجام شده' })]) : null
+      ])]),
+      span ? h('div', { class: 'cp-road' }, [
+        h('div', { class: 'cp-road-track' }, [h('i', { style: 'width:' + elapsed + '%' }), h('span', { class: 'cp-road-now', style: 'inset-inline-start:' + elapsed + '%' }, [h('em', { text: 'امروز' })])]),
+        h('div', { class: 'cp-road-ends' }, [h('span', { text: 'شروع · ' + jal(p.start, false) }), h('span', { text: 'تحویل · ' + jal(p.end, false) })])
+      ]) : null
+    ]);
+    if (first) {
+      setTimeout(function () { var fg = ring.querySelector('.fg'); if (fg) fg.style.strokeDashoffset = c * (1 - p.progress / 100); }, 80);
+      countUp(pct, p.progress, '٪');
+    }
+
+    pane.replaceChildren(hero, actions(t), tiles(p, doneT, tasks.length));
     if (p.milestones.length) {
-      pane.append(h('article', { class: 'cp-card' }, [h('h3', { text: 'مراحل پروژه' }), h('ol', { class: 'cp-steps' }, p.milestones.map(function (m) {
+      pane.append(h('article', { class: 'cp-card' }, [h('h3', { class: 'cp-h', html: icon('target') + '<span>مراحل پروژه</span>' }), h('ol', { class: 'cp-steps' }, p.milestones.map(function (m) {
         var now = m.status !== 'done' && m.start <= t && m.end >= t;
         return h('li', { class: m.status + (now ? ' now' : '') }, [h('span', { class: 'dot', html: m.status === 'done' ? icon('check') : '' }), h('div', null, [h('strong', { text: m.title }), h('small', { text: jal(m.start, false) + ' تا ' + jal(m.end, false) + ' · ' + (m.status === 'done' ? 'انجام شد' : now ? 'در حال انجام' : PST[m.status] || '') })])]);
       }))]));
     }
+    if (tasks.length) pane.append(taskBoard(tasks, t));
     var secs = p.sections.filter(function (s) { return s.total; });
-    if (secs.length) pane.append(h('article', { class: 'cp-card' }, [h('h3', { text: 'پیشرفت بخش‌ها' })].concat(secs.map(function (s) {
+    if (secs.length) pane.append(h('article', { class: 'cp-card' }, [h('h3', { class: 'cp-h', html: icon('grid') + '<span>پیشرفت بخش‌ها</span>' })].concat(secs.map(function (s) {
       var pc = Math.round(s.done / s.total * 100);
       return h('div', { class: 'cp-sec' }, [h('span', { text: s.title }), h('div', { class: 'cp-bar' }, [h('i', { style: 'width:' + pc + '%' })]), h('b', { text: fa(pc) + '٪' })]);
     }))));
   }
+
+  /** «کارهای شما»: everything waiting on the client, each with one clear button. */
+  function actions(t) {
+    var list = [];
+    var live = (data.meetings || []).filter(function (x) { return x.status === 'live'; })[0];
+    if (live) list.push({ tone: 'live', ic: 'video', title: 'جلسه «' + live.title + '» همین حالا برگزار می‌شود', sub: 'تیم منتظر شماست', cta: 'ورود به جلسه', href: live.link });
+    var pend = data.designs.filter(function (d) { return d.status === 'pending'; });
+    if (pend.length) list.push({ tone: 'brand', ic: 'eye', title: pend.length > 1 ? fa(pend.length) + ' طرح منتظر نظر شماست' : 'طرح «' + pend[0].title + '» منتظر نظر شماست', sub: 'روی طرح نظر بدهید، تأیید کنید یا تغییر بخواهید', cta: 'دیدن طرح', run: function () { go('designs'); if (pend.length === 1) review(pend[0]); } });
+    (data.contracts || []).filter(function (x) { return x.status === 'sent'; }).forEach(function (x) {
+      list.push({ tone: 'brand', ic: 'edit', title: 'قرارداد ' + fa(x.number) + ' منتظر امضای شماست', sub: x.title || 'مطالعه و امضای آنلاین با کد پیامکی', cta: 'مطالعه و امضا', href: x.url });
+    });
+    data.invoices.filter(function (x) { return x.kind === 'proforma' && x.status === 'sent'; }).forEach(function (x) {
+      list.push({ tone: 'brand', ic: 'file', title: 'پیش‌فاکتور ' + fa(x.number) + ' منتظر تأیید شماست', sub: money(x.total), cta: 'مشاهده و تأیید', href: x.url });
+    });
+    data.invoices.filter(function (x) { return x.kind === 'invoice' && x.status === 'sent'; }).forEach(function (x) {
+      list.push({ tone: 'pay', ic: 'wallet', title: 'فاکتور ' + fa(x.number) + ' منتظر پرداخت', sub: money(x.total), cta: x.pay ? 'پرداخت آنلاین' : 'مشاهده فاکتور', run: x.pay ? function () { payNow(x); } : null, href: x.pay ? null : x.url });
+    });
+    var next = (data.meetings || []).filter(function (x) { return x.status !== 'live' && x.status !== 'ended' && x.date >= t; }).sort(function (a, b) { return (a.date + a.time).localeCompare(b.date + b.time); })[0];
+    var box = h('section', { class: 'cp-actions' }, [h('h3', { class: 'cp-h', html: icon('bell') + '<span>کارهای شما</span>' + (list.length ? '<em>' + fa(list.length) + '</em>' : '') })]);
+    if (!list.length) box.append(h('div', { class: 'cp-act calm' }, [h('span', { class: 'cp-act-ico', html: icon('check') }), h('div', { class: 'cp-act-copy' }, [h('strong', { text: 'همه‌چیز طبق برنامه است' }), h('small', { text: 'فعلاً کاری از سمت شما لازم نیست؛ هر وقت چیزی برای بررسی آماده شد، همین‌جا می‌بینید.' })])]));
+    list.forEach(function (a) {
+      var btn = a.href ? h('a', { class: 'cp-act-btn', href: a.href, target: '_blank', rel: 'noopener', text: a.cta }) : h('button', { type: 'button', class: 'cp-act-btn', text: a.cta, onclick: a.run });
+      box.append(h('div', { class: 'cp-act ' + a.tone }, [h('span', { class: 'cp-act-ico', html: icon(a.ic) }), h('div', { class: 'cp-act-copy' }, [h('strong', { text: a.title }), a.sub ? h('small', { text: a.sub }) : null]), btn]));
+    });
+    if (next) box.append(h('button', { type: 'button', class: 'cp-act soft', onclick: function () { go('meetings'); } }, [h('span', { class: 'cp-act-ico', html: icon('video') }), h('div', { class: 'cp-act-copy' }, [h('strong', { text: 'جلسه بعدی: ' + next.title }), h('small', { text: (next.date === t ? 'امروز' : jal(next.date)) + ' · ساعت ' + fa(next.time) })]), h('span', { class: 'cp-act-chev', html: icon('left') })]));
+    return box;
+  }
+
+  /** Four tappable summary tiles. */
+  function tiles(p, doneT, totalT) {
+    var ok = data.designs.filter(function (d) { return d.status === 'approved'; }).length;
+    var mdone = p.milestones.filter(function (m) { return m.status === 'done'; }).length;
+    function tile(ic, label, value, sub, to) {
+      return h(to ? 'button' : 'div', { type: to ? 'button' : null, class: 'cp-tile', onclick: to ? function () { go(to); } : null }, [
+        h('span', { class: 'cp-tile-ico', html: icon(ic) }), h('b', { text: value }), h('small', { text: label }), sub ? h('i', { text: sub }) : null]);
+    }
+    return h('div', { class: 'cp-tiles' }, [
+      tile('eye', 'طرح‌ها', fa(data.designs.length), data.designs.length ? fa(ok) + ' تأیید شده' : 'هنوز طرحی نیست', data.designs.length ? 'designs' : null),
+      tile('download', 'فایل تحویلی', fa(data.files.length), data.files.length ? 'آماده دانلود' : '', data.files.length ? 'files' : null),
+      tile('tasks', 'کار انجام‌شده', totalT ? fa(doneT) + '/' + fa(totalT) : '—', '', null),
+      tile('target', 'مرحله', p.milestones.length ? fa(mdone) + '/' + fa(p.milestones.length) : '—', '', null)
+    ]);
+  }
+
+  /* The project's tasks by schedule: status of each, filters, and the checklist on tap. */
+  var taskFilter = 'all', taskMore = false;
+  var TST = { todo: 'انجام نشده', doing: 'در حال انجام', done: 'انجام شد', late: 'عقب افتاده' };
+  function taskState(x, t) { return x.status === 'done' ? 'done' : x.status === 'doing' ? 'doing' : x.date < t ? 'late' : 'todo'; }
+  function taskBoard(all, t) {
+    var card = h('article', { class: 'cp-card cp-tasks' });
+    function draw() {
+      var counts = { all: all.length, doing: 0, todo: 0, late: 0, done: 0 };
+      all.forEach(function (x) { counts[taskState(x, t)]++; });
+      var list = all.filter(function (x) { var s = taskState(x, t); return taskFilter === 'all' || s === taskFilter || (taskFilter === 'todo' && s === 'late'); });
+      var LIMIT = 40, shown = taskMore ? list : list.slice(0, LIMIT);
+      var filters = h('div', { class: 'cp-tfilters', role: 'tablist' }, [['all', 'همه'], ['doing', 'در حال انجام'], ['todo', 'باقی‌مانده'], ['done', 'انجام‌شده']].map(function (f) {
+        var n = f[0] === 'todo' ? counts.todo + counts.late : counts[f[0]];
+        return h('button', { type: 'button', role: 'tab', 'aria-selected': String(taskFilter === f[0]), onclick: function () { taskFilter = f[0]; taskMore = false; draw(); } }, [document.createTextNode(f[1] + ' '), h('span', { text: fa(n) })]);
+      }));
+      var rows = h('ol', { class: 'cp-tlist' }), lastDay = '';
+      shown.forEach(function (x) {
+        if (x.date !== lastDay) {
+          lastDay = x.date;
+          rows.append(h('li', { class: 'cp-tday' + (x.date === t ? ' today' : '') }, [h('span', { text: x.date === t ? 'امروز · ' + jal(x.date) : jal(x.date) })]));
+        }
+        var st = taskState(x, t), done = x.items.filter(function (i) { return i.done; }).length;
+        var row = h('li', { class: 'cp-task ' + st });
+        var head = h('button', { type: 'button', class: 'cp-task-head', 'aria-expanded': 'false', disabled: x.items.length ? null : '' }, [
+          h('span', { class: 'cp-tdot', html: st === 'done' ? icon('check') : '' }),
+          h('span', { class: 'cp-tcopy' }, [h('strong', { text: x.title }), h('small', { text: [TST[st], x.time ? 'ساعت ' + fa(x.time) : '', x.section].filter(Boolean).join(' · ') })]),
+          x.items.length ? h('span', { class: 'cp-tcheck', text: fa(done) + '/' + fa(x.items.length) }) : null,
+          x.items.length ? h('span', { class: 'cp-tchev', html: icon('down') }) : null
+        ]);
+        row.append(head);
+        if (x.items.length) {
+          var box = h('ul', { class: 'cp-tchecklist', hidden: '' }, x.items.map(function (i) {
+            return h('li', { class: i.done ? 'done' : '' }, [h('span', { class: 'cp-tcb', html: i.done ? icon('check') : '' }), h('span', { text: i.text })]);
+          }));
+          var bar = h('div', { class: 'cp-bar' }, [h('i', { style: 'width:' + Math.round(done / x.items.length * 100) + '%' })]);
+          var wrap = h('div', { class: 'cp-tdetail', hidden: '' }, [bar, box]);
+          box.hidden = false;
+          head.onclick = function () { var open = wrap.hidden; wrap.hidden = !open; head.setAttribute('aria-expanded', String(open)); row.classList.toggle('open', open); };
+          row.append(wrap);
+        }
+        rows.append(row);
+      });
+      card.replaceChildren(
+        h('div', { class: 'cp-tasks-head' }, [h('h3', { class: 'cp-h', html: icon('tasks') + '<span>برنامه کارهای پروژه</span>' }), h('small', { text: fa(counts.done) + ' از ' + fa(counts.all) + ' کار انجام شده' + (counts.late ? ' · ' + fa(counts.late) + ' عقب افتاده' : '') })]),
+        filters,
+        shown.length ? rows : h('p', { class: 'cp-tempty', text: 'کاری در این دسته نیست.' }),
+        list.length > shown.length ? h('button', { type: 'button', class: 'btn btn-ghost btn-sm cp-tmore', text: 'نمایش ' + fa(list.length - shown.length) + ' کار دیگر', onclick: function () { taskMore = true; draw(); } }) : null
+      );
+    }
+    draw();
+    return card;
+  }
+
   function stat(ic, label, value, onclick, tone) {
     // Same KPI card as the panel's dashboard.
     return h('article', { class: 'card kpi' + (onclick ? '' : ' static'), tabindex: onclick ? '0' : null, role: onclick ? 'button' : null, onclick: onclick }, [h('div', { class: 'kpi-icon' + (tone === 'warn' ? ' warn' : ''), html: icon(ic) }), h('div', { class: 'kpi-copy' }, [h('small', { text: label }), h('strong', { text: value })])]);
@@ -221,7 +387,7 @@
   function ext(n) { return (String(n).split('.').pop() || '').toUpperCase().slice(0, 4); }
   function files() {
     var pane = $('pane-files');
-    pane.replaceChildren(data.files.length ? h('div', { class: 'cp-card cp-list' }, data.files.map(function (f) {
+    pane.replaceChildren(data.files.length ? h('div', { class: 'cp-list2' }, data.files.map(function (f) {
       return h('a', { class: 'cp-row', href: f.file.url, target: '_blank', rel: 'noopener', download: f.file.name }, [
         f.file.image ? h('img', { class: 'cp-row-ico', src: f.file.url, alt: '' }) : h('span', { class: 'cp-row-ico', text: ext(f.file.name) }),
         h('div', { class: 'cp-row-copy' }, [h('strong', { text: f.title }), h('small', { text: jal(f.created_at) + (f.note ? ' · ' + f.note : '') })]),
@@ -235,8 +401,8 @@
   }
   function invoices() {
     var pane = $('pane-invoices');
-    pane.replaceChildren(data.invoices.length ? h('div', { class: 'cp-card cp-list' }, data.invoices.map(function (x) {
-      return h('a', { class: 'cp-row', href: x.url, target: '_blank', rel: 'noopener' }, [
+    pane.replaceChildren(data.invoices.length ? h('div', { class: 'cp-list2' }, data.invoices.map(function (x) {
+      return h('a', { class: 'cp-row' + (x.status === 'paid' ? ' paid' : x.kind === 'invoice' && x.status === 'sent' ? ' due' : ''), href: x.url, target: '_blank', rel: 'noopener' }, [
         h('span', { class: 'cp-row-ico', html: icon('file') }),
         h('div', { class: 'cp-row-copy' }, [h('strong', { text: (x.kind === 'proforma' ? 'پیش‌فاکتور ' : 'فاکتور ') + fa(x.number) + (x.title ? ' — ' + x.title : '') }), h('small', { text: jal(x.date) })]),
         h('div', { class: 'cp-row-end' }, [h('b', { text: money(x.total) }), h('span', { class: 'chip ' + (x.status === 'paid' ? 'ok' : x.status === 'cancelled' ? 'danger' : 'brand'), text: x.kind === 'proforma' && x.status === 'sent' ? 'منتظر تأیید' : IST[x.status] || '' }),
@@ -246,9 +412,9 @@
 
   function contracts() {
     var pane = $('pane-contracts'), list = data.contracts || [];
-    pane.replaceChildren(list.length ? h('div', { class: 'cp-card cp-list' }, list.map(function (x) {
+    pane.replaceChildren(list.length ? h('div', { class: 'cp-list2' }, list.map(function (x) {
       var signed = x.status === 'signed', waiting = x.status === 'client_signed';
-      return h('a', { class: 'cp-row', href: x.url, target: '_blank', rel: 'noopener' }, [
+      return h('a', { class: 'cp-row' + (signed ? ' paid' : waiting ? '' : ' due'), href: x.url, target: '_blank', rel: 'noopener' }, [
         h('span', { class: 'cp-row-ico', html: icon('edit') }),
         h('div', { class: 'cp-row-copy' }, [h('strong', { text: 'قرارداد ' + fa(x.number) + (x.title ? ' — ' + x.title : '') }), h('small', { text: signed ? 'امضا شده توسط ' + x.signer + ' · ' + jal(x.signed_at) : 'ارسال شده ' + jal(x.sent_at) })]),
         h('div', { class: 'cp-row-end' }, [signed ? h('span', { class: 'chip ok', text: 'امضاشده ✓' }) : waiting ? h('span', { class: 'chip brand', text: 'منتظر امضای مجری' }) : h('span', { class: 'btn btn-primary btn-sm', text: 'مطالعه و امضا' })])]);
@@ -258,9 +424,9 @@
   function meetings() {
     var pane = $('pane-meetings'), list = (data && data.meetings) || [];
     if (!pane) return;
-    pane.replaceChildren(list.length ? h('div', { class: 'cp-card cp-list' }, list.map(function (x) {
+    pane.replaceChildren(list.length ? h('div', { class: 'cp-list2' }, list.map(function (x) {
       var live = x.status === 'live';
-      return h('a', { class: 'cp-row', href: x.link, target: '_blank', rel: 'noopener' }, [
+      return h('a', { class: 'cp-row' + (live ? ' live' : ''), href: x.link, target: '_blank', rel: 'noopener' }, [
         h('span', { class: 'cp-row-ico', html: icon('video') }),
         h('div', { class: 'cp-row-copy' }, [h('strong', { text: x.title }), h('small', { text: jal(x.date) + ' · ساعت ' + fa(x.time) + (x.duration ? ' · ' + fa(x.duration) + ' دقیقه' : '') })]),
         h('div', { class: 'cp-row-end' }, [live ? h('span', { class: 'btn btn-primary btn-sm', text: 'ورود؛ جلسه شروع شده' }) : h('span', { class: 'btn btn-secondary btn-sm', text: 'ورود به جلسه' })])]);
@@ -304,7 +470,7 @@
         if (day !== lastDay) { lastDay = day; box.append(h('div', { class: 'day-sep', text: day === today() ? 'امروز' : jal(day) })); }
         if (m.kind === 'system') { if (!first && m.meta && m.meta.t !== 'join') stale = true; box.append(sysCard(m)); return; }
         var mine = !m.team;
-        var b = h('div', { class: 'bubble' }, [h('span', { class: 'b-author', text: m.author + (m.team ? ' · تیم مربع' : '') })]);
+        var b = h('div', { class: 'bubble' }, [h('span', { class: 'b-author', text: m.author + (m.team ? ' · ' + ((me && me.team) || 'تیم مربع') : '') })]);
         if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
         else if (m.file && m.file.image) b.append(h('a', { href: m.file.url, target: '_blank', rel: 'noopener' }, [h('img', { class: 'b-img', src: m.file.url, alt: m.file.name })]));
         else if (m.file) b.append(h('a', { class: 'file-chip', href: m.file.url, target: '_blank', rel: 'noopener', html: icon('clip') + '<span></span>' }));
@@ -355,8 +521,18 @@
       $('cp-hello').textContent = (hr < 12 ? 'صبح بخیر' : hr < 17 ? 'روز بخیر' : 'عصر بخیر') + (first ? '، ' + first : '');
       $('cp-hello-sub').textContent = (m.client || '') + (m.client && m.title ? ' · ' : '') + m.title;
       var tj = j(today()); $('cp-today').textContent = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'][new Date().getDay()] + ' ' + fa(tj[2]) + ' ' + MONTHS[tj[1] - 1] + ' ' + fa(tj[0]);
-      if (m.logged_in) { $('cp-logout').hidden = false; $('cp-me-avatar').hidden = false; $('cp-me-avatar').textContent = initials(m.name); $('cp-me-avatar').title = m.name; }
+      // Staff seeing the portal as this client: a banner, and nothing can be sent.
+      if (m.preview) {
+        $('cp-preview').hidden = false; document.body.classList.add('cp-previewing');
+        $('cp-preview-who').textContent = 'نمای مشتری: ' + (m.name || 'مشتری');
+        $('cp-preview-end').onclick = function () { logout(); };
+        form.querySelector('textarea').placeholder = 'در حالت نمای مشتری پیام فرستاده نمی‌شود';
+        form.querySelector('textarea').disabled = true; form.querySelector('.cp-send').disabled = true;
+      }
+      if (m.logged_in) { $('cp-logout').hidden = false; $('cp-me-avatar').hidden = false; $('cp-me-avatar').textContent = initials(m.name); $('cp-client-logo-m').hidden = true; }
       else { form.elements.name.hidden = false; try { form.elements.name.value = localStorage.getItem('mp-client-name') || ''; } catch (e) { /* private */ } }
+      var sk = $('pane-progress'); sk.hidden = false;
+      sk.replaceChildren(h('div', { class: 'cp-sk hero' }), h('div', { class: 'cp-sk act' }), h('div', { class: 'cp-sk-row' }, [h('div', { class: 'cp-sk tile' }), h('div', { class: 'cp-sk tile' }), h('div', { class: 'cp-sk tile' }), h('div', { class: 'cp-sk tile' })]), h('div', { class: 'cp-sk card' }));
       return api('/portal').then(function (d) {
         data = d;
         var want = (location.hash || '').slice(1);
@@ -364,7 +540,7 @@
         if (!d.project) tab = want === 'meetings' && (d.meetings || []).length ? 'meetings' : 'chat';
         else {
           progress(); designs(); files(); invoices(); contracts();
-          tab = TABS.some(function (t) { return t[0] === want; }) ? want : d.designs.some(function (x) { return x.status === 'pending'; }) ? 'designs' : 'progress';
+          tab = TABS.some(function (t) { return t[0] === want; }) ? want : 'progress'; // the home lists anything waiting (designs, invoices…)
         }
         go(tab);
         clearInterval(chatTimer);

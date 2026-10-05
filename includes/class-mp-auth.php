@@ -107,88 +107,62 @@ class MP_Auth {
 		return array( 'code' => $code, 'body' => is_array( $body ) ? $body : array() );
 	}
 
-	/** Plain text message (notifications). Non-blocking; returns true when handed to a provider. */
-	public static function text( $mobile, $message ) {
-		$mobile = self::normalize( $mobile );
+	/**
+	 * Plain text message. Non-blocking by default (returns true when handed to a provider);
+	 * blocking returns whether the provider accepted it and sets $last_error otherwise.
+	 */
+	public static function text( $mobile, $message, $blocking = false ) {
+		self::$last_error = '';
+		$mobile           = self::normalize( $mobile );
 		if ( ! $mobile ) {
+			self::$last_error = 'شماره موبایل معتبر نیست.';
 			return false;
 		}
 		switch ( self::provider() ) {
 			case 'smsir':
 				if ( ! get_option( 'mp_smsir_line', '' ) ) {
+					self::$last_error = 'شماره خط sms.ir خالی است؛ پیامک متن عادی بدون خط ارسال نمی‌شود (برای این پیام پترن ثبت کنید یا شماره خط را وارد کنید).';
 					return false;
 				}
-				wp_remote_post(
-					'https://api.sms.ir/v1/send/bulk',
-					array(
-						'blocking' => false,
-						'timeout'  => 5,
-						'headers'  => array( 'X-API-KEY' => get_option( 'mp_smsir_key' ), 'Content-Type' => 'application/json', 'Accept' => 'text/plain' ),
-						'body'     => wp_json_encode( array( 'lineNumber' => (int) get_option( 'mp_smsir_line' ), 'messageText' => $message, 'mobiles' => array( $mobile ) ) ),
-					)
+				$args = array(
+					'headers' => array( 'X-API-KEY' => get_option( 'mp_smsir_key' ), 'Content-Type' => 'application/json', 'Accept' => 'text/plain' ),
+					'body'    => wp_json_encode( array( 'lineNumber' => (int) get_option( 'mp_smsir_line' ), 'messageText' => $message, 'mobiles' => array( $mobile ) ) ),
 				);
-				return true;
-			case 'kavenegar':
-				wp_remote_post(
-					'https://api.kavenegar.com/v1/' . rawurlencode( get_option( 'mp_sms_key' ) ) . '/sms/send.json',
-					array(
-						'blocking' => false,
-						'timeout'  => 5,
-						'body'     => array( 'receptor' => $mobile, 'sender' => get_option( 'mp_sms_sender', '' ), 'message' => $message ),
-					)
-				);
-				return true;
-		}
-		return false;
-	}
-
-	/** Login code. Blocking, so the person is told right away if the provider refused. */
-	public static function send_code( $mobile, $code ) {
-		switch ( self::provider() ) {
-			case 'smsir':
-				$template = (int) get_option( 'mp_smsir_template', 0 );
-				$headers  = array( 'X-API-KEY' => get_option( 'mp_smsir_key' ), 'Content-Type' => 'application/json', 'Accept' => 'text/plain' );
-				if ( $template ) {
-					$res = self::post(
-						'https://api.sms.ir/v1/send/verify',
-						array(
-							'headers' => $headers,
-							'body'    => wp_json_encode(
-								array(
-									'mobile'     => $mobile,
-									'templateId' => $template,
-									'parameters' => array( array( 'name' => get_option( 'mp_smsir_param', 'CODE' ) ? get_option( 'mp_smsir_param', 'CODE' ) : 'CODE', 'value' => $code ) ),
-								)
-							),
-						)
-					);
-				} else {
-					$res = self::post(
-						'https://api.sms.ir/v1/send/bulk',
-						array(
-							'headers' => $headers,
-							'body'    => wp_json_encode( array( 'lineNumber' => (int) get_option( 'mp_smsir_line' ), 'messageText' => 'کد ورود پنل ' . get_bloginfo( 'name' ) . ': ' . $code, 'mobiles' => array( $mobile ) ) ),
-						)
-					);
+				if ( ! $blocking ) {
+					wp_remote_post( 'https://api.sms.ir/v1/send/bulk', $args + array( 'blocking' => false, 'timeout' => 5 ) );
+					return true;
 				}
-				$ok = ! is_wp_error( $res ) && 200 === $res['code'] && isset( $res['body']['status'] ) && 1 === (int) $res['body']['status'];
+				$res = self::post( 'https://api.sms.ir/v1/send/bulk', $args + array( 'timeout' => 10 ) );
+				$ok  = ! is_wp_error( $res ) && isset( $res['body']['status'] ) && 1 === (int) $res['body']['status'];
 				if ( ! $ok ) {
-					self::$last_error = is_wp_error( $res ) ? $res->get_error_message() : 'HTTP ' . $res['code'] . ( isset( $res['body']['message'] ) ? ' — ' . $res['body']['message'] : '' );
+					self::$last_error = is_wp_error( $res ) ? $res->get_error_message() : 'sms.ir HTTP ' . $res['code'] . ( isset( $res['body']['message'] ) ? ' — ' . $res['body']['message'] : '' );
 				}
 				return $ok;
 			case 'kavenegar':
-				$res = self::post(
-					'https://api.kavenegar.com/v1/' . rawurlencode( get_option( 'mp_sms_key' ) ) . '/sms/send.json',
-					array( 'body' => array( 'receptor' => $mobile, 'sender' => get_option( 'mp_sms_sender', '' ), 'message' => 'کد ورود پنل: ' . $code ) )
-				);
+				$url  = 'https://api.kavenegar.com/v1/' . rawurlencode( get_option( 'mp_sms_key' ) ) . '/sms/send.json';
+				$args = array( 'body' => array( 'receptor' => $mobile, 'sender' => get_option( 'mp_sms_sender', '' ), 'message' => $message ) );
+				if ( ! $blocking ) {
+					wp_remote_post( $url, $args + array( 'blocking' => false, 'timeout' => 5 ) );
+					return true;
+				}
+				$res = self::post( $url, $args );
 				if ( is_wp_error( $res ) || 200 !== $res['code'] ) {
-					self::$last_error = is_wp_error( $res ) ? $res->get_error_message() : 'HTTP ' . $res['code'];
+					self::$last_error = is_wp_error( $res ) ? $res->get_error_message() : 'کاوه‌نگار HTTP ' . $res['code'] . ( isset( $res['body']['return']['message'] ) ? ' — ' . $res['body']['return']['message'] : '' );
 					return false;
 				}
 				return true;
 		}
 		self::$last_error = 'سرویس پیامک انتخاب نشده یا کلید API خالی است.';
 		return false;
+	}
+
+	/** Login code. Blocking, so the person is told right away if the provider refused. Text and pattern come from «اعلان‌ها و پیامک‌ها». */
+	public static function send_code( $mobile, $code ) {
+		$ok = MP_Messages::send_sms( 'otp', $mobile, array( 'CODE' => (string) $code ) );
+		if ( ! $ok ) {
+			self::$last_error = MP_Messages::$last_error;
+		}
+		return $ok;
 	}
 
 	/* ------------------------------------------------------------------ One-time code login */

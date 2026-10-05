@@ -88,6 +88,9 @@ class MP_Frontend {
 		// The address itself, too: works before rewrite rules are refreshed and when a cache or a
 		// messenger drops the query string.
 		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
+		if ( preg_match( '#/s/([A-Za-z0-9]{6})/?$#', $path, $pm ) ) {
+			MP_Messages::redirect( $pm[1] );
+		}
 		if ( preg_match( '#/(c|i|k|m)/([A-Za-z0-9]{32})/?$#', $path, $pm ) ) {
 			status_header( 200 );
 			if ( 'c' === $pm[1] ) {

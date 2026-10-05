@@ -101,9 +101,11 @@ class MP_Portal {
 	}
 
 	/** Every panel member of the project hears about the client's action (the notification opens the project's portal). */
-	private static function notify( $pid, $title, $detail, $item_id ) {
-		foreach ( MP_Util::project_members( $pid ) as $u ) {
-			MP_Notify::send( $u, 'portal', $title, $detail, 'portal', $pid, true );
+	private static function notify( $pid, $key, $vars, $item_id ) {
+		global $wpdb;
+		$extra = array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT DISTINCT m.user_id FROM ' . self::t( 'channel_members' ) . ' m JOIN ' . self::t( 'channels' ) . " c ON c.id = m.channel_id WHERE c.type = 'client' AND c.project_id = %d AND c.archived_at IS NULL", $pid ) ) );
+		foreach ( array_unique( array_merge( MP_Util::project_members( $pid ), $extra ) ) as $u ) {
+			MP_Notify::event( $key, $u, $vars, 'portal', $pid, true );
 		}
 	}
 
@@ -295,7 +297,30 @@ class MP_Portal {
 		foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT s.title, s.status, COUNT(t.id) total, SUM(t.status = 'done') done FROM " . self::t( 'sections' ) . ' s LEFT JOIN ' . self::t( 'tasks' ) . ' t ON t.section_id = s.id AND t.archived_at IS NULL AND t.client_hidden = 0 WHERE s.project_id = %d GROUP BY s.id ORDER BY s.sort, s.id', $pid ) ) as $s ) {
 			$sections[] = array( 'title' => $s->title, 'status' => $s->status, 'total' => (int) $s->total, 'done' => (int) $s->done );
 		}
+		// Every task of the project the client may see (not «مخفی از مشتری»), by schedule, with its checklist.
+		// Only what helps the client follow the work: title, date, status, section, checklist — no notes or names.
+		$tasks = $wpdb->get_results( $wpdb->prepare( 'SELECT t.id, t.title, t.task_date, t.task_time, t.status, s.title AS section FROM ' . self::t( 'tasks' ) . ' t LEFT JOIN ' . self::t( 'sections' ) . ' s ON s.id = t.section_id WHERE t.project_id = %d AND t.archived_at IS NULL AND t.client_hidden = 0 ORDER BY t.task_date, t.task_time = \'\', t.task_time, t.id LIMIT 400', $pid ) );
+		$items = array();
+		if ( $tasks ) {
+			$in = implode( ',', array_map( 'intval', wp_list_pluck( $tasks, 'id' ) ) );
+			foreach ( $wpdb->get_results( 'SELECT task_id, text, done FROM ' . self::t( 'task_items' ) . " WHERE task_id IN ($in) ORDER BY sort, id" ) as $it ) { // phpcs:ignore
+				$items[ (int) $it->task_id ][] = array( 'text' => $it->text, 'done' => (bool) $it->done );
+			}
+		}
+		$task_list = array();
+		foreach ( $tasks as $t ) {
+			$task_list[] = array(
+				'id'      => (int) $t->id,
+				'title'   => $t->title,
+				'date'    => $t->task_date,
+				'time'    => (string) $t->task_time,
+				'status'  => $t->status,
+				'section' => (string) $t->section,
+				'items'   => isset( $items[ (int) $t->id ] ) ? $items[ (int) $t->id ] : array(),
+			);
+		}
 		$out['project'] = array(
+			'tasks'      => $task_list,
 			'name'       => $p->name,
 			'status'     => $p->status,
 			'start'      => $p->start_date,
@@ -333,6 +358,9 @@ class MP_Portal {
 		if ( ! $x ) {
 			return self::err( 'طرح پیدا نشد.', 404 );
 		}
+		if ( MP_Client::is_preview( $ch ) ) {
+			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
+		}
 		if ( ! MP_Rest::client_rate_ok( $ch->id ) ) {
 			return self::err( 'کمی صبر کنید و دوباره بفرستید.', 429 );
 		}
@@ -341,7 +369,7 @@ class MP_Portal {
 		if ( $e ) {
 			return $e;
 		}
-		self::notify( $x->project_id, ( '' !== $name ? $name : $ch->client_name ) . ' روی طرح «' . $x->title . '» نظر داد', wp_trim_words( (string) $r['body'], 14 ), $x->id );
+		self::notify( $x->project_id, 'portal_comment', array( 'CLIENT' => '' !== $name ? $name : $ch->client_name, 'TITLE' => $x->title, 'PREVIEW' => wp_trim_words( (string) $r['body'], 14 ) ), $x->id );
 		return self::payload( $x, $ch->token );
 	}
 
@@ -352,6 +380,9 @@ class MP_Portal {
 		if ( ! $x || 'superseded' === $x->status ) {
 			return self::err( 'طرح پیدا نشد.', 404 );
 		}
+		if ( MP_Client::is_preview( $ch ) ) {
+			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
+		}
 		$d    = 'approved' === $r['decision'] ? 'approved' : 'changes';
 		$name = MP_Util::text( $r['name'], 80 );
 		$note = MP_Util::long_text( $r['note'], 1000 );
@@ -360,7 +391,7 @@ class MP_Portal {
 		}
 		$wpdb->update( self::t( 'client_items' ), array( 'status' => $d, 'decision_note' => $note, 'decided_by' => '' !== $name ? $name : $ch->client_name, 'decided_at' => MP_Util::now() ), array( 'id' => $x->id ) );
 		MP_Client::system( 0, $x->project_id, ( '' !== $name ? $name : $ch->client_name ) . ( 'approved' === $d ? ' طرح «' . $x->title . '» را تأیید کرد ✓' : ' برای طرح «' . $x->title . '» درخواست تغییر داد.' ), array( 't' => 'design', 'id' => (int) $x->id ) );
-		self::notify( $x->project_id, ( '' !== $name ? $name : $ch->client_name ) . ( 'approved' === $d ? ' طرح «' . $x->title . '» را تأیید کرد' : ' برای طرح «' . $x->title . '» تغییر خواست' ), $note, $x->id );
+		self::notify( $x->project_id, 'approved' === $d ? 'portal_approved' : 'portal_changes', array( 'CLIENT' => '' !== $name ? $name : $ch->client_name, 'TITLE' => $x->title, 'NOTE' => $note ), $x->id );
 		MP_Audit::log( 'update', 'portal', $x->id, '«' . $x->title . '»: ' . self::STATUS[ $d ] . ' توسط مشتری' );
 		return self::payload( self::get( $x->id ), $ch->token );
 	}

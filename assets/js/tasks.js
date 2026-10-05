@@ -84,10 +84,14 @@
   MP.taskRow = function (t, opts) {
     opts = opts || {};
     var p = MP.project(t.project_id), overdue = !t.done && t.date < S.today;
+    var sec = t.section_id ? MP.section(t.section_id) : null;
     var meta = [];
+    // Inside a project's own page the section leads (the project is obvious); elsewhere: project › section.
+    if (opts.project === false && p) meta.push(sec ? el('span', { class: 'chip sec-chip', title: 'بخش پروژه', html: icon('grid') + '<b></b>' }) : el('span', { class: 'sec-none', text: 'بدون بخش' }));
+    if (opts.project === false && sec) meta[0].lastChild.textContent = sec.title;
     if (opts.date !== false) meta.push(el('span', { class: 'due' }, J.format(t.date, false) + (overdue ? ' · عقب‌افتاده' : '')));
     if (t.time) meta.push(el('span', { class: 'meta-ico', html: icon('clock') }, MP.timeFa(t.time)));
-    if (p) meta.push(el('span', { class: 'meta-ico', html: icon('folder') }, p.name));
+    if (p && opts.project !== false) meta.push(el('span', { class: 'meta-ico', html: icon('folder'), title: sec ? 'پروژه › بخش' : 'پروژه' }, p.name + (sec ? ' › ' + sec.title : '')));
     if (t.items_total) meta.push(el('span', { class: 'meta-ico', html: icon('list') }, fa(t.items_done) + '/' + fa(t.items_total)));
     if (t.comments) meta.push(el('span', { class: 'meta-ico', html: icon('chat') }, fa(t.comments)));
     if (t.files) meta.push(el('span', { class: 'meta-ico', html: icon('clip') }, fa(t.files)));

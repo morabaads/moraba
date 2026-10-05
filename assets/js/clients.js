@@ -94,22 +94,37 @@
     var picks = el('div', { class: 'cl-proj-picks' }, MP.S.projects.map(function (p) {
       return el('label', { class: 'check' }, el('input', { type: 'checkbox', value: p.id, checked: c.projects.indexOf(p.id) >= 0 }), el('span', { text: p.name }));
     }));
+    // Client groups already made (any customer, or none yet); this customer's own are ticked and fixed.
+    var groupPicks = el('div', { class: 'cl-proj-picks' }, (MP.S.channels || []).filter(function (g) { return g.type === 'client'; }).map(function (g) {
+      var mine = c.id && g.client_id === c.id, p = g.project_id ? MP.project(g.project_id) : null;
+      return el('label', { class: 'check', title: mine ? 'گروه همین مشتری' : '' }, el('input', { type: 'checkbox', value: g.id, checked: mine, disabled: mine }),
+        el('span', { text: g.title + (p ? ' · ' + p.name : '') + (g.client_name && !mine && g.client_name !== g.title ? ' (' + g.client_name + ')' : '') }));
+    }));
     var f = el('form', { class: 'form' },
       el('div', { class: 'row' },
         MP.field('نام مشتری', el('input', { name: 'name', required: true, maxlength: 160, value: c.name })),
-        MP.field('تلفن', el('input', { name: 'phone', maxlength: 40, dir: 'ltr', value: c.phone }))),
+        MP.field('موبایل', el('input', { name: 'phone', maxlength: 40, dir: 'ltr', inputmode: 'tel', value: c.phone }), 'با موبایل، مشتری به گروه مشتری (پروژه‌های انتخاب‌شده، یا گروه اختصاصی خودش) اضافه می‌شود و لینک پرتال برایش پیامک می‌شود.')),
       MP.field('اطلاعات (برای فاکتور)', el('textarea', { name: 'info', rows: 2, maxlength: 1000, placeholder: 'نشانی، کد اقتصادی، …' }, c.info || '')),
       el('div', { class: 'field' }, el('span', { text: 'پروژه‌های این مشتری' }), picks),
+      groupPicks.children.length ? el('div', { class: 'field' }, el('span', { text: 'اضافه به گروه‌های مشتری موجود' }), groupPicks,
+        el('small', { class: 'hint', text: 'با موبایل، مشتری همین حالا عضو گروه‌های انتخاب‌شده می‌شود و لینک هر گروه برایش پیامک می‌شود. گروه‌های پروژه‌های انتخاب‌شده خودکار اضافه می‌شوند.' })) : null,
       MP.actions(c.id ? 'ذخیره' : 'ساخت مشتری', c.id && manager ? el('button', { type: 'button', class: 'btn btn-ghost', text: 'آرشیو مشتری', onclick: function () {
-        MP.confirm('آرشیو مشتری', '«' + c.name + '» از فهرست برداشته شود؟ گروه‌ها، پیام‌ها و فاکتورهایش می‌مانند.', 'آرشیو').then(function (ok) {
+        MP.confirm('آرشیو مشتری', '«' + c.name + '» آرشیو شود؟ گروه‌های مشتری‌اش هم آرشیو می‌شوند: لینک پرتال کار نمی‌کند و همه از پرتال خارج می‌شوند. پیام‌ها و فاکتورها می‌مانند و گروه‌ها از «گروه‌های آرشیوشده» قابل بازگرداندن‌اند.', 'آرشیو').then(function (ok) {
           if (ok) MP.api('customers/' + c.id, { method: 'DELETE' }).then(function () { MP.dialog.close(); MP.toast('آرشیو شد'); load(); }).catch(MP.soft);
         });
       } }) : null));
     f.onsubmit = function (e) {
       e.preventDefault(); MP.busy(f, true);
       var ids = Array.prototype.filter.call(picks.querySelectorAll('input'), function (i) { return i.checked; }).map(function (i) { return +i.value; });
-      MP.api(c.id ? 'customers/' + c.id : 'customers', { method: 'POST', body: { name: f.elements.name.value, phone: f.elements.phone.value, info: f.elements.info.value, project_ids: ids } })
-        .then(function () { MP.dialog.close(); MP.toast(c.id ? 'ذخیره شد' : 'مشتری ساخته شد'); load(); }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
+      MP.api(c.id ? 'customers/' + c.id : 'customers', { method: 'POST', body: { name: f.elements.name.value, phone: f.elements.phone.value, info: f.elements.info.value, project_ids: ids, group_ids: Array.prototype.filter.call(groupPicks.querySelectorAll('input:not(:disabled)'), function (i) { return i.checked; }).map(function (i) { return +i.value; }) } })
+        .then(function (d) {
+          MP.dialog.close(); load(); MP.loadChannels && MP.loadChannels();
+          var sent = d.portal.filter(function (x) { return x.sms; }), failed = d.portal.filter(function (x) { return x.sms === false; });
+          if (failed.length) MP.toast('لینک پرتال پیامک نشد (' + failed.map(function (x) { return x.project || x.group; }).join('، ') + '): ' + failed[0].error, { error: true, duration: 10000 });
+          else if (sent.length) MP.toast((c.id ? 'ذخیره شد' : 'مشتری ساخته شد') + ' و لینک پرتال ' + sent.map(function (x) { return '«' + (x.project || x.group) + '»'; }).join('، ') + ' برایش پیامک شد', { icon: 'check', duration: 6000 });
+          else if (!d.mobile_ok) MP.toast('ذخیره شد؛ «موبایل» شماره موبایل معتبر نیست، پس لینک پرتال پیامک نشد', { error: true, duration: 7000 });
+          else MP.toast(c.id ? 'ذخیره شد' : 'مشتری ساخته شد');
+        }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
     };
     MP.dialog.open(c.id ? 'مشتری · ' + c.name : 'مشتری جدید', f);
   }

@@ -683,7 +683,7 @@ class MP_Contracts {
 		if ( ! empty( $r['sms'] ) ) {
 			$p   = self::payload( $c );
 			$mob = MP_Auth::normalize( $p['phone'] );
-			$sms = $mob && MP_Auth::text( $mob, $c->client_name . ' عزیز، قرارداد «' . $c->title . '» از ' . self::settings()['studio'] . ' آماده امضاست: ' . self::url( $c->token ) );
+			$sms = $mob && MP_Messages::send_sms( 'contract_send', $mob, array( 'NAME' => $c->client_name, 'TITLE' => $c->title, 'LINK' => self::url( $c->token ) ) );
 		}
 		MP_Audit::log( 'update', 'contract', $c->id, $c->number . ' ارسال برای امضا' );
 		return self::payload( self::get( $c->id ) ) + array( 'sms_sent' => (bool) $sms );
@@ -886,7 +886,7 @@ class MP_Contracts {
 			$sg = $i >= 0 ? self::signers_of( $c )[ $i ] : null;
 			$m  = $sg ? MP_Auth::normalize( $sg['mobile'] ) : '';
 			if ( $m ) {
-				MP_Auth::text( $m, $sg['name'] . ' عزیز، قرارداد «' . $c->title . '» از ' . $s['studio'] . ' منتظر امضای شماست' . ( $c->expires_at && $s['f_expiry'] ? ' (مهلت تا ' . MP_Jalali::format( $c->expires_at ) . ')' : '' ) . ': ' . self::url( $c->token ) );
+				MP_Messages::send_sms( 'contract_remind', $m, array( 'NAME' => $sg['name'], 'TITLE' => $c->title, 'DEADLINE' => $c->expires_at && $s['f_expiry'] ? '(مهلت تا ' . MP_Jalali::format( $c->expires_at ) . ')' : '', 'LINK' => self::url( $c->token ) ) );
 			}
 			$wpdb->update( self::t(), array( 'reminders_sent' => $c->reminders_sent + 1, 'last_reminded_at' => MP_Util::now() ), array( 'id' => $c->id ) );
 		}
@@ -1035,7 +1035,7 @@ class MP_Contracts {
 			$n  = $list[ $i + 1 ];
 			$nm = MP_Auth::normalize( isset( $n['mobile'] ) ? $n['mobile'] : '' );
 			if ( $nm ) {
-				MP_Auth::text( $nm, $n['name'] . ' عزیز، ' . $name . ' قرارداد «' . $c->title . '» را امضا کرد؛ نوبت امضای شماست: ' . self::url( $c->token ) );
+				MP_Messages::send_sms( 'contract_next', $nm, array( 'NAME' => $n['name'], 'ACTOR' => $name, 'TITLE' => $c->title, 'LINK' => self::url( $c->token ) ) );
 			}
 			MP_Client::system( 0, (int) $c->project_id, $name . ' قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' را امضا کرد؛ نوبت ' . $n['name'] . ' است.', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
 			return array( 'signed' => true, 'complete' => false );
@@ -1045,7 +1045,7 @@ class MP_Contracts {
 			MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط ' . $f['signer_name'] . ' امضا شد؛ منتظر امضای مجری.', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
 			foreach ( MP_Util::panel_users() as $m ) {
 				if ( MP_Util::is_manager( $m ) ) {
-					MP_Notify::send( $m, 'contract', $f['signer_name'] . ' قرارداد ' . $c->number . ' را امضا کرد؛ نوبت امضای مجری است', $c->title, 'contracts', $c->id, true );
+					MP_Notify::event( 'contract_signed', $m, array( 'CLIENT' => $f['signer_name'], 'NUMBER' => $c->number, 'TITLE' => $c->title ), 'contracts', $c->id, true );
 				}
 			}
 			return array( 'signed' => true, 'complete' => false, 'waiting_studio' => true );
@@ -1059,7 +1059,7 @@ class MP_Contracts {
 		MP_Client::system( 0, (int) $c->project_id, 'قرارداد ' . "\u{2066}" . MP_Jalali::digits( $c->number ) . "\u{2069}" . ' توسط هر دو طرف امضا شد ✓', array( 't' => 'contract', 'id' => (int) $c->id, 'url' => self::url( $c->token ) ) );
 		foreach ( MP_Util::panel_users() as $m ) {
 			if ( MP_Util::is_manager( $m ) ) {
-				MP_Notify::send( $m, 'contract', 'قرارداد ' . $c->number . ' کامل امضا شد', $c->title, 'contracts', $c->id, true );
+				MP_Notify::event( 'contract_complete', $m, array( 'NUMBER' => $c->number, 'TITLE' => $c->title ), 'contracts', $c->id, true );
 			}
 		}
 		if ( self::settings()['f_invoice'] ) {
@@ -1119,7 +1119,7 @@ class MP_Contracts {
 				$f['first_viewed_at'] = MP_Util::now();
 				foreach ( MP_Util::panel_users() as $m ) {
 					if ( MP_Util::is_manager( $m ) ) {
-						MP_Notify::send( $m, 'contract', self::client_of( $c ) . ' قرارداد ' . $c->number . ' را باز کرد', $c->title, 'contracts', $c->id );
+						MP_Notify::event( 'contract_viewed', $m, array( 'CLIENT' => self::client_of( $c ), 'NUMBER' => $c->number, 'TITLE' => $c->title ), 'contracts', $c->id );
 					}
 				}
 			}
