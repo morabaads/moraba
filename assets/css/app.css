@@ -803,6 +803,22 @@ body.is-loading .meetings-card::after{background:linear-gradient(90deg,#222 25%,
   .chat-back{display:inline-grid}
   .punch-chip .punch-text{display:none}.punch-chip.is-in .punch-text{display:inline}.punch-chip{padding:0 12px}
 }
+/* ---------------------------------------------------------------- Home-screen widgets dialog */
+.wg{display:grid;gap:14px}
+.wg a.btn{text-decoration:none}
+.wg .seg{justify-self:start}
+.wg-steps{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.wg-step{display:flex;gap:12px;align-items:flex-start}
+.wg-step>div{display:grid;gap:6px;min-width:0;flex:1}
+.wg-num{width:26px;height:26px;border-radius:50%;background:var(--brand-soft);color:var(--brand-ink);display:grid;place-items:center;font-weight:800;font-size:13px;flex-shrink:0}
+.wg-pair{display:grid;gap:8px;justify-items:start}
+.wg-code{width:100%;font:12px/1.5 ui-monospace,monospace;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-sm);padding:10px;color:var(--ink);resize:none;word-break:break-all}
+.wg-h{margin:6px 0 0;font-size:14px}
+.wg-devices{display:grid;gap:8px}
+.wg-device{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm)}
+.wg-device-ico{width:32px;height:32px;border-radius:10px;background:var(--surface-3);display:grid;place-items:center}
+.wg-device-main{flex:1;display:grid;min-width:0}
+.muted.small,.wg .small{font-size:12px}
 /* ---------------------------------------------------------------- Print */
 @media print{.sidebar,.topbar,.bottom-nav,.page-actions,.toasts{display:none!important}.app{display:block}.card{box-shadow:none;border:1px solid #ddd}}
 

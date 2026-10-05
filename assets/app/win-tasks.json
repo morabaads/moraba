@@ -1,0 +1,53 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "rtl": true,
+  "body": [
+    {
+      "type": "ColumnSet",
+      "verticalContentAlignment": "Center",
+      "columns": [
+        { "type": "Column", "width": "stretch", "items": [ { "type": "TextBlock", "text": "تسک‌ها", "weight": "Bolder", "size": "Medium" } ] },
+        { "type": "Column", "width": "auto", "selectAction": { "type": "Action.Execute", "verb": "tab-today" }, "items": [ { "type": "TextBlock", "text": "امروز", "weight": "${if(tab == 'today', 'Bolder', 'Default')}", "color": "${if(tab == 'today', 'Default', 'Light')}", "isSubtle": "${tab != 'today'}" } ] },
+        { "type": "Column", "width": "auto", "spacing": "Medium", "selectAction": { "type": "Action.Execute", "verb": "tab-week" }, "items": [ { "type": "TextBlock", "text": "هفته", "weight": "${if(tab == 'week', 'Bolder', 'Default')}", "isSubtle": "${tab != 'week'}" } ] },
+        { "type": "Column", "width": "auto", "spacing": "Medium", "selectAction": { "type": "Action.Execute", "verb": "tab-overdue" }, "items": [ { "type": "TextBlock", "text": "عقب‌افتاده", "weight": "${if(tab == 'overdue', 'Bolder', 'Default')}", "isSubtle": "${tab != 'overdue'}" } ] },
+        { "type": "Column", "width": "auto", "spacing": "Medium", "selectAction": { "type": "Action.OpenUrl", "url": "${urls.new_task}" }, "items": [ { "type": "TextBlock", "text": "＋", "weight": "Bolder", "size": "Large", "color": "Warning" } ] }
+      ]
+    },
+    {
+      "type": "TextBlock", "$when": "${count(list) == 0}", "isSubtle": true, "wrap": true, "spacing": "Medium",
+      "text": "${if(tab == 'overdue', 'عقب‌افتاده‌ای ندارید؛ همه کارها به‌موقع است.', if(tab == 'today', 'امروز تسکی ندارید', 'این هفته تسکی ندارید'))}"
+    },
+    {
+      "type": "Container",
+      "$data": "${list}",
+      "spacing": "Small",
+      "separator": true,
+      "items": [
+        {
+          "type": "ColumnSet",
+          "verticalContentAlignment": "Center",
+          "selectAction": { "type": "Action.OpenUrl", "url": "${$root.urls.task}${id}" },
+          "columns": [
+            {
+              "type": "Column", "width": "auto",
+              "selectAction": { "type": "Action.Execute", "verb": "${if(done, 'undo', 'done')}", "data": { "id": "${id}" } },
+              "items": [ { "type": "TextBlock", "text": "${if(done, '✔', '◯')}", "size": "Large", "color": "${if(done, 'Warning', 'Default')}" } ]
+            },
+            {
+              "type": "Column", "width": "stretch",
+              "items": [
+                { "type": "TextBlock", "text": "${if(locked, '🔒 ', '')}${title}${if(new, '  · جدید', '')}${if(urgent, '  · فوری', '')}", "weight": "Bolder", "wrap": false, "isSubtle": "${done}" },
+                { "type": "TextBlock", "$when": "${due != '' || time != '' || project != '' || items != ''}", "spacing": "None", "size": "Small", "wrap": false,
+                  "color": "${if(overdue, 'Attention', 'Default')}", "isSubtle": "${!overdue}",
+                  "text": "${due}${if(time != '', concat('  ⏱ ', time), '')}${if(project != '', concat('  📁 ', project), '')}${if(items != '', concat('  ☰ ', items), '')}" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    { "type": "TextBlock", "$when": "${more > 0}", "text": "${more_text}", "size": "Small", "isSubtle": true, "spacing": "Small" }
+  ]
+}

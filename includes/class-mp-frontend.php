@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -183,6 +183,11 @@ class MP_Frontend {
 					array( 'name' => 'تقویم', 'url' => self::panel_url() . '#calendar', 'icons' => array( array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192' ) ) ),
 					array( 'name' => 'پیام‌ها', 'url' => self::panel_url() . '#messages', 'icons' => array( array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192' ) ) ),
 				),
+				// Windows 11 widgets board (Edge): templates are Adaptive Cards, data comes from the service worker.
+				'widgets'          => array(
+					array( 'name' => 'مربع · تسک‌ها', 'short_name' => 'تسک‌ها', 'description' => 'تسک‌های امروز، این هفته و عقب‌افتاده؛ تیک بزنید یا تسک تازه بسازید', 'tag' => 'mp-tasks', 'template' => 'mp-tasks', 'ms_ac_template' => MP_URL . 'assets/app/win-tasks.json', 'data' => rest_url( 'moraba-panel/v1/widget' ), 'type' => 'application/json', 'auth' => false, 'update' => 900, 'screenshots' => array( array( 'src' => MP_URL . 'assets/app/shot-tasks.png', 'sizes' => '600x450', 'label' => 'ویجت تسک‌ها' ) ), 'icons' => array( array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192' ) ) ),
+					array( 'name' => 'مربع · خلاصه امروز', 'short_name' => 'خلاصه امروز', 'description' => 'حضور و ثبت ورود/خروج، تسک‌ها، پیام‌های نخوانده و جلسه بعدی', 'tag' => 'mp-summary', 'template' => 'mp-summary', 'ms_ac_template' => MP_URL . 'assets/app/win-summary.json', 'data' => rest_url( 'moraba-panel/v1/widget' ), 'type' => 'application/json', 'auth' => false, 'update' => 900, 'screenshots' => array( array( 'src' => MP_URL . 'assets/app/shot-summary.png', 'sizes' => '600x450', 'label' => 'ویجت خلاصه امروز' ) ), 'icons' => array( array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192' ) ) ),
+				),
 				'background_color' => '#f3f3f1',
 				'theme_color'      => '#161616',
 				'icons'            => array(
@@ -205,7 +210,7 @@ class MP_Frontend {
 			$assets[] = MP_URL . 'assets/' . $a . ( 0 === strpos( $a, 'fonts/' ) ? '' : '?ver=' . MP_VERSION ); // app.css asks for the font without ?ver
 		}
 		$cache = 'mp-' . MP_VERSION;
-		echo "const CACHE=" . wp_json_encode( $cache ) . ",ASSETS=" . wp_json_encode( $assets ) . ',FEED=' . wp_json_encode( add_query_arg( 'mp_push_feed', 1, home_url( '/' ) ) ) . ',START=' . wp_json_encode( self::panel_url() ) . ',ICON=' . wp_json_encode( MP_URL . 'assets/img/icon-192.png' ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ";\n"; // phpcs:ignore
+		echo "const CACHE=" . wp_json_encode( $cache ) . ",ASSETS=" . wp_json_encode( $assets ) . ',FEED=' . wp_json_encode( add_query_arg( 'mp_push_feed', 1, home_url( '/' ) ) ) . ',START=' . wp_json_encode( self::panel_url() ) . ',ICON=' . wp_json_encode( MP_URL . 'assets/img/icon-192.png' ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ',WAPI=' . wp_json_encode( rest_url( 'moraba-panel/v1/widget' ) ) . ";\n"; // phpcs:ignore
 		echo <<<'JS'
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith('mp-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
@@ -228,6 +233,43 @@ self.addEventListener('push',e=>{
     }).catch(()=>self.registration.showNotification('پنل مربع',{body:'اعلان جدید دارید',icon:ICON,dir:'rtl',data:{url:START}}));
   }));
 });
+// Windows 11 widgets (Edge-installed app): the summary is read with the user's own session.
+const FA=s=>String(s).replace(/\d/g,c=>'۰۱۲۳۴۵۶۷۸۹'[c]);
+const wstate=()=>caches.open('mp-widget').then(c=>c.match('tab')).then(r=>r?r.text():'today').catch(()=>'today');
+const wsave=t=>caches.open('mp-widget').then(c=>c.put('tab',new Response(t))).catch(()=>{});
+function wcall(body){
+  return fetch(WAPI,{method:body?'POST':'GET',credentials:'include',cache:'no-store',headers:Object.assign({'X-MP-Widget':'1','Accept':'application/json'},body?{'Content-Type':'application/x-www-form-urlencoded'}:{}),body:body||undefined}).then(r=>r.json());
+}
+function wdata(tag,d,tab){
+  if(!d||!d.ok)return {tab:tab,list:[],more:0,more_text:'',urls:{},today_fa:'برای دیدن ویجت، اپ مربع را باز کنید و وارد شوید',attendance:{open:false,since:'',worked:''},tasks:{overdue:{count:0}},messages:{unread:0,items:[]},tasks_today:'',tasks_overdue:'',unread:'',meeting_text:'',meeting_url:START,meeting_live:false};
+  if(tag==='mp-tasks'){const all=d.tasks[tab].items,max=6;return {tab:tab,list:all.slice(0,max),more:all.length-max,more_text:'و '+FA(all.length-max)+' تسک دیگر',urls:d.urls};}
+  const m=d.meeting;
+  return Object.assign({},d,{tasks_today:FA(d.tasks.today.open)+' باز از '+FA(d.tasks.today.count),tasks_overdue:FA(d.tasks.overdue.count),unread:FA(d.messages.unread),meeting_text:m?m.when+' · '+m.title:'جلسه‌ای پیش رو ندارید',meeting_url:m?m.url:d.urls.meetings,meeting_live:!!(m&&m.live)});
+}
+function wpaint(widget,d){
+  const tag=widget.definition.tag;
+  return Promise.all([fetch(widget.definition.msAcTemplate).then(r=>r.text()),d?Promise.resolve(d):wcall().catch(()=>null),wstate()]).then(([tpl,data,tab])=>
+    self.widgets.updateByTag(tag,{template:tpl,data:JSON.stringify(wdata(tag,data,tab))}));
+}
+function wall(d){
+  if(!self.widgets)return Promise.resolve();
+  return Promise.all(['mp-tasks','mp-summary'].map(t=>self.widgets.getByTag(t).then(w=>w&&w.instances&&w.instances.length?wpaint(w,d):null).catch(()=>null)));
+}
+self.addEventListener('widgetinstall',e=>{e.waitUntil((self.registration.periodicSync?self.registration.periodicSync.register(e.widget.definition.tag,{minInterval:(e.widget.definition.update||900)*1000}).catch(()=>{}):Promise.resolve()).then(()=>wpaint(e.widget)));});
+self.addEventListener('widgetresume',e=>{e.waitUntil(wpaint(e.widget));});
+self.addEventListener('widgetuninstall',e=>{if(e.widget.instances.length<=1&&self.registration.periodicSync)e.waitUntil(self.registration.periodicSync.unregister(e.widget.definition.tag).catch(()=>{}));});
+self.addEventListener('periodicsync',e=>{if(e.tag==='mp-tasks'||e.tag==='mp-summary')e.waitUntil(wall());});
+self.addEventListener('widgetclick',e=>{
+  const v=e.action||'';
+  let data=e.data;
+  try{if(typeof data==='string')data=JSON.parse(data);}catch(x){data={};}
+  const id=data&&(data.id||(data.data&&data.data.id));
+  if(v.indexOf('tab-')===0){e.waitUntil(wsave(v.slice(4)).then(()=>wall()));return;}
+  if(v==='punch'){e.waitUntil(wcall('action=punch').then(d=>wall(d.ok?d:null)));return;}
+  if((v==='done'||v==='undo')&&id){e.waitUntil(wcall('action='+v+'&id='+encodeURIComponent(id)).then(d=>wall(d.ok?d:null)));return;}
+  e.waitUntil(self.clients.openWindow(START));
+});
+self.addEventListener('message',e=>{if(e.data&&e.data.type==='widgets')e.waitUntil(wall());});
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
   const url=(e.notification.data&&e.notification.data.url)||START;
@@ -302,7 +344,7 @@ JS;
 		foreach ( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'js/pwa.js', 'js/pins.js', 'js/client.js' ) as $a ) {
 			$assets[] = MP_URL . 'assets/' . $a . ( 0 === strpos( $a, 'fonts/' ) ? '' : '?ver=' . MP_VERSION );
 		}
-		echo 'const CACHE=' . wp_json_encode( 'mpc-' . MP_VERSION ) . ',ASSETS=' . wp_json_encode( $assets ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ";\n"; // phpcs:ignore
+		echo 'const CACHE=' . wp_json_encode( 'mpc-' . MP_VERSION ) . ',ASSETS=' . wp_json_encode( $assets ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ',WAPI=' . wp_json_encode( rest_url( 'moraba-panel/v1/widget' ) ) . ";\n"; // phpcs:ignore
 		echo <<<'JS'
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith('mpc-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});

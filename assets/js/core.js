@@ -823,7 +823,7 @@
   $$('[data-user-action]').forEach(function (b) {
     b.onclick = function () {
       closePopover();
-      ({ profile: function () { MP.openProfile(S.me.id); }, account: openAccount, appearance: openAppearance, logout: logout, install: MP.install })[b.dataset.userAction]();
+      ({ profile: function () { MP.openProfile(S.me.id); }, account: openAccount, appearance: openAppearance, logout: logout, install: MP.install, widgets: function () { MP.openWidgets(); } })[b.dataset.userAction]();
     };
   });
   MP.renderMe = function () {

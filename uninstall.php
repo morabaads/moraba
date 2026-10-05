@@ -18,7 +18,7 @@ delete_metadata( 'user', 0, 'mp_job_title', '', true );
 delete_metadata( 'user', 0, 'mp_phone', '', true );
 delete_metadata( 'user', 0, 'mp_sms_test_phone', '', true );
 delete_metadata( 'user', 0, 'mp_pins', '', true );
-foreach ( array( 'mp_avatar_file', 'mp_avatar_public', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs' ) as $meta ) {
+foreach ( array( 'mp_avatar_file', 'mp_avatar_public', 'mp_telegram_chat', 'mp_bale_chat', 'mp_push_subs', 'mp_widget_devices' ) as $meta ) {
 	delete_metadata( 'user', 0, $meta, '', true );
 }
 remove_role( 'moraba_employee' );

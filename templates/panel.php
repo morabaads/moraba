@@ -89,6 +89,7 @@ $mp_nav = array(
 							<button type="button" data-user-action="profile"><?php echo $mp_i( 'user' ); // phpcs:ignore ?>پروفایل من</button>
 							<button type="button" data-user-action="account"><?php echo $mp_i( 'edit' ); // phpcs:ignore ?>حساب کاربری و اعلان‌ها</button>
 							<button type="button" data-user-action="appearance"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?>ظاهر پنل</button>
+							<button type="button" data-user-action="widgets"><?php echo $mp_i( 'grid' ); // phpcs:ignore ?>ویجت‌ها روی صفحه اصلی</button>
 							<button type="button" data-user-action="install" hidden><?php echo $mp_i( 'download' ); // phpcs:ignore ?>نصب روی گوشی</button>
 							<button type="button" data-user-action="logout" class="danger"><?php echo $mp_i( 'logout' ); // phpcs:ignore ?>خروج از حساب</button>
 						</div>

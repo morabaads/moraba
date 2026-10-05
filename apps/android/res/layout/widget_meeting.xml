@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:layoutDirection="rtl"
+    android:background="@drawable/bg_widget"
+    android:paddingStart="14dp"
+    android:paddingEnd="12dp">
+
+    <ImageView android:layout_width="40dp" android:layout_height="40dp" android:background="@drawable/bg_punch_out"
+        android:scaleType="center" android:src="@drawable/ic_video" android:contentDescription="@null" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+        android:layout_marginStart="10dp" android:orientation="vertical">
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/when" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="جلسه بعدی" android:textColor="@color/muted" android:textSize="12sp" android:textStyle="bold" android:maxLines="1" />
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="جلسه‌ای پیش رو ندارید" android:textColor="@color/ink" android:textSize="15sp" android:textStyle="bold"
+            android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <TextView android:textDirection="anyRtl" android:textAlignment="center" android:id="@+id/join" android:layout_width="wrap_content" android:layout_height="34dp"
+        android:layout_marginStart="8dp" android:gravity="center" android:background="@drawable/bg_btn"
+        android:paddingStart="14dp" android:paddingEnd="14dp" android:text="ورود" android:textColor="#FFFFFFFF"
+        android:textSize="13sp" android:textStyle="bold" android:visibility="gone" />
+</LinearLayout>

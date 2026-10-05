@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:layoutDirection="rtl"
+    android:background="@drawable/bg_widget"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:id="@+id/chip"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/bg_punch_in"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+        <ImageView android:id="@+id/dot" android:layout_width="8dp" android:layout_height="8dp"
+            android:src="@drawable/dot_ok" android:contentDescription="@null" />
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/label" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginStart="8dp" android:text="حاضر" android:textColor="@color/ok"
+            android:textSize="15sp" android:textStyle="bold" />
+        <Chronometer android:id="@+id/clock" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginStart="8dp" android:textColor="@color/ok" android:textSize="15sp" android:textStyle="bold"
+            android:fontFeatureSettings="tnum" android:textDirection="ltr" />
+    </LinearLayout>
+
+    <TextView android:textDirection="anyRtl" android:textAlignment="viewStart"
+        android:id="@+id/sub"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textColor="@color/muted"
+        android:textSize="11sp"
+        android:includeFontPadding="false"
+        android:maxLines="1" />
+</LinearLayout>

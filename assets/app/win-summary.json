@@ -1,0 +1,53 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "rtl": true,
+  "body": [
+    {
+      "type": "ColumnSet",
+      "verticalContentAlignment": "Center",
+      "columns": [
+        { "type": "Column", "width": "stretch", "items": [ { "type": "TextBlock", "text": "${today_fa}", "weight": "Bolder" } ] },
+        { "type": "Column", "width": "auto", "selectAction": { "type": "Action.Execute", "verb": "punch" },
+          "items": [ { "type": "TextBlock", "text": "${if(attendance.open, concat('● حاضر از ', attendance.since), '○ ثبت ورود')}", "weight": "Bolder", "color": "${if(attendance.open, 'Good', 'Default')}" } ] }
+      ]
+    },
+    { "type": "TextBlock", "text": "کارکرد امروز: ${attendance.worked}", "size": "Small", "isSubtle": true, "spacing": "None" },
+    {
+      "type": "ColumnSet", "separator": true, "spacing": "Medium",
+      "selectAction": { "type": "Action.OpenUrl", "url": "${urls.tasks}" },
+      "columns": [
+        { "type": "Column", "width": "stretch", "items": [ { "type": "TextBlock", "text": "تسک‌های امروز" } ] },
+        { "type": "Column", "width": "auto", "items": [ { "type": "TextBlock", "text": "${tasks_today}", "weight": "Bolder" } ] }
+      ]
+    },
+    {
+      "type": "ColumnSet", "$when": "${tasks.overdue.count > 0}", "spacing": "Small",
+      "selectAction": { "type": "Action.OpenUrl", "url": "${urls.tasks}" },
+      "columns": [
+        { "type": "Column", "width": "stretch", "items": [ { "type": "TextBlock", "text": "عقب‌افتاده", "color": "Attention" } ] },
+        { "type": "Column", "width": "auto", "items": [ { "type": "TextBlock", "text": "${tasks_overdue}", "weight": "Bolder", "color": "Attention" } ] }
+      ]
+    },
+    {
+      "type": "ColumnSet", "spacing": "Small",
+      "selectAction": { "type": "Action.OpenUrl", "url": "${urls.messages}" },
+      "columns": [
+        { "type": "Column", "width": "stretch", "items": [
+          { "type": "TextBlock", "text": "پیام‌های نخوانده" },
+          { "type": "TextBlock", "$when": "${count(messages.items) > 0}", "text": "${messages.items[0].text}", "size": "Small", "isSubtle": true, "spacing": "None" }
+        ] },
+        { "type": "Column", "width": "auto", "items": [ { "type": "TextBlock", "text": "${unread}", "weight": "Bolder", "color": "${if(messages.unread > 0, 'Warning', 'Default')}" } ] }
+      ]
+    },
+    {
+      "type": "Container", "separator": true, "spacing": "Medium",
+      "selectAction": { "type": "Action.OpenUrl", "url": "${meeting_url}" },
+      "items": [
+        { "type": "TextBlock", "text": "جلسه بعدی", "size": "Small", "isSubtle": true },
+        { "type": "TextBlock", "text": "${meeting_text}", "weight": "Bolder", "wrap": true, "spacing": "None", "color": "${if(meeting_live, 'Good', 'Default')}" }
+      ]
+    }
+  ]
+}

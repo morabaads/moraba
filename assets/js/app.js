@@ -17,12 +17,19 @@
     var start = (location.hash || '').slice(1);
     // Home-screen shortcuts (manifest): #new-task, #punch.
     if (start === 'new-task') { MP.showView('dashboard'); setTimeout(function () { MP.taskForm(); }, 300); }
+    else if (start === 'widgets') { MP.showView('dashboard'); setTimeout(MP.openWidgets, 300); }
+    else if (/^task-\d+$/.test(start)) { MP.showView('mytasks'); setTimeout(function () { MP.openTask(+start.slice(5)); }, 300); }
     else if (start === 'punch') { MP.showView('attendance'); setTimeout(function () { var c = document.getElementById('punch-chip'); if (c) c.click(); }, 300); }
     else MP.showView(start || 'dashboard');
     MP.renderPrompts();
     setInterval(function () { if (!document.hidden) MP.refreshCounts(); }, 30000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) MP.refreshCounts(); });
-    window.addEventListener('hashchange', function () { var v = location.hash.slice(1); if (v && v !== S.view) MP.showView(v); });
+    window.addEventListener('hashchange', function () {
+      var v = location.hash.slice(1);
+      if (/^task-\d+$/.test(v)) { MP.openTask(+v.slice(5)); return; }
+      if (v === 'widgets') { MP.openWidgets(); return; }
+      if (v && v !== S.view) MP.showView(v);
+    });
   }).catch(function (err) {
     document.body.classList.remove('is-loading');
     MP.toast(err.message || 'بارگذاری پنل انجام نشد.', { error: true, duration: 10000, action: 'تلاش دوباره', onAction: function () { location.reload(); } });

@@ -299,7 +299,7 @@ class MP_Rest {
 		);
 	}
 
-	private static function payloads( array $rows ) {
+	public static function payloads( array $rows ) {
 		$counts = self::task_counts( wp_list_pluck( $rows, 'id' ) );
 		$out    = array();
 		foreach ( $rows as $row ) {

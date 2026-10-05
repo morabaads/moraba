@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:layoutDirection="rtl"
+    android:background="@drawable/bg_widget"
+    android:padding="14dp">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:src="@drawable/ic_chat" android:contentDescription="@null" />
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+            android:layout_marginStart="8dp" android:text="پیام‌ها" android:textColor="@color/ink" android:textSize="17sp" android:textStyle="bold" />
+        <TextView android:textDirection="anyRtl" android:textAlignment="center" android:id="@+id/count" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:minWidth="26dp" android:gravity="center" android:background="@drawable/bg_badge"
+            android:paddingStart="8dp" android:paddingEnd="8dp" android:paddingTop="1dp" android:paddingBottom="1dp"
+            android:textColor="#FFFFFFFF" android:textSize="13sp" android:textStyle="bold" android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView android:textDirection="anyRtl" android:textAlignment="center" android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:gravity="center" android:text="پیام نخوانده‌ای ندارید" android:textColor="@color/muted" android:textSize="14sp" />
+
+    <LinearLayout android:id="@+id/r1" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="10dp" android:visibility="gone">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/t1" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="@color/ink" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/n1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/brand" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/b1" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/r2" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp" android:visibility="gone">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/t2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="@color/ink" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/n2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/brand" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/b2" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+    <LinearLayout android:id="@+id/r3" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp" android:visibility="gone">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+            <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/t3" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textColor="@color/ink" android:textSize="14sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+            <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/n3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="6dp" android:textColor="@color/brand" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
+        <TextView android:textDirection="anyRtl" android:textAlignment="viewStart" android:id="@+id/b3" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/muted" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+</LinearLayout>
