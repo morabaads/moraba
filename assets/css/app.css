@@ -1063,7 +1063,9 @@ body.is-offline .topbar{top:34px}
   .chat-list{padding:6px;border-radius:var(--r-xl)}
   .chat-layout .chat-pane{display:none}
   .chat-layout.open .chat-list{display:none}
-  .chat-layout.open .chat-pane{display:flex;position:fixed;top:0;right:0;left:0;height:var(--vvh,100dvh);z-index:70;border-radius:0;box-shadow:none;animation:slide-fwd .28s var(--ease)}
+  .chat-layout.open .chat-pane{display:flex;position:fixed;top:var(--vvt,0px);right:0;left:0;height:var(--vvh,100dvh);z-index:70;border-radius:0;box-shadow:none;animation:slide-fwd .28s var(--ease)}
+  html:has(body.chat-full),body.chat-full{overflow:hidden;overscroll-behavior:none}
+  body.chat-full .bottom-nav{display:none}
   .chat-head{padding:calc(8px + var(--safe-t)) 10px 8px;background:var(--surface)}
   .chat-back{display:inline-grid}
   #chat-tools > :not(.keep){display:none}
@@ -2922,8 +2924,9 @@ html.dark .chat-messages .day-sep span{background:rgba(255,255,255,.12)}
 .composer textarea{display:block;min-height:46px;padding:11px 16px;padding-inline-end:44px;border-radius:23px;border:0;background:var(--surface-2);box-shadow:none;font-size:15px}
 .composer textarea:focus{border:0;box-shadow:none;outline:none;background:var(--surface-3)}
 html.dark .composer textarea{background:var(--surface-3)}
-.composer-emoji{position:absolute;inset-inline-end:8px;bottom:8px;width:32px;height:32px;border-radius:50%;border:0;background:none;font-size:20px;line-height:1;cursor:pointer;filter:grayscale(.5);opacity:.75}
-.composer-emoji:hover{filter:none;opacity:1}
+.composer-emoji{position:absolute;inset-inline-end:7px;bottom:7px;width:32px;height:32px;border-radius:50%;border:0;background:none;color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.composer-emoji .icon{width:23px;height:23px}
+.composer-emoji:hover{color:var(--brand-strong)}
 .composer-clip{background:none;color:var(--muted)}
 .composer-clip .icon{width:23px;height:23px;transform:rotate(-45deg)}
 .composer .composer-send{display:none}
@@ -2938,9 +2941,6 @@ html.dark .composer textarea{background:var(--surface-3)}
 .compose-ctx b{font-size:13px;color:var(--brand-strong)}
 .compose-ctx small{font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .emoji-pop,.mention-pop{position:absolute;bottom:calc(100% + 6px);inset-inline:10px;z-index:8;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 14px 36px rgba(0,0,0,.22);animation:fade-in .12s}
-.emoji-pop{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));max-height:240px;overflow:auto;padding:8px}
-.emoji-pop button{height:40px;border:0;background:none;font-size:24px;border-radius:10px;cursor:pointer}
-.emoji-pop button:hover{background:var(--surface-2)}
 .mention-pop{padding:6px;max-height:260px;overflow:auto}
 .mention-pop button{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border:0;background:none;border-radius:10px;color:inherit;font:inherit;text-align:right;cursor:pointer}
 .mention-pop button.on,.mention-pop button:hover{background:var(--surface-2)}
@@ -3062,3 +3062,56 @@ html.dark .composer textarea{background:var(--surface-3)}
   .chat-layout.open.swiping-back .chat-pane{box-shadow:-10px 0 30px rgba(0,0,0,.25)}
   .gv-nav{display:none}
 }
+
+/* ---- Apple emoji images, big emoji, emoji picker */
+img.emj{display:inline-block;width:1.3em;height:1.3em;vertical-align:-.3em;margin:0 .04em;object-fit:contain}
+.b-text.b-jumbo{font-size:40px;line-height:1.25}
+.b-text.b-jumbo.j1{font-size:64px}
+.b-text.b-jumbo img.emj{width:1.1em;height:1.1em;vertical-align:-.15em}
+.msg-row .bubble.jumbo{background:transparent!important;box-shadow:none;padding:0 2px 18px}
+.msg-row .bubble.jumbo::before{display:none}
+.msg-row .bubble.jumbo .b-meta{position:absolute;bottom:0;inset-inline-end:0;padding:2px 7px;border-radius:99px;background:rgba(0,0,0,.35);color:#fff}
+.msg-row .bubble.jumbo .b-text::after{display:none}
+.msg-row .bubble.jumbo .b-author{display:none}
+.emoji-pop{display:flex;flex-direction:column;padding:0;overflow:hidden;height:320px}
+.ep-title{padding:10px 14px 4px;font-size:12px;font-weight:800;color:var(--muted)}
+.ep-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));align-content:start;padding:2px 8px 8px;overscroll-behavior:contain}
+.ep-grid button{height:42px;border:0;background:none;border-radius:10px;cursor:pointer;display:grid;place-items:center;font-size:26px;line-height:1}
+.ep-grid button:hover{background:var(--surface-2)}
+.ep-grid img.emj{width:30px;height:30px;margin:0;vertical-align:0}
+.ep-none{grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
+.ep-tabs{display:flex;justify-content:space-between;gap:2px;padding:6px 8px;border-top:1px solid var(--line);background:var(--surface-2)}
+.ep-tabs button{flex:1;height:36px;border:0;background:none;border-radius:10px;cursor:pointer;display:grid;place-items:center;font-size:20px;filter:grayscale(1);opacity:.55;transition:opacity .15s,filter .15s}
+.ep-tabs button.on{filter:none;opacity:1;background:var(--surface-3)}
+.ep-tabs img.emj{width:22px;height:22px;margin:0;vertical-align:0}
+.ctx-reacts button{display:grid;place-items:center}
+.ctx-reacts img.emj{width:28px;height:28px;margin:0;vertical-align:0}
+.b-react img.emj{width:17px;height:17px;vertical-align:-3px;margin:0}
+/* ---- Attach sheet (paperclip), like Telegram */
+.attach-sheet{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;justify-content:flex-end}
+.as-shade{position:absolute;inset:0;background:rgba(0,0,0,.35);opacity:0;transition:opacity .18s}
+.attach-sheet.in .as-shade{opacity:1}
+.as-sheet{position:relative;display:flex;flex-direction:column;max-height:82%;background:var(--bg);border-radius:22px 22px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.3);transform:translateY(100%);transition:transform .22s cubic-bezier(.2,.8,.2,1)}
+.attach-sheet.in .as-sheet{transform:none}
+.as-handle{width:38px;height:5px;border-radius:5px;background:var(--line-strong);margin:8px auto 4px}
+.as-body{flex:1;overflow:auto;padding:6px 12px 12px;display:grid;gap:12px;align-content:start}
+.as-card,.as-recent{background:var(--surface);border-radius:18px;overflow:hidden}
+.as-row,.as-file{display:flex;align-items:center;gap:14px;width:100%;padding:11px 14px;border:0;background:none;color:inherit;font:inherit;text-align:right;cursor:pointer}
+.as-row+.as-row,.as-file+.as-file{border-top:1px solid var(--line)}
+.as-row:hover,.as-file:hover{background:var(--surface-2)}
+.as-ico{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:#fff;flex:none}
+.as-ico .icon{width:22px;height:22px}
+.as-ico.green{background:#3fb96f}.as-ico.blue{background:#3a8ee6}.as-ico.orange{background:var(--brand)}
+.as-copy{display:grid;min-width:0;line-height:1.5}
+.as-copy b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.as-copy small{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.as-sec{padding:12px 14px 4px;font-size:13px;font-weight:800;color:var(--brand-strong)}
+.as-thumb,.as-ext{width:46px;height:46px;border-radius:10px;flex:none;object-fit:cover}
+.as-ext{display:grid;place-items:center;background:#3fb96f;color:#fff;font-size:12px;font-weight:800;text-transform:lowercase}
+.as-tabs{display:flex;justify-content:space-around;gap:4px;margin:0 10px calc(10px + var(--safe-b,0px));padding:6px;border-radius:999px;background:color-mix(in srgb,var(--surface) 80%,transparent);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);box-shadow:0 4px 18px rgba(0,0,0,.2)}
+.as-tab{flex:1;display:grid;justify-items:center;gap:2px;padding:6px 4px;border:0;border-radius:999px;background:none;color:var(--ink-2);font:inherit;font-size:11.5px;font-weight:700;cursor:pointer}
+.as-tab .icon{width:22px;height:22px}
+.as-tab.on{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand-strong)}
+.as-tab:hover{background:var(--surface-2)}
+.emj-t{font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif}
+.ep-grid .emj-t{font-size:26px}.ep-tabs .emj-t{font-size:19px}.ctx-reacts .emj-t{font-size:24px}

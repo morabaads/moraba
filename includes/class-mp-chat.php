@@ -314,6 +314,9 @@ class MP_Chat {
 		}
 		$uid  = self::uid();
 		$from = ! empty( $m->fwd_from ) ? $m->fwd_from : self::author( $m );
+		if ( $r['resend'] && 'false' !== $r['resend'] ) {
+			$from = ''; // «recent files» in the attach sheet: the same file again, as a new message
+		}
 		$done = array();
 		foreach ( array_unique( array_map( 'intval', (array) $r['channel_ids'] ) ) as $cid ) {
 			$to = MP_Rest::channel_for( $cid, $uid );
@@ -328,7 +331,7 @@ class MP_Chat {
 					'body'       => $m->body,
 					'file_id'    => (int) $m->file_id,
 					'transcript' => $m->transcript,
-					'fwd_from'   => mb_substr( $from, 0, 120 ),
+					'fwd_from'   => mb_substr( (string) $from, 0, 120 ),
 					'as_file'    => (int) $m->as_file,
 					'created_at' => MP_Util::now(),
 				)
@@ -488,6 +491,73 @@ class MP_Chat {
 			$id = (int) $wpdb->insert_id;
 		}
 		return MP_Rest::channel_payload( MP_Rest::channel_for( $id, $uid ), $uid );
+	}
+
+	/* ------------------------------------------------------------------ Apple emoji images */
+
+	const EMOJI_CDN = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.2/img/apple/64/';
+
+	/** Public folder: once an emoji is saved, the web server serves it directly (no WordPress). */
+	public static function emoji_dir() {
+		$u = wp_upload_dir( null, false );
+		return $u['basedir'] . '/moraba-emoji';
+	}
+
+	public static function emoji_url() {
+		$u = wp_upload_dir( null, false );
+		return set_url_scheme( $u['baseurl'] . '/moraba-emoji/' );
+	}
+
+	/**
+	 * ?mp_emoji=1f44d — the Apple image of one emoji, fetched once from the emoji-datasource package and then
+	 * served from this site (cached a year in the browser), so Android and Windows show the same emoji as iPhone.
+	 */
+	public static function emoji_image() {
+		if ( ! isset( $_GET['mp_emoji'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			return;
+		}
+		$code = strtolower( (string) wp_unslash( $_GET['mp_emoji'] ) ); // phpcs:ignore WordPress.Security.NonceVerification, WordPress.Security.ValidatedSanitizedInput
+		if ( ! preg_match( '/^[0-9a-f]{2,6}(-[0-9a-f]{2,6}){0,9}$/', $code ) ) {
+			status_header( 404 );
+			exit;
+		}
+		$dir  = self::emoji_dir();
+		$file = $dir . '/' . $code . '.png';
+		if ( ! is_file( $file ) ) {
+			$miss = $dir . '/' . $code . '.miss';
+			if ( is_file( $miss ) && time() - filemtime( $miss ) < DAY_IN_SECONDS ) {
+				status_header( 404 );
+				exit;
+			}
+			wp_mkdir_p( $dir );
+			// The package names some emoji with the FE0F selector and some without.
+			$tries = array( $code );
+			if ( false !== strpos( $code, '-fe0f' ) ) {
+				$tries[] = str_replace( '-fe0f', '', $code );
+			} else {
+				$parts   = explode( '-', $code );
+				$tries[] = $parts[0] . '-fe0f' . ( count( $parts ) > 1 ? '-' . implode( '-', array_slice( $parts, 1 ) ) : '' );
+			}
+			$png = '';
+			foreach ( $tries as $t ) {
+				$res = wp_remote_get( self::EMOJI_CDN . $t . '.png', array( 'timeout' => 8 ) );
+				if ( ! is_wp_error( $res ) && 200 === (int) wp_remote_retrieve_response_code( $res ) && 0 === strpos( wp_remote_retrieve_body( $res ), "\x89PNG" ) ) {
+					$png = wp_remote_retrieve_body( $res );
+					break;
+				}
+			}
+			if ( '' === $png ) {
+				file_put_contents( $miss, '' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+				status_header( 404 );
+				exit;
+			}
+			file_put_contents( $file, $png ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		}
+		header( 'Content-Type: image/png' );
+		header( 'Cache-Control: public, max-age=31536000, immutable' );
+		header( 'Content-Length: ' . filesize( $file ) );
+		readfile( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		exit;
 	}
 
 	/* ------------------------------------------------------------------ Link preview */

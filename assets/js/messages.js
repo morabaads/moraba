@@ -7,7 +7,7 @@
   'use strict';
   var MP = window.MP, S = MP.S, J = MP.J, el = MP.el, $ = MP.$, $$ = MP.$$, fa = MP.fa, icon = MP.icon;
   var chatLayer = null;
-  function closeChat() { finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx();
+  function closeChat() { finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx(); closeAttach();
     layout.classList.remove('open'); document.body.classList.remove('chat-full');
     current = 0; stop(); renderList();
     if (chatLayer) { var l = chatLayer; chatLayer = null; MP.popLayer(l); }
@@ -83,7 +83,8 @@
       else { p.append(tag); last = m.index + tag.length; }
     }
     if (last < body.length) p.append(body.slice(last));
-    return p;
+    if (MP.onlyEmoji(body)) p.classList.add('b-jumbo', 'j' + MP.onlyEmoji(body));
+    return MP.emojify(p);
   }
 
   /* ------------------------------------------------------------ Chat list */
@@ -145,6 +146,7 @@
     if (quiet.length && !q) list.append(el('button', { type: 'button', class: 'chat-archive-link', html: icon(showQuiet ? 'eye' : 'folder') + (showQuiet ? 'پنهان کردن گروه‌های بی‌پیام' : fa(quiet.length) + ' گروه بدون پیام'), onclick: function () { showQuiet = !showQuiet; renderList(); } }));
     list.append(el('button', { type: 'button', class: 'chat-archive-link', html: icon('folder') + 'گروه‌های آرشیو‌شده', onclick: archivedGroups }));
     if (keepFocus) { var i = $('#chat-search'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+    MP.emojify(list);
     list.scrollTop = scroll;
   }
   function findMessages() {
@@ -427,12 +429,14 @@
     else if (kind === 'video') b.append(el('video', { class: 'b-video', src: m.file.url, controls: true, preload: 'metadata', playsinline: true }));
     else if (kind === 'file') b.append(fileCard(m));
     if (caption) b.append(richText(caption));
+    if (caption && !m.file && !m.reply && !m.fwd_from && MP.onlyEmoji(caption)) b.classList.add('jumbo');
     var url = caption && !m.file ? (caption.match(URL_RE) || [])[0] : '';
     if (url) b.append(linkCard(url.replace(/[.,،)!؟?]+$/, '')));
     var reacts = reactionsOf(list);
     if (reacts) b.append(reacts);
     var meta = metaOf(last, list);
     b.append(meta);
+    $$('.b-quote, .b-reacts, .b-link', b).forEach(MP.emojify);
     // Time and ticks tuck into the end of the last text line; under media or cards they get their own line.
     var prevEl = meta.previousElementSibling;
     if (prevEl && prevEl.classList.contains('b-text')) b.classList.add('meta-in');
@@ -566,6 +570,7 @@
     var bar = $('#chat-pinbar'); bar.hidden = !p;
     if (!p) return;
     $('#chat-pin-text').textContent = (p.kind === 'photo' ? '🖼 ' : p.kind === 'voice' ? '🎤 ' : '') + (p.text || p.author);
+    MP.emojify($('#chat-pin-text'));
   }
   $('#chat-pinbar').onclick = function (e) {
     if (e.target.closest('#chat-pin-x')) { if (pinned) pin({ id: pinned.id }, false); return; }
@@ -752,6 +757,8 @@
     sendActivity(text.value.trim() ? 'typing' : 'idle'); autoGrow(); composerState(); mentionCheck();
     clearTimeout(draftTimer); var ch = current; draftTimer = setTimeout(function () { if (ch === current && !editing) saveDraft(ch, text.value.trim()); }, 400);
   });
+  // iPhone: keep the page itself from scrolling away under the keyboard.
+  text.addEventListener('focus', function () { if (MP.isMobile()) setTimeout(function () { window.scrollTo(0, 0); }, 60); });
   text.addEventListener('keydown', function (e) {
     if (mentionKeys(e)) return;
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !MP.isMobile()) { e.preventDefault(); $('#composer').requestSubmit(); }
@@ -765,7 +772,7 @@
     var bar = $('#compose-ctx');
     $('#cc-ico').innerHTML = icon(kind === 'edit' ? 'edit' : 'reply');
     $('#cc-title').textContent = kind === 'edit' ? 'ویرایش پیام' : 'پاسخ به ' + (m.mine ? 'خودتان' : m.author);
-    $('#cc-text').textContent = snippet(m);
+    $('#cc-text').textContent = snippet(m); MP.emojify($('#cc-text'));
     bar.hidden = false; bar.dataset.kind = kind;
     text.focus();
   }
@@ -779,11 +786,33 @@
   function startReply(m) { if (editing) clearCtx(); replyTo = m; setCtx('reply', m); }
   function startEdit(m) { replyTo = null; editing = m; text.value = m.body || ''; autoGrow(); setCtx('edit', m); composerState(); text.setSelectionRange(text.value.length, text.value.length); }
 
-  // Emoji panel.
-  var EMOJI = '😀 😃 😄 😁 😆 😅 😂 🤣 🙂 😉 😊 😇 🥰 😍 🤩 😘 😋 😜 🤪 😎 🤓 🧐 🤔 🤗 🤭 🤫 😐 😑 😶 🙄 😏 😬 😌 😔 😪 😴 😷 🤒 🥵 🥶 😵 🤯 🥳 😕 😟 🙁 😮 😯 😲 😳 🥺 😢 😭 😱 😖 😣 😞 😓 😩 😫 😤 😡 😠 👍 👎 👌 ✌️ 🤞 🤝 👏 🙌 🙏 💪 👋 ✍️ 👀 💯 ✅ ❌ ⚠️ ❓ ❗ 🔥 ⭐ ✨ 🎉 🎊 🎁 🏆 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💡 📌 📎 📁 📝 📅 ⏰ ☕ 🍕 🎨 🖌️ 🖼️ 💻 📱 💰 📈 🚀 🌹 🌸 🌙 ☀️'.split(' ');
-  var pop = $('#emoji-pop');
-  pop.append.apply(pop, EMOJI.map(function (e) { return el('button', { type: 'button', text: e, onclick: function () { insertAt(e); } }); }));
-  $('#composer-emoji').onclick = function () { pop.hidden = !pop.hidden; if (!pop.hidden && !MP.isMobile()) text.focus(); };
+  // Emoji panel, in groups like Telegram's, with «recent» first.
+  var EMOJI = [
+    ['🕒', 'اخیر', ''],
+    ['😀', 'شکلک‌ها', '😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 🫠 😉 😊 😇 🥰 😍 🤩 😘 😗 ☺️ 😚 😙 🥲 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🫢 🫣 🤫 🤔 🫡 🤐 🤨 😐 😑 😶 🫥 😏 😒 🙄 😬 😮‍💨 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 😵‍💫 🤯 🤠 🥳 🥸 😎 🤓 🧐 😕 🫤 😟 🙁 ☹️ 😮 😯 😲 😳 🥺 🥹 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 👾 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾 🙈 🙉 🙊'],
+    ['👋', 'دست و آدم‌ها', '👋 🤚 🖐️ ✋ 🖖 🫱 🫲 🫳 🫴 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 🖕 👇 ☝️ 🫵 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 🫶 👐 🤲 🤝 🙏 ✍️ 💅 🤳 💪 🦾 🦵 🦶 👂 👃 🧠 🫀 🫁 🦷 🦴 👀 👁️ 👅 👄 🫦 👶 🧒 👦 👧 🧑 👱 👨 🧔 👩 🧓 👴 👵 🙍 🙎 🙅 🙆 💁 🙋 🧏 🙇 🤦 🤷 🧑‍💻 👨‍💻 👩‍💻 🧑‍🎨 👨‍🎨 👩‍🎨 🧑‍💼 👨‍💼 👩‍💼 🧑‍🏫 🧑‍🔧 🧑‍🍳 🧑‍🎓 🕵️ 💂 🥷 👷 🤴 👸 🧕 🤵 👰 🤰 🤱 👼 🎅 🦸 🦹 🧙 🧚 🧛 🧜 🧝 🧞 🧟 💆 💇 🚶 🧍 🧎 🏃 💃 🕺 👯 🧖 🧗 🤸 🏋️ 🚴 🤹 🧘 🛀 🛌 👭 👫 👬 💏 💑 👪 🗣️ 👤 👥'],
+    ['🐶', 'حیوانات و طبیعت', '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐻‍❄️ 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦇 🐺 🐗 🐴 🦄 🐝 🪱 🐛 🦋 🐌 🐞 🐜 🪰 🪲 🦟 🦗 🕷️ 🦂 🐢 🐍 🦎 🦖 🦕 🐙 🦑 🦐 🦞 🦀 🐡 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🦧 🐘 🦛 🦏 🐪 🐫 🦒 🦘 🐃 🐂 🐄 🐎 🐖 🐏 🐑 🦙 🐐 🦌 🐕 🐩 🦮 🐈 🐈‍⬛ 🪶 🐓 🦃 🦚 🦜 🦢 🦩 🕊️ 🐇 🦝 🦨 🦡 🦫 🦦 🦥 🐁 🐀 🐿️ 🦔 🐾 🐉 🐲 🌵 🎄 🌲 🌳 🌴 🪵 🌱 🌿 ☘️ 🍀 🎍 🪴 🎋 🍃 🍂 🍁 🍄 🐚 🪨 🌾 💐 🌷 🌹 🥀 🌺 🌸 🌼 🌻 🌞 🌝 🌛 🌜 🌚 🌕 🌙 🌎 🪐 💫 ⭐ 🌟 ✨ ⚡ ☄️ 💥 🔥 🌪️ 🌈 ☀️ 🌤️ ⛅ 🌥️ ☁️ 🌦️ 🌧️ ⛈️ 🌩️ 🌨️ ❄️ ☃️ ⛄ 🌬️ 💨 💧 💦 ☔ ☂️ 🌊'],
+    ['🍔', 'خوراکی', '🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍈 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🍆 🥑 🥦 🥬 🥒 🌶️ 🫑 🌽 🥕 🫒 🧄 🧅 🥔 🍠 🥐 🥯 🍞 🥖 🥨 🧀 🥚 🍳 🧈 🥞 🧇 🥓 🥩 🍗 🍖 🌭 🍔 🍟 🍕 🫓 🥪 🥙 🧆 🌮 🌯 🫔 🥗 🥘 🫕 🥫 🍝 🍜 🍲 🍛 🍣 🍱 🥟 🦪 🍤 🍙 🍚 🍘 🍥 🥠 🥮 🍢 🍡 🍧 🍨 🍦 🥧 🧁 🍰 🎂 🍮 🍭 🍬 🍫 🍿 🍩 🍪 🌰 🥜 🍯 🥛 🍼 🫖 ☕ 🍵 🧃 🥤 🧋 🍶 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🧉 🍾 🧊 🥄 🍴 🍽️ 🥣 🥡 🥢 🧂'],
+    ['⚽', 'فعالیت', '⚽ 🏀 🏈 ⚾ 🥎 🎾 🏐 🏉 🥏 🎱 🪀 🏓 🏸 🏒 🏑 🥍 🏏 🪃 🥅 ⛳ 🪁 🏹 🎣 🤿 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 ⛷️ 🏂 🪂 🏆 🥇 🥈 🥉 🏅 🎖️ 🏵️ 🎗️ 🎫 🎟️ 🎪 🤹 🎭 🩰 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🪘 🎷 🎺 🪗 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🎰 🧩'],
+    ['🚗', 'سفر و مکان', '🚗 🚕 🚙 🚌 🚎 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚛 🚜 🦯 🦽 🦼 🛴 🚲 🛵 🏍️ 🛺 🚨 🚔 🚍 🚘 🚖 🚡 🚠 🚟 🚃 🚋 🚞 🚝 🚄 🚅 🚈 🚂 🚆 🚇 🚊 🚉 ✈️ 🛫 🛬 🛩️ 💺 🛰️ 🚀 🛸 🚁 🛶 ⛵ 🚤 🛥️ 🛳️ ⛴️ 🚢 ⚓ 🪝 ⛽ 🚧 🚦 🚥 🚏 🗺️ 🗿 🗽 🗼 🏰 🏯 🏟️ 🎡 🎢 🎠 ⛲ ⛱️ 🏖️ 🏝️ 🏜️ 🌋 ⛰️ 🏔️ 🗻 🏕️ ⛺ 🛖 🏠 🏡 🏘️ 🏚️ 🏗️ 🏭 🏢 🏬 🏣 🏤 🏥 🏦 🏨 🏪 🏫 🏩 💒 🏛️ ⛪ 🕌 🕍 🛕 🕋 ⛩️ 🛤️ 🛣️ 🗾 🎑 🏞️ 🌅 🌄 🌠 🎇 🎆 🌇 🌆 🏙️ 🌃 🌌 🌉 🌁'],
+    ['💡', 'اشیا', '⌚ 📱 📲 💻 ⌨️ 🖥️ 🖨️ 🖱️ 🖲️ 🕹️ 🗜️ 💽 💾 💿 📀 📼 📷 📸 📹 🎥 📽️ 🎞️ 📞 ☎️ 📟 📠 📺 📻 🎙️ 🎚️ 🎛️ 🧭 ⏱️ ⏲️ ⏰ 🕰️ ⌛ ⏳ 📡 🔋 🪫 🔌 💡 🔦 🕯️ 🪔 🧯 🛢️ 💸 💵 💴 💶 💷 🪙 💰 💳 💎 ⚖️ 🪜 🧰 🪛 🔧 🔨 ⚒️ 🛠️ ⛏️ 🪚 🔩 ⚙️ 🪤 🧱 ⛓️ 🧲 🔫 💣 🧨 🪓 🔪 🗡️ ⚔️ 🛡️ 🚬 ⚰️ 🪦 ⚱️ 🏺 🔮 📿 🧿 💈 ⚗️ 🔭 🔬 🕳️ 🩹 🩺 💊 💉 🩸 🧬 🦠 🧫 🧪 🌡️ 🧹 🪠 🧺 🧻 🚽 🚰 🚿 🛁 🧼 🪥 🪒 🧽 🪣 🧴 🛎️ 🔑 🗝️ 🚪 🪑 🛋️ 🛏️ 🧸 🪆 🖼️ 🪞 🪟 🛍️ 🛒 🎁 🎈 🎏 🎀 🪄 🪅 🎊 🎉 🎎 🏮 🎐 🧧 ✉️ 📩 📨 📧 💌 📥 📤 📦 🏷️ 🪧 📪 📫 📬 📭 📮 📯 📜 📃 📄 📑 🧾 📊 📈 📉 🗒️ 🗓️ 📆 📅 🗑️ 📇 🗃️ 🗳️ 🗄️ 📋 📁 📂 🗂️ 🗞️ 📰 📓 📔 📒 📕 📗 📘 📙 📚 📖 🔖 🧷 🔗 📎 🖇️ 📐 📏 🧮 📌 📍 ✂️ 🖊️ 🖋️ ✒️ 🖌️ 🖍️ 📝 ✏️ 🔍 🔎 🔏 🔐 🔒 🔓'],
+    ['❤️', 'نمادها', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❤️‍🔥 ❤️‍🩹 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ 🛐 ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ 🉑 ☢️ ☣️ 📴 📳 🆚 💮 🉐 ㊙️ ㊗️ 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🚷 🚯 🚳 🚱 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 〽️ ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 🈯 💹 ❇️ ✳️ ❎ 🌐 💠 Ⓜ️ 🌀 💤 🏧 🚾 ♿ 🅿️ 🛗 🈳 🈂️ 🛂 🛃 🛄 🛅 🚹 🚺 🚼 ⚧️ 🚻 🚮 🎦 📶 🈁 🔣 ℹ️ 🔤 🔡 🔠 🆖 🆗 🆙 🆒 🆕 🆓 0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟 🔢 #️⃣ *️⃣ ⏏️ ▶️ ⏸️ ⏯️ ⏹️ ⏺️ ⏭️ ⏮️ ⏩ ⏪ ⏫ ⏬ ◀️ 🔼 🔽 ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ ↙️ ↖️ ↕️ ↔️ ↪️ ↩️ ⤴️ ⤵️ 🔀 🔁 🔂 🔄 🔃 🎵 🎶 ➕ ➖ ➗ ✖️ 🟰 ♾️ 💲 💱 ™️ ©️ ®️ 〰️ ➰ ➿ 🔚 🔙 🔛 🔝 🔜 ✔️ ☑️ 🔘 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ 🟤 🔺 🔻 🔸 🔹 🔶 🔷 🔳 🔲 ▪️ ▫️ ◾ ◽ ◼️ ◻️ 🟥 🟧 🟨 🟩 🟦 🟪 ⬛ ⬜ 🟫 🔈 🔇 🔉 🔊 🔔 🔕 📣 📢 💬 💭 🗯️ ♠️ ♣️ ♥️ ♦️ 🃏 🎴 🀄 🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛'],
+    ['🏁', 'پرچم‌ها', '🏳️ 🏴 🏁 🚩 🏳️‍🌈 🇮🇷 🇦🇫 🇹🇯 🇮🇶 🇹🇷 🇦🇪 🇸🇦 🇶🇦 🇰🇼 🇴🇲 🇧🇭 🇦🇿 🇦🇲 🇬🇪 🇵🇰 🇮🇳 🇨🇳 🇯🇵 🇰🇷 🇷🇺 🇺🇦 🇩🇪 🇫🇷 🇬🇧 🇮🇹 🇪🇸 🇳🇱 🇧🇪 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇨🇭 🇦🇹 🇵🇱 🇬🇷 🇵🇹 🇮🇪 🇺🇸 🇨🇦 🇲🇽 🇧🇷 🇦🇷 🇦🇺 🇳🇿 🇿🇦 🇪🇬 🇲🇦 🇳🇬 🇰🇪 🇮🇩 🇲🇾 🇹🇭 🇻🇳 🇵🇭 🇸🇬 🇪🇺 🇺🇳']
+  ];
+  var pop = $('#emoji-pop'), emoTab = 1;
+  function recentEmoji() { try { return JSON.parse(localStorage.getItem('mp_emoji_recent') || '[]'); } catch (e) { return []; } }
+  function drawEmoji() {
+    var list = emoTab === 0 ? recentEmoji() : EMOJI[emoTab][2].split(' ');
+    var grid = el('div', { class: 'ep-grid' }, list.length ? list.map(function (e) { return el('button', { type: 'button', 'aria-label': e, onclick: function () { pickEmoji(e); } }, MP.emojiImg(e)); }) : el('p', { class: 'ep-none', text: 'هنوز ایموجی‌ای نفرستاده‌اید' }));
+    var tabs = el('div', { class: 'ep-tabs' }, EMOJI.map(function (c, i) { return el('button', { type: 'button', class: i === emoTab ? 'on' : '', title: c[1], 'aria-label': c[1], onclick: function () { emoTab = i; drawEmoji(); } }, MP.emojiImg(c[0])); }));
+    pop.replaceChildren(el('div', { class: 'ep-title', text: EMOJI[emoTab][1] }), grid, tabs);
+  }
+  function pickEmoji(e) {
+    var r = recentEmoji().filter(function (x) { return x !== e; }); r.unshift(e);
+    try { localStorage.setItem('mp_emoji_recent', JSON.stringify(r.slice(0, 32))); } catch (er) { /* private mode */ }
+    insertAt(e);
+  }
+  $('#composer-emoji').onclick = function () { if (pop.hidden) { emoTab = recentEmoji().length ? 0 : 1; drawEmoji(); } pop.hidden = !pop.hidden; if (!pop.hidden && !MP.isMobile()) text.focus(); };
   document.addEventListener('pointerdown', function (e) { if (!pop.hidden && !e.target.closest('#emoji-pop, #composer-emoji')) pop.hidden = true; });
   function insertAt(s) {
     var a = text.selectionStart || text.value.length, b = text.selectionEnd || a;
@@ -925,7 +954,62 @@
 
   /* ------------------------------------------------------------ Attach: photos (album) or files, like Telegram */
 
-  $('#composer-file').onchange = function (e) { var files = Array.prototype.slice.call(e.target.files || []); e.target.value = ''; sendSheet(files); };
+  // Each picker sends its own way: gallery → photos, «without compression» and «file» → as files.
+  var pickMode = '';
+  ['composer-file', 'composer-media', 'composer-camera', 'composer-doc'].forEach(function (id) {
+    $('#' + id).onchange = function (e) { var files = Array.prototype.slice.call(e.target.files || []); e.target.value = ''; closeAttach(); sendSheet(files, pickMode); pickMode = ''; };
+  });
+
+  /* ------------------------------------------------------------ Attach sheet (Telegram's paperclip) */
+
+  var attach = $('#attach-sheet'), attachLayer = null;
+  function closeAttach() {
+    if (attach.hidden) return;
+    attach.classList.remove('in'); setTimeout(function () { attach.hidden = true; attach.replaceChildren(); }, 180);
+    if (attachLayer) { var l = attachLayer; attachLayer = null; MP.popLayer(l); }
+  }
+  function pick(id, mode) { pickMode = mode; $('#' + id).click(); }
+  function openAttach() {
+    if (!current) return;
+    if (!attach.hidden) { closeAttach(); return; }
+    var c = chan(), mobile = MP.isMobile();
+    var row = function (ic, color, title, sub, fn) {
+      return el('button', { type: 'button', class: 'as-row', onclick: fn }, el('span', { class: 'as-ico ' + color, html: icon(ic) }), el('span', { class: 'as-copy' }, el('b', { text: title }), el('small', { text: sub })));
+    };
+    var recent = el('div', { class: 'as-recent' }, el('div', { class: 'as-sec', text: 'فایل‌های اخیر این گفت‌وگو' }), el('div', { class: 'as-list' }, MP.skeleton(1)));
+    var tab = function (ic, label, fn, on) { return el('button', { type: 'button', class: 'as-tab' + (on ? ' on' : ''), onclick: fn }, MP.iconEl(ic), el('span', { text: label })); };
+    attach.replaceChildren(
+      el('div', { class: 'as-shade', onclick: closeAttach }),
+      el('div', { class: 'as-sheet', role: 'dialog', 'aria-label': 'پیوست' },
+        el('div', { class: 'as-handle' }),
+        el('div', { class: 'as-body' },
+          el('div', { class: 'as-card' },
+            row('image', 'green', 'گالری', 'عکس و ویدیو، فشرده و سریع؛ چند عکس با هم آلبوم می‌شوند', function () { pick('composer-media', 'photo'); }),
+            row('file', 'blue', 'فایل از حافظه', 'PDF، ورد، اکسل، فایل طراحی و هر فایلی، بدون فشرده‌سازی', function () { pick('composer-doc', 'file'); }),
+            row('download', 'orange', 'گالری بدون فشرده‌سازی', 'عکس با کیفیت اصلی، به‌صورت فایل', function () { pick('composer-media', 'file'); })),
+          recent),
+        el('div', { class: 'as-tabs' },
+          tab('image', 'گالری', function () { pick('composer-media', 'photo'); }, true),
+          tab('file', 'فایل', function () { pick('composer-doc', 'file'); }),
+          mobile ? tab('eye', 'دوربین', function () { pick('composer-camera', 'photo'); }) : null,
+          c && c.type !== 'saved' ? tab('video', 'جلسه', function () { closeAttach(); startMeeting(c); }) : null,
+          tab('tasks', 'تسک', function () { closeAttach(); MP.taskForm({ projectId: c && c.project_id ? c.project_id : 0 }); }))));
+    attach.hidden = false; requestAnimationFrame(function () { attach.classList.add('in'); });
+    attachLayer = MP.pushLayer(function () { attachLayer = null; closeAttach(); });
+    MP.emojify(attach);
+    // Files already in this chat: one tap sends the same file again (no upload).
+    MP.api('channels/' + current + '/media', { query: { kind: 'files' } }).then(function (l) {
+      var list = $('.as-list', recent); if (!list) return;
+      if (!l.length) { recent.remove(); return; }
+      list.replaceChildren.apply(list, l.slice(0, 12).map(function (x) {
+        var f = x.file, ext = (f.name.split('.').pop() || '').slice(0, 4).toLowerCase();
+        return el('button', { type: 'button', class: 'as-file', onclick: function () { closeAttach(); var ch = current; MP.api('messages/' + x.id + '/forward', { method: 'POST', body: { channel_ids: [ch], resend: 1 } }).then(function () { MP.loadChannels(); }).catch(MP.soft); } },
+          f.image ? el('img', { class: 'as-thumb', src: f.url, alt: '', loading: 'lazy' }) : el('span', { class: 'as-ext', text: ext || 'file' }),
+          el('span', { class: 'as-copy' }, el('b', { text: f.name, dir: 'auto' }), el('small', { text: MP.fileSize(f.size) + ' · ' + listTime(x.created_at) })));
+      }));
+    }).catch(function () { recent.remove(); });
+  }
+  $('#composer-clip').onclick = openAttach;
   text.addEventListener('paste', function (e) {
     var files = Array.prototype.slice.call((e.clipboardData && e.clipboardData.files) || []);
     if (!files.length) return;
@@ -942,9 +1026,9 @@
   })();
   function isPic(f) { return /^image\/(jpeg|png|webp|gif|bmp|heic|heif)$/i.test(f.type) || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name); }
   /** Before sending: thumbnails, «عکس» (compressed, grouped in an album) or «فایل» (original), and a caption. */
-  function sendSheet(files) {
+  function sendSheet(files, want) {
     if (!current || !files.length) return;
-    var list = files.slice(0, 20), pics = list.filter(isPic).length, mode = pics ? 'photo' : 'file', group = true;
+    var list = files.slice(0, 20), pics = list.filter(isPic).length, mode = pics && want !== 'file' ? 'photo' : 'file', group = true;
     var grid = el('div', { class: 'ss-grid' }), cap = el('textarea', { class: 'ss-cap', rows: 1, placeholder: 'توضیح (اختیاری)…', maxlength: 4000, dir: 'auto' });
     if (text.value.trim() && !editing) { cap.value = text.value.trim(); }
     var seg = el('div', { class: 'seg ss-seg', role: 'tablist' });
@@ -1085,7 +1169,7 @@
     if ((m.mine && !m.archived) || S.manager) items.push(['trash', 'حذف', function () { list.forEach(function (x, i) { if (i === 0) askDelete(x); else if (!S.manager) archiveMsg(x, true); }); }, true]);
     var strip = el('div', { class: 'ctx-reacts' }, REACTIONS.map(function (e) {
       var mine = (last.reactions || []).some(function (x) { return x.mine && x.emoji === e; });
-      return el('button', { type: 'button', class: mine ? 'on' : '', text: e, onclick: function () { close(); react(last, e); } });
+      return el('button', { type: 'button', class: mine ? 'on' : '', 'aria-label': e, onclick: function () { close(); react(last, e); } }, MP.emojiImg(e));
     }));
     var menu = el('div', { class: 'ctx-menu msg-menu', role: 'menu' }, strip,
       items.map(function (it) {

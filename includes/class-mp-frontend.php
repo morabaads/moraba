@@ -412,6 +412,7 @@ JS;
 			'root'   => esc_url_raw( rest_url( MP_Rest::NS . '/' ) ),
 			'nonce'  => wp_create_nonce( 'wp_rest' ),
 			'assets' => MP_URL . 'assets/',
+			'emoji'  => array( MP_Chat::emoji_url(), home_url( '/' ) . ( false === strpos( home_url( '/' ), '?' ) ? '?' : '&' ) . 'mp_emoji=' ),
 			'sw'     => add_query_arg( 'mp_sw', 1, home_url( '/' ) ),
 			'scope'  => self::scope(),
 			'export' => add_query_arg( array( 'mp_export' => 'ledger', '_wpnonce' => wp_create_nonce( 'mp_export' ) ), home_url( '/' ) ),

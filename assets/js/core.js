@@ -500,6 +500,52 @@
     zone.addEventListener('drop', function (e) { e.preventDefault(); zone.classList.remove('over'); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
     return zone;
   };
+  /* ------------------------------------------------------------ Apple emoji everywhere (iPhone and Mac already have them) */
+
+  var EMOJI_RE = null;
+  try { EMOJI_RE = new RegExp('(?:\\p{RI}\\p{RI}|[#*0-9]\\uFE0F?\\u20E3|\\p{Extended_Pictographic}(?:\\uFE0F|\\p{EMod})?(?:\\u200D\\p{Extended_Pictographic}(?:\\uFE0F|\\p{EMod})?)*)', 'gu'); } catch (e) { /* old browser: native emoji */ }
+  var appleNative = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+  MP.EMOJI_RE = EMOJI_RE;
+  MP.emojiCode = function (seq) { return Array.from(seq).map(function (c) { return c.codePointAt(0).toString(16); }).join('-'); };
+  /** One emoji as Apple's image: the site's saved copy, else fetched once by the site, else the phone's own. */
+  // The phone's own emoji shows at once; Apple's image takes its place as soon as it has loaded.
+  var emojiOk = {};
+  MP.emojiImg = function (seq) {
+    if (appleNative || !C.emoji) return document.createTextNode(seq);
+    var code = MP.emojiCode(seq);
+    if (emojiOk[code]) return el('img', { class: 'emj', alt: seq, draggable: 'false', src: emojiOk[code] });
+    var span = el('span', { class: 'emj-t', text: seq }), img = new Image();
+    img.onload = function () { emojiOk[code] = img.src; if (span.isConnected || span.parentNode) span.replaceWith(el('img', { class: 'emj', alt: seq, draggable: 'false', src: img.src })); };
+    img.onerror = function () { if (!img.dataset.retry) { img.dataset.retry = '1'; img.src = C.emoji[1] + code; } };
+    img.src = C.emoji[0] + code + '.png';
+    return span;
+  };
+  /** Replaces the emoji in a node's text with Apple images (form fields are left alone). */
+  MP.emojify = function (node) {
+    if (appleNative || !EMOJI_RE || !node || !C.emoji) return node;
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, { acceptNode: function (t) { return t.parentNode && /^(TEXTAREA|INPUT|SCRIPT|STYLE|OPTION)$/.test(t.parentNode.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } }), list = [], t;
+    while ((t = walker.nextNode())) { EMOJI_RE.lastIndex = 0; if (EMOJI_RE.test(t.nodeValue)) list.push(t); }
+    list.forEach(function (tn) {
+      var s = tn.nodeValue, frag = document.createDocumentFragment(), last = 0, m;
+      EMOJI_RE.lastIndex = 0;
+      while ((m = EMOJI_RE.exec(s))) {
+        if (/^[#*0-9]$/.test(m[0])) continue;
+        if (m.index > last) frag.append(s.slice(last, m.index));
+        frag.append(MP.emojiImg(m[0])); last = m.index + m[0].length;
+      }
+      if (last < s.length) frag.append(s.slice(last));
+      tn.replaceWith(frag);
+    });
+    return node;
+  };
+  /** True when a text is nothing but 1–3 emoji (shown large, like Telegram). */
+  MP.onlyEmoji = function (s) {
+    if (!EMOJI_RE) return 0;
+    var t = String(s || '').replace(/\s+/g, ''); if (!t) return 0;
+    var m = t.match(EMOJI_RE); if (!m || m.join('') !== t) return 0;
+    return m.length <= 3 ? m.length : 0;
+  };
+
   MP.fileChip = function (f) {
     return el('a', { class: 'file-chip', href: f.url, target: '_blank', rel: 'noopener' }, MP.iconEl(f.image ? 'eye' : 'file'), el('span', { text: f.name }), el('small', { class: 'muted', text: MP.fileSize(f.size) }));
   };
@@ -535,12 +581,14 @@
   });
   window.addEventListener('scroll', function () { document.body.classList.toggle('scrolled', window.scrollY > 4); }, { passive: true });
   if (window.visualViewport) {
+    // iPhone scrolls the page up when the keyboard opens; full-screen panes follow the visible area instead.
     var vv = function () {
-      var h = window.visualViewport.height;
+      var v = window.visualViewport, h = v.height;
       root.style.setProperty('--vvh', h + 'px');
+      root.style.setProperty('--vvt', Math.max(0, v.offsetTop) + 'px');
       document.body.classList.toggle('keyboard', window.innerHeight - h > 140);
     };
-    window.visualViewport.addEventListener('resize', vv); vv();
+    window.visualViewport.addEventListener('resize', vv); window.visualViewport.addEventListener('scroll', vv); vv();
   }
 
   /* ------------------------------------------------------------ Navigation */

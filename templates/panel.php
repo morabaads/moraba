@@ -328,13 +328,18 @@ $mp_nav = array(
 					<div class="chat-find-list" id="chat-find-list" hidden></div>
 					<div class="chat-messages" id="chat-messages"></div>
 					<button type="button" class="chat-down" id="chat-down" hidden aria-label="رفتن به آخرین پیام"><?php echo $mp_i( 'down' ); // phpcs:ignore ?><i class="badge" id="chat-down-n" hidden></i></button>
+					<div class="attach-sheet" id="attach-sheet" hidden></div>
 					<form class="composer" id="composer" hidden>
 						<div class="compose-ctx" id="compose-ctx" hidden><span class="cc-ico" id="cc-ico"></span><span class="cc-copy"><b id="cc-title"></b><small id="cc-text"></small></span><button type="button" class="icon-btn sm" id="cc-x" aria-label="لغو"><?php echo $mp_i( 'close' ); // phpcs:ignore ?></button></div>
 						<div class="mention-pop" id="mention-pop" hidden></div>
 						<div class="emoji-pop" id="emoji-pop" hidden></div>
 						<div class="composer-row">
-							<label class="icon-btn composer-clip" title="پیوست عکس یا فایل" aria-label="پیوست عکس یا فایل"><?php echo $mp_i( 'clip' ); // phpcs:ignore ?><input type="file" id="composer-file" class="visually-hidden" multiple></label>
-							<div class="composer-input"><textarea id="composer-text" rows="1" placeholder="پیام… (Enter ارسال، Shift+Enter خط جدید)" maxlength="4000" aria-label="متن پیام"></textarea><button type="button" class="composer-emoji" id="composer-emoji" aria-label="ایموجی">😊</button></div>
+							<button type="button" class="icon-btn composer-clip" id="composer-clip" title="پیوست عکس یا فایل" aria-label="پیوست عکس یا فایل"><?php echo $mp_i( 'clip' ); // phpcs:ignore ?></button>
+							<input type="file" id="composer-file" class="visually-hidden" multiple tabindex="-1" aria-hidden="true">
+							<input type="file" id="composer-media" class="visually-hidden" multiple accept="image/*,video/*" tabindex="-1" aria-hidden="true">
+							<input type="file" id="composer-camera" class="visually-hidden" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+							<input type="file" id="composer-doc" class="visually-hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip,.rar,.7z,.psd,.ai,.eps,.svg,.cdr,.indd,.fig,.sketch,.xd,.mp3,.wav,.m4a,.mp4,.mov,.png,.jpg,.jpeg,.webp,.gif,application/*,text/*" tabindex="-1" aria-hidden="true">
+							<div class="composer-input"><textarea id="composer-text" rows="1" placeholder="پیام… (Enter ارسال، Shift+Enter خط جدید)" maxlength="4000" aria-label="متن پیام"></textarea><button type="button" class="composer-emoji" id="composer-emoji" aria-label="ایموجی"><?php echo $mp_i( 'smile' ); // phpcs:ignore ?></button></div>
 							<button type="button" class="icon-btn lg composer-mic" id="composer-mic" aria-label="ضبط پیام صوتی" title="پیام صوتی"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?></button>
 							<button type="submit" class="icon-btn accent lg composer-send" aria-label="ارسال"><?php echo $mp_i( 'send' ); // phpcs:ignore ?></button>
 						</div>
