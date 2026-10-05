@@ -957,15 +957,20 @@ body.is-offline .topbar{top:34px}
 
   /* tab bar with center action */
   /* Floating pill bar: icons only; the active section is a dark pill with its name. */
-  .bottom-nav{display:flex;align-items:center;gap:2px;position:fixed;right:0;left:0;margin-inline:auto;width:max-content;max-width:calc(100% - 28px);bottom:calc(12px + var(--safe-b));z-index:40;height:62px;padding:5px;border-radius:999px;background:color-mix(in srgb,var(--surface) 70%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(22px);backdrop-filter:saturate(1.8) blur(22px);box-shadow:0 10px 30px rgba(0,0,0,.22),inset 0 0 0 1px color-mix(in srgb,var(--ink) 9%,transparent);transition:transform .28s var(--ease)}
-  .bottom-nav button{flex:none;width:64px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0;border-radius:999px;font-size:10.5px;font-weight:700;line-height:1.2;color:var(--muted);position:relative;white-space:nowrap;transition:background .3s var(--ease),color .2s}
-  .bottom-nav button .icon{width:22px;height:22px;flex:none;transition:transform .3s var(--ease)}
+  .bottom-nav{display:flex;align-items:center;gap:4px;position:fixed;right:14px;left:14px;bottom:calc(12px + var(--safe-b));z-index:40;height:64px;padding:0 10px;border-radius:24px;background:color-mix(in srgb,var(--surface) 55%,transparent);-webkit-backdrop-filter:saturate(1.8) blur(24px);backdrop-filter:saturate(1.8) blur(24px);box-shadow:0 12px 32px rgba(0,0,0,.18),inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent);transition:transform .28s var(--ease)}
+  .bottom-nav button{flex:1 1 auto;min-width:40px;display:flex;align-items:center;justify-content:center;gap:0;height:46px;padding:0;border-radius:16px;font-size:13px;font-weight:700;color:var(--muted);position:relative;white-space:nowrap;transition:background .35s var(--ease),color .25s,padding .35s var(--ease)}
+  .bottom-nav button .icon{width:23px;height:23px;flex:none}
+  .bottom-nav button > span{display:inline-block;max-width:0;overflow:hidden;opacity:0;transition:max-width .35s var(--ease),opacity .25s,margin .35s var(--ease)}
+  .bottom-nav button .icon{transition:transform .35s var(--ease)}
+  .bottom-nav button.active .icon{transform:scale(1.04)}
   .bottom-nav button:not(.fab):active .icon{transform:scale(.88)}
-  .bottom-nav button.active{background:color-mix(in srgb,var(--brand) 17%,transparent);color:var(--brand)}
-  .bottom-nav .fab{width:52px;height:52px;margin:0 4px;border-radius:50%;background:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(242,138,36,.35)}
-  .bottom-nav .fab .icon{width:23px;height:23px;stroke-width:2.2}
+  .bottom-nav button.active{flex-shrink:0;padding:0 16px;background:var(--ink);color:var(--surface)}
+  .bottom-nav button.active > span{max-width:120px;opacity:1;margin-inline-start:8px}
+  .bottom-nav .fab{flex:0 0 auto;width:46px;border-radius:50%;background:var(--brand);color:#fff;box-shadow:0 6px 16px rgba(242,138,36,.4)}
+  .bottom-nav .fab .icon{width:24px;height:24px;stroke-width:2.2}
   .bottom-nav .fab:active{transform:scale(.92)}
-  .bottom-nav .badge{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;height:18px;font-size:10px;border:2px solid var(--surface)}
+  .bottom-nav .badge{position:absolute;top:3px;right:calc(50% - 20px);min-width:18px;height:18px;font-size:10px;border:2px solid var(--surface)}
+  .bottom-nav button.active .badge{right:4px;border-color:var(--ink)}
   body.chat-full .bottom-nav,body.search-open .bottom-nav,body.sheet-open .bottom-nav,html.dialog-open .bottom-nav,body.keyboard .bottom-nav{transform:translateY(140%)}
   .toasts{bottom:calc(92px + var(--safe-b))}
   body.chat-full .toasts{bottom:calc(84px + var(--safe-b))}
