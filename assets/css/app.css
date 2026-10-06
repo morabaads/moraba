@@ -3512,3 +3512,17 @@ a.ios-install-btn{display:flex;align-items:center;justify-content:center;text-de
 .gv-simple.gv-one .gv-cap{padding-bottom:calc(16px + var(--safe-b,0px))}
 @media (min-width:900px){.gv-th{width:120px;height:80px}.gv-strip{justify-content:safe center}}
 @media (max-width:899px){.gv .gv-nav{display:grid;width:40px;height:40px;margin-top:-20px;border-radius:12px;background:rgba(0,0,0,.55)}.gv .gv-nav[hidden]{display:none}.gv-next{left:8px}.gv-prev{right:8px}}
+
+/* Round video by holding the mic: no buttons until slid up to lock; the lock hint floats above */
+.rr-holding .rr-acts{display:none}
+.rr-lock{position:absolute;bottom:calc(150px + var(--safe-b,0px));inset-inline-end:14px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;border-radius:99px;background:rgba(255,255,255,.12);font-size:11px;width:44px;text-align:center;animation:rr-lock-bob 1.4s ease-in-out infinite}
+.rr-lock .icon{width:20px;height:20px}
+.rr-lock span{writing-mode:vertical-rl;opacity:.85}
+.rr-locked .rr-lock,.rr-arm .rr-lock{display:none}
+.rr-arm .rr-circle{opacity:.45;outline:3px solid #e5484d;outline-offset:4px}
+.rr-arm .rr-hint{color:#ff8a8d;opacity:1}
+@keyframes rr-lock-bob{50%{transform:translateY(-8px)}}
+#composer-mic.mic-flip .icon{animation:mic-flip .25s ease}
+#composer-mic.is-video{color:var(--brand)}
+@keyframes mic-flip{0%{transform:scale(.4) rotate(-90deg);opacity:0}100%{transform:none;opacity:1}}
+.reduced-motion .rr-lock,.reduced-motion #composer-mic.mic-flip .icon{animation:none}

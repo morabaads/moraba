@@ -269,8 +269,11 @@
   /**
    * Records up to 60 seconds from the front camera, shown in a circle. Resolves {file, dur, thumb} or null.
    * The caller tells others «recording video…» through onTick.
+   * opts.hold: started by holding the microphone button — no buttons until opts.ctl.lock() (slide up); the caller
+   * ends it with opts.ctl.finish(true = send / false = cancel) when the finger lifts; opts.ctl.arm(on) shows «cancel».
    */
-  K.recordRound = function (onTick) {
+  K.recordRound = function (onTick, opts) {
+    opts = opts || {};
     return new Promise(function (resolve) {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) { MP.toast('ضبط ویدیو در این مرورگر ممکن نیست.', { error: true }); resolve(null); return; }
       var types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'], mime = '';
@@ -282,9 +285,12 @@
       var flip = el('button', { type: 'button', class: 'icon-btn rr-flip', 'aria-label': 'تعویض دوربین', html: icon('repeat') });
       var cancel = el('button', { type: 'button', class: 'btn btn-secondary', html: icon('trash') + 'لغو' });
       var send = el('button', { type: 'button', class: 'btn btn-primary', html: icon('send') + 'ارسال' });
-      var wrap = el('div', { class: 'rr-layer', role: 'dialog', 'aria-label': 'پیام ویدیویی' },
+      var hint = el('p', { class: 'rr-hint', text: opts.hold ? 'رها کنید تا ارسال شود · برای لغو به کنار بکشید' : 'تا ۶۰ ثانیه؛ برای پایان «ارسال» را بزنید.' });
+      var lockTip = el('div', { class: 'rr-lock', html: icon('lock') + '<span>برای قفل به بالا بکشید</span>' });
+      var wrap = el('div', { class: 'rr-layer' + (opts.hold ? ' rr-holding' : ''), role: 'dialog', 'aria-label': 'پیام ویدیویی' },
+        opts.hold ? lockTip : null,
         el('div', { class: 'rr-circle' }, video, el('span', { class: 'rr-prog' })), time,
-        el('p', { class: 'rr-hint', text: 'تا ۶۰ ثانیه؛ برای پایان «ارسال» را بزنید.' }),
+        hint,
         el('div', { class: 'rr-acts' }, cancel, flip, send));
       function start() {
         navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 480 }, height: { ideal: 480 }, aspectRatio: 1 }, audio: { echoCancellation: true, noiseSuppression: true } }).then(function (s) {
@@ -325,6 +331,11 @@
       flip.onclick = function () { if (!rec) return; facing = facing === 'user' ? 'environment' : 'user'; rec.onstop = null; try { rec.stop(); } catch (e) { /* ignore */ } stopAll(); start(); };
       cancel.onclick = function () { finish(false); };
       send.onclick = function () { finish(true); };
+      if (opts.ctl) {
+        opts.ctl.finish = finish;
+        opts.ctl.lock = function () { wrap.classList.remove('rr-holding', 'rr-arm'); wrap.classList.add('rr-locked'); hint.textContent = 'قفل شد؛ برای پایان «ارسال» را بزنید.'; };
+        opts.ctl.arm = function (on) { wrap.classList.toggle('rr-arm', !!on); };
+      }
       document.body.append(wrap);
       layer = MP.pushLayer(function () { layer = null; finish(false); });
       start();

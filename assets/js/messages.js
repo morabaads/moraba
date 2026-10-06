@@ -1345,7 +1345,7 @@
     for (var i = 0; i < list.length; i++) if (!MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(list[i])) return list[i];
     return '';
   }
-  function micIcon() { var b = $('#composer-mic'); b.innerHTML = icon(recMode === 'video' ? 'video' : 'mic'); b.setAttribute('aria-label', recMode === 'video' ? 'پیام ویدیویی' : 'پیام صوتی (نگه دارید)'); b.title = recMode === 'video' ? 'پیام ویدیویی — بزنید؛ برای ویس دوبار بزنید' : 'برای ضبط نگه دارید؛ برای پیام ویدیویی یک بار بزنید'; }
+  function micIcon() { var b = $('#composer-mic'), v = recMode === 'video'; b.innerHTML = icon(v ? 'video' : 'mic'); b.classList.toggle('is-video', v); b.setAttribute('aria-label', v ? 'پیام ویدیویی (نگه دارید)' : 'پیام صوتی (نگه دارید)'); b.title = (v ? 'پیام ویدیویی' : 'پیام صوتی') + ' — برای ضبط نگه دارید؛ برای ' + (v ? 'ویس' : 'پیام ویدیویی') + ' یک بار بزنید'; }
   function startRecording(hold) {
     if (!current || rec) return;
     var mime = pickMime();
@@ -1438,40 +1438,70 @@
     comp.append(box2);
   }
   (function () {
-    var mic = $('#composer-mic'), st = null;
+    // Tap: voice ↔ round video. Hold: record in that mode; slide up to lock, sideways to cancel, let go to send.
+    var mic = $('#composer-mic'), st = null, round = null;
     micIcon();
     mic.addEventListener('pointerdown', function (e) {
-      if (e.button || !current) return;
+      if (e.button || !current || rec || round) return;
       e.preventDefault();
       st = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, started: false };
       try { mic.setPointerCapture(e.pointerId); } catch (er) { /* synthetic */ }
-      if (recMode === 'voice') st.timer = setTimeout(function () { if (st) { st.started = true; startRecording(true); } }, 180);
+      st.timer = setTimeout(function () {
+        if (!st) return;
+        st.started = true;
+        if (recMode === 'voice') startRecording(true); else holdRound();
+      }, 220);
     });
+    /** A round video started by holding the button; ends when the finger lifts unless slid up to lock. */
+    function holdRound() {
+      var ch = current, r = replyTo, ctl = {};
+      round = { ctl: ctl, locked: false };
+      MP.haptic && MP.haptic(15);
+      MP.chatKit.recordRound(function () { sendActivity('video'); }, { hold: true, ctl: ctl }).then(function (v) {
+        round = null; sendActivity('idle');
+        if (v) { clearCtx(false); sendNow({ file: v.file, thumb: v.thumb, x: { round: 1, dur: Math.round(v.dur * 10) / 10 }, reply: r, channel: ch }); }
+      });
+    }
+    function holding() { return rec && !rec.locked ? rec : round && !round.locked ? round : null; }
     mic.addEventListener('pointermove', function (e) {
-      if (!st || !st.started || !rec || rec.locked) return;
-      var dx = e.clientX - st.x, dy = e.clientY - st.y;
-      $('#composer').style.setProperty('--rec-dy', Math.min(0, dy) + 'px');
-      if (dy < -70) { rec.locked = true; $('#composer').classList.remove('rec-hold'); $('#composer').classList.add('rec-locked'); MP.haptic(15); return; }
-      var arm = Math.abs(dx) > 90;
-      $('#composer').classList.toggle('rec-cancel-arm', arm);
-      if (Math.abs(dx) > 140) { st = null; finishRecording(false); MP.toast('ضبط لغو شد'); }
+      if (!st || !st.started) return;
+      var h = holding(); if (!h) return;
+      var dx = e.clientX - st.x, dy = e.clientY - st.y, arm = Math.abs(dx) > 90;
+      if (h === rec) $('#composer').style.setProperty('--rec-dy', Math.min(0, dy) + 'px');
+      if (dy < -70) {
+        h.locked = true; MP.haptic(15);
+        if (h === rec) { $('#composer').classList.remove('rec-hold', 'rec-cancel-arm'); $('#composer').classList.add('rec-locked'); }
+        else h.ctl.lock && h.ctl.lock();
+        return;
+      }
+      if (h === rec) $('#composer').classList.toggle('rec-cancel-arm', arm); else h.ctl.arm && h.ctl.arm(arm);
+      h.armed = arm;
+      if (Math.abs(dx) > 140) {
+        st = null;
+        if (h === rec) finishRecording(false); else h.ctl.finish && h.ctl.finish(false);
+        MP.toast('ضبط لغو شد');
+      }
     });
     function up() {
       if (!st) return;
       var s = st; st = null; clearTimeout(s.timer);
       $('#composer').style.removeProperty('--rec-dy');
       if (!s.started) {
-        // A quick tap: voice ↔ round video (as in Telegram); in video mode the tap records a video.
-        if (recMode === 'video' && Date.now() - s.t < 400) { recordRound(); return; }
+        // A quick tap only switches the mode (as in Telegram).
         recMode = recMode === 'voice' ? 'video' : 'voice';
         try { localStorage.setItem('mp_rec_mode', recMode); } catch (er) { /* private mode */ }
         micIcon(); MP.haptic(8);
-        MP.toast(recMode === 'video' ? 'حالت پیام ویدیویی؛ برای ضبط بزنید. برای ویس دوباره روی دکمه بزنید.' : 'حالت ویس؛ برای ضبط دکمه را نگه دارید.', { icon: recMode === 'video' ? 'video' : 'mic' });
+        mic.classList.remove('mic-flip'); void mic.offsetWidth; mic.classList.add('mic-flip');
+        MP.toast(recMode === 'video' ? 'پیام ویدیویی؛ برای ضبط نگه دارید' : 'پیام صوتی؛ برای ضبط نگه دارید', { icon: recMode === 'video' ? 'video' : 'mic' });
         return;
       }
-      if (rec && !rec.locked) {
+      var h = holding(); if (!h) return;
+      if (h === rec) {
         if ($('#composer').classList.contains('rec-cancel-arm')) { finishRecording(false); MP.toast('ضبط لغو شد'); }
         else finishRecording(true);
+      } else if (h.ctl.finish) {
+        h.ctl.finish(!h.armed);
+        if (h.armed) MP.toast('ضبط لغو شد');
       }
     }
     mic.addEventListener('pointerup', up);
