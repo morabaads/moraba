@@ -1847,6 +1847,7 @@ class MP_Rest {
 				'body'       => $m->body,
 				'file'       => $m->file_id ? self::client_file( $m->file_id, $ch->token ) : null,
 				'created_at' => $m->created_at,
+				'x'          => MP_Chat::x_client( $m ),
 			) + MP_Client::msg_extra( $m );
 		}
 		return array( 'title' => $ch->title, 'client' => $ch->client_name, 'messages' => $out );

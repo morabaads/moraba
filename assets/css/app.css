@@ -3471,3 +3471,14 @@ html.reduced-motion .b-jumbo .emj{animation:none!important}
 .composer .composer-send{transition:transform .12s var(--ease)}
 .gv-stage{overflow:hidden}
 .gv-stage img,.gv-stage .gv-video{max-height:calc(100dvh - 150px);max-width:100%}
+
+/* ---- Client portal: the team's new message kinds */
+.cp-poll{display:grid;gap:5px;min-width:200px}
+.cp-poll-o{position:relative;display:flex;justify-content:space-between;gap:8px;padding:5px 9px;border-radius:9px;background:rgba(127,127,127,.12);overflow:hidden;font-size:13px}
+.cp-poll-o i{position:absolute;inset-block:0;inset-inline-start:0;background:color-mix(in srgb,var(--brand) 22%,transparent)}
+.cp-poll-o span,.cp-poll-o small{position:relative}
+.cp-stk{max-width:150px!important;background:none!important}
+.cp-round{width:200px!important;height:200px;border-radius:50%;object-fit:cover}
+.cp-quote{font-style:italic;opacity:.8;border-inline-start:3px solid var(--brand);padding-inline-start:8px}
+.cp-card{font-weight:700}
+.cp-spoiler{background:currentColor;border-radius:4px;cursor:pointer}.cp-spoiler.open{background:none}

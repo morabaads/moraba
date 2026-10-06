@@ -402,6 +402,31 @@ class MP_Chat {
 		return $x;
 	}
 
+	/** What the client portal shows of a message's extras (no names of voters, no internal task details). */
+	public static function x_client( $m ) {
+		$x = self::x( $m );
+		if ( ! $x ) {
+			return null;
+		}
+		$out = array();
+		if ( ! empty( $x['poll'] ) ) {
+			$full        = self::x_out( $m, 0 );
+			$out['poll'] = array( 'q' => $x['poll']['q'], 'o' => $x['poll']['o'], 'counts' => $full['poll']['counts'], 'closed' => ! empty( $x['poll']['closed'] ) );
+		}
+		foreach ( array( 'loc', 'sticker', 'gif', 'round', 'dur', 'quote' ) as $k ) {
+			if ( isset( $x[ $k ] ) ) {
+				$out[ $k ] = $x[ $k ];
+			}
+		}
+		if ( ! empty( $x['contact'] ) ) {
+			$out['contact'] = array( 'name' => $x['contact']['name'], 'phone' => $x['contact']['phone'] );
+		}
+		if ( ! empty( $x['card'] ) ) {
+			$out['card'] = array( 't' => $x['card']['t'], 'title' => isset( $x['card']['title'] ) ? $x['card']['title'] : '' );
+		}
+		return $out ? $out : null;
+	}
+
 	/** Formatting marks (**bold**, __italic__, ~~strike~~, `code`, ||spoiler||, [text](link)) taken out. */
 	public static function plain( $s ) {
 		$s = preg_replace( '/\[([^\]\n]+)\]\((?:https?:\/\/|task:|project:)[^)\s]+\)/u', '$1', $s );

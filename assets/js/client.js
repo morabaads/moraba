@@ -460,6 +460,19 @@
     chatBusy = fetchChat(scroll).then(function () { chatBusy = null; }, function () { chatBusy = null; });
     return chatBusy;
   }
+  /** The team's formatting (**bold**, __italic__, ~~strike~~, `code`, ||spoiler||, [text](link)) as nodes, never HTML. */
+  function fmt(t) {
+    var p = h('p'), re = /\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|~~([\s\S]+?)~~|`([^`\n]+)`|\|\|([\s\S]+?)\|\||\[([^\]\n]+)\]\(([^)\s]+)\)/g, last = 0, m;
+    while ((m = re.exec(t))) {
+      if (m.index > last) p.append(t.slice(last, m.index));
+      if (m[1]) p.append(h('strong', { text: m[1] })); else if (m[2]) p.append(h('em', { text: m[2] })); else if (m[3]) p.append(h('del', { text: m[3] }));
+      else if (m[4]) p.append(h('code', { text: m[4] })); else if (m[5]) p.append(h('span', { class: 'cp-spoiler', text: m[5], onclick: function () { this.classList.add('open'); } }));
+      else if (/^https?:\/\//.test(m[7])) p.append(h('a', { href: m[7], target: '_blank', rel: 'noopener', text: m[6] })); else p.append(m[6].replace(/^#/, ''));
+      last = m.index + m[0].length;
+    }
+    if (last < t.length) p.append(t.slice(last));
+    return p;
+  }
   function fetchChat(scroll) {
     return api('?after=' + lastId).then(function (d) {
       var near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
@@ -476,11 +489,21 @@
         if (m.kind === 'system') { if (!first && m.meta && m.meta.t !== 'join') stale = true; box.append(sysCard(m)); return; }
         var mine = !m.team;
         var b = h('div', { class: 'bubble' }, [h('span', { class: 'b-author', text: m.author + (m.team ? ' · ' + ((me && me.team) || 'تیم مربع') : '') })]);
-        if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
+        var x = m.x || {};
+        if (x.poll) {
+          var tot = x.poll.counts.reduce(function (p, q) { return p + q; }, 0);
+          b.append(h('div', { class: 'cp-poll' }, [h('b', { text: '📊 ' + x.poll.q })].concat(x.poll.o.map(function (o, i) { var pct = tot ? Math.round(x.poll.counts[i] / tot * 100) : 0; return h('div', { class: 'cp-poll-o' }, [h('span', { text: o }), h('small', { text: fa(pct) + '٪' }), h('i', { style: 'width:' + pct + '%' })]); }))));
+        } else if (x.loc) b.append(h('a', { class: 'file-chip', href: 'https://www.google.com/maps?q=' + x.loc.lat + ',' + x.loc.lng, target: '_blank', rel: 'noopener', text: '📍 ' + (x.loc.label || 'موقعیت مکانی') }));
+        else if (x.contact) b.append(h('a', { class: 'file-chip', href: 'tel:' + x.contact.phone, text: '👤 ' + x.contact.name + ' · ' + fa(x.contact.phone) }));
+        else if (x.card) b.append(h('p', { class: 'cp-card', text: (x.card.t === 'task' ? '✅ ' : '📁 ') + x.card.title }));
+        if ((x.sticker || x.gif) && m.file) b.append(h('img', { class: 'b-img cp-stk', src: m.file.url, alt: '' }));
+        else if (m.file && /^video\//.test(m.file.mime || '')) b.append(h('video', { controls: '', preload: 'metadata', playsinline: '', src: m.file.url, class: 'b-img' + (x.round ? ' cp-round' : '') }));
+        else if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
         else if (m.file && m.file.image) b.append(h('a', { href: m.file.url, target: '_blank', rel: 'noopener' }, [h('img', { class: 'b-img', src: m.file.url, alt: m.file.name })]));
         else if (m.file) b.append(h('a', { class: 'file-chip', href: m.file.url, target: '_blank', rel: 'noopener', html: icon('clip') + '<span></span>' }));
         if (m.file && !m.file.image && !/^audio\//.test(m.file.mime || '')) b.querySelector('.file-chip span').textContent = m.file.name;
-        if (m.body) b.append(h('p', { text: m.body }));
+        if (x.quote) b.append(h('p', { class: 'cp-quote', text: '«' + x.quote + '»' }));
+        if (m.body) b.append(fmt(m.body));
         b.append(h('span', { class: 'b-meta', text: hm(m.created_at) }));
         box.append(h('div', { class: 'bubble-row ' + (mine ? 'me' : 'other') + (lastId && !scroll ? ' b-new' : '') }, [b]));
       });
