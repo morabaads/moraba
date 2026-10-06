@@ -3388,3 +3388,35 @@ html.reduced-motion .b-jumbo .emj{animation:none!important}
 .ed-item{padding:8px 10px;border-radius:12px;background:var(--surface-2)}
 .ed-item.now{border:1px solid var(--brand)}
 .ed-item small{font-size:11.5px;color:var(--muted)}
+
+/* ---- Chat: search filters, group admin, topics, read-only bar */
+.find-filters{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--surface);overflow-x:auto;scrollbar-width:none;flex:none}
+.chat-layout.finding .chat-find-list{position:relative;top:0;max-height:40%;flex:none}
+.ff-sel{height:30px;padding:0 8px;border-radius:99px;border:1px solid var(--line-strong);background:var(--surface-2);color:inherit;font:12.5px Dana,Tahoma,sans-serif;flex:none}
+.ff-kinds{display:flex;gap:4px;flex:none}
+.ff-k{display:inline-flex;align-items:center;gap:4px;flex:none;height:30px;padding:0 10px;border-radius:99px;border:1px solid var(--line-strong);background:none;color:inherit;font:600 12.5px Dana,Tahoma,sans-serif;cursor:pointer;white-space:nowrap}
+.ff-k .icon{width:14px;height:14px}
+.ff-k.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.ci-desc{margin:4px 0 0;font-size:13px;color:var(--ink-2);text-align:center;white-space:pre-wrap}
+.ci-admin{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:8px 0}
+.ci-admin .chip{display:inline-flex;align-items:center;gap:4px;cursor:default}.ci-admin button.chip{cursor:pointer}
+.ci-admin .chip .icon{width:14px;height:14px}
+.ga .check span small{display:inline}
+.ga-invite{display:grid;gap:6px}.ga-row{display:flex;gap:6px;flex-wrap:wrap}
+.ga-roles{display:grid;gap:4px;max-height:40vh;overflow:auto}
+.ga-role{display:flex;align-items:center;gap:10px;padding:5px 6px;border-radius:10px;background:var(--surface-2)}
+.ga-role b{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ga-role select{flex:none;width:auto;min-width:120px;height:34px;border-radius:8px}
+.tp-list{display:grid;gap:2px;align-content:start;padding:6px 0;width:100%;max-width:640px;margin:0 auto}
+.tp-row{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border:0;border-radius:14px;background:var(--surface);color:inherit;text-align:right;cursor:pointer;box-shadow:0 1px 1.5px rgba(0,0,0,.1)}
+.tp-row:hover{background:var(--surface-2)}
+.tp-dot{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:18px;background:var(--surface-3)}
+.tp-all .tp-dot{background:var(--brand)}.tp-dot .icon{width:20px;height:20px}
+.tp-copy{flex:1;min-width:0;display:grid;line-height:1.45}
+.tp-copy b{font-size:14.5px}.tp-copy small{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tp-row time{font-size:11.5px;color:var(--muted);flex:none}
+.tp-row.closed{opacity:.7}
+.tp-new{justify-self:center;margin-top:8px}
+.tp-colors{display:flex;gap:8px}
+.chat-locked{display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;border-top:1px solid var(--line);background:var(--surface);font-size:13px;color:var(--muted);text-align:center}
+.chat-tools .icon-btn.on{color:var(--brand)}

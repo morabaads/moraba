@@ -437,6 +437,10 @@
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + 'مشتریان و ظاهر', onclick: function () { clientSettings(c); } }));
       if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
     }
+    if (c.settings && c.settings.topics) {
+      tools.prepend(el('button', { type: 'button', class: 'icon-btn sm keep' + (topic ? '' : ' on'), title: 'تاپیک‌ها', 'aria-label': 'تاپیک‌ها', html: icon('list'), onclick: function () { select(c.id, 0, { topics: true }); } }));
+      if (topic) sub.textContent = topic > 0 ? '# ' + (topicName(c.id, topic) || 'تاپیک') : 'همه تاپیک‌ها';
+    }
     if (c.type !== 'saved') tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جلسه آنلاین', 'aria-label': 'جلسه آنلاین', html: icon('video'), onclick: function () { startMeeting(c); } }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جستجو در گفت‌وگو', 'aria-label': 'جستجو در گفت‌وگو', html: icon('search'), onclick: openFind }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', 'aria-label': 'گزینه‌های گفت‌وگو', title: 'گزینه‌ها', html: icon('more'), onclick: function (e) { chatMenu(c, e.currentTarget); } }));
@@ -467,12 +471,15 @@
     drawHead(); showPinned(null); downBtn();
     text.value = draftOf(id); composerState(); autoGrow();
     $('#composer').hidden = false;
+    postLock(c);
+    // A group with topics opens on its list of topics (unless a topic or a message was asked for).
+    if (c.settings && c.settings.topics && !topic && (!jump || opts.topics)) { showTopics(c); liveRestart(); return; }
     if (c.marked) { c.marked = false; MP.api('channels/' + id + '/mark', { method: 'POST', body: { on: false } }).catch(function () {}); }
     c.unread = 0; renderList();
     var token = ++loopToken;
     // At once: the copy kept on this device; the server's answer replaces it a moment later.
     MP.kv.get(snapKey(id)).then(function (snap) {
-      if (token !== loopToken || !snap || !snap.messages || !snap.messages.length || !box.querySelector('.sk')) return;
+      if (topic || token !== loopToken || !snap || !snap.messages || !snap.messages.length || !box.querySelector('.sk')) return;
       box.replaceChildren(); resetRows();
       snap.messages.forEach(function (m) { place(m, false); });
       decorate(); box.scrollTop = box.scrollHeight;
@@ -484,6 +491,61 @@
       if (opts.reply) text.focus();
       else if (!MP.isMobile()) text.focus();
     });
+  }
+  /* ------------------------------------------------------------ Topics (a group split into separate conversations) */
+
+  var topicNames = {};
+  function topicName(chId, tid) { return (topicNames[chId] || {})[tid] || ''; }
+  function showTopics(c) {
+    topic = 0; $('#composer').hidden = true; $('#chat-locked') && ($('#chat-locked').hidden = true);
+    var id = c.id;
+    MP.api('channels/' + id + '/topics', { noCache: true }).then(function (d) {
+      if (current !== id || topic) return;
+      topicNames[id] = {}; d.topics.forEach(function (t) { topicNames[id][t.id] = t.title; });
+      var wrap = el('div', { class: 'tp-list' },
+        el('button', { type: 'button', class: 'tp-row tp-all', onclick: function () { select(id, 0, { topic: -1 }); } }, el('span', { class: 'tp-dot', html: icon('chat') }), el('span', { class: 'tp-copy' }, el('b', { text: 'همه پیام‌ها' }), el('small', { text: 'پیام‌های همه تاپیک‌ها با هم' }))),
+        d.topics.map(function (t) {
+          var row = el('button', { type: 'button', class: 'tp-row' + (t.closed ? ' closed' : ''), onclick: function () { select(id, 0, { topic: t.id }); } },
+            el('span', { class: 'tp-dot', style: { background: t.color || 'var(--brand)' }, text: '#' }),
+            el('span', { class: 'tp-copy' }, el('b', null, t.title, t.closed ? el('i', { class: 'ci-mute', html: icon('lock') }) : null), el('small', { text: t.last ? (t.last.mine ? 'شما' : t.last.author.split(' ')[0]) + ': ' + t.last.text : 'هنوز پیامی نیست' })),
+            t.last ? el('time', { text: listTime(t.last.created_at) }) : null,
+            t.unread ? el('span', { class: 'badge', text: fa(t.unread) }) : null);
+          if (d.can_manage) longPress(row, function () { topicForm(c, t); });
+          return row;
+        }),
+        d.can_manage ? el('button', { type: 'button', class: 'btn btn-secondary tp-new', html: icon('plus') + 'تاپیک جدید', onclick: function () { topicForm(c, null); } }) : null);
+      box.replaceChildren(wrap);
+      MP.emojify(wrap);
+      $('#chat-sub').textContent = fa(d.topics.length) + ' تاپیک · ' + fa(c.members) + ' عضو';
+    }).catch(function (e) { box.replaceChildren(MP.empty('chat', 'تاپیک‌ها باز نشد', e.message, null, true)); });
+  }
+  function topicForm(c, t) {
+    var colors = ['#ff8a00', '#e5484d', '#8e5be8', '#3a8ee6', '#14a3a3', '#3fb96f', '#8e8e93'], color = t ? t.color : colors[0];
+    var title = el('input', { class: 'input', maxlength: 80, required: true, value: t ? t.title : '', placeholder: 'مثلاً طراحی، چاپ، مالی' });
+    var pal = el('div', { class: 'tp-colors' });
+    function drawPal() { pal.replaceChildren.apply(pal, colors.map(function (x) { return el('button', { type: 'button', class: 'pe-color' + (x === color ? ' on' : ''), style: { background: x }, 'aria-label': x, onclick: function () { color = x; drawPal(); } }); })); }
+    drawPal();
+    var closed = el('input', { type: 'checkbox', checked: !!(t && t.closed) });
+    var f = el('form', { class: 'form' }, MP.field('نام تاپیک', title), el('div', { class: 'field' }, el('span', { text: 'رنگ' }), pal),
+      t ? el('label', { class: 'check' }, closed, el('span', { text: 'بسته (فقط مدیران می‌نویسند)' })) : null,
+      el('div', { class: 'dialog-actions' }, el('button', { type: 'submit', class: 'btn btn-primary', text: t ? 'ذخیره' : 'ساخت تاپیک' }),
+        t ? el('button', { type: 'button', class: 'btn btn-danger', text: 'حذف تاپیک', onclick: function () { MP.confirm('حذف تاپیک', 'پیام‌های «' + t.title + '» به تاپیک «عمومی» منتقل می‌شوند.', 'حذف').then(function (ok) { if (ok) MP.api('topics/' + t.id, { method: 'DELETE' }).then(function () { MP.dialog.close(); showTopics(c); }).catch(MP.soft); }); } }) : null));
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      MP.api('channels/' + c.id + '/topics', { method: 'POST', body: { topic_id: t ? t.id : 0, title: title.value, color: color, closed: closed.checked } }).then(function () { MP.dialog.close(); showTopics(c); }).catch(MP.soft);
+    };
+    MP.dialog.open(t ? 'ویرایش تاپیک' : 'تاپیک جدید', f);
+  }
+  /** Who may write here: a channel's members and read-only people see a bar instead of the composer. */
+  function postLock(c) {
+    var bar = $('#chat-locked');
+    if (!bar) { bar = el('div', { id: 'chat-locked', class: 'chat-locked' }); $('#composer').after(bar); }
+    var locked = c.can_post === false;
+    bar.hidden = !locked;
+    $('#composer').hidden = locked;
+    if (locked) bar.replaceChildren(el('span', { text: c.post_why || 'در این گفت‌وگو نمی‌توانید پیام بفرستید.' }), el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon(c.muted ? 'bell' : 'bell-off') + (c.muted ? 'صدادار' : 'بی‌صدا'), onclick: function () { setMute(c, !c.muted); } }));
+    var slow = c.settings && c.settings.slow && c.role !== 'admin';
+    text.placeholder = slow ? 'حالت آهسته: هر ' + slowLabel(c.settings.slow) + ' یک پیام' : MP.isMobile() ? 'پیام…' : 'پیام… (Enter ارسال، Shift+Enter خط جدید)';
   }
   function resetRows() { lastId = 0; firstId = 0; hasMore = false; msgs = {}; rowsById = {}; mineRows = {}; albumRows = {}; }
   function snapKey(id) { return 'api:channels/' + id + '/messages?after=0'; }
@@ -502,7 +564,7 @@
 
   /** First page: the newest ~80 messages; then the unread line and the right scroll position. */
   function fetchFirst(token, around) {
-    var q = { after: 0, topic: topic || '' };
+    var q = { after: 0, topic: topic > 0 ? topic : '' };
     // A message far back (a link, a search hit, a date): open the page that holds it.
     if (around && typeof around === 'number') q.around = around;
     return MP.api('channels/' + current + '/messages', { query: q, noCache: !!(q.around || q.topic) }).then(function (d) {
@@ -533,7 +595,7 @@
     if (pulling) { pullAgain = true; return; }
     pulling = true;
     var id = current;
-    MP.api('channels/' + id + '/messages', { query: { after: lastId, since: since, topic: topic || '' }, noCache: true }).then(function (d) {
+    MP.api('channels/' + id + '/messages', { query: { after: lastId, since: since, topic: topic > 0 ? topic : '' }, noCache: true }).then(function (d) {
       pulling = false;
       if (token !== loopToken || id !== current) return;
       var nearBottom = atBottom();
@@ -1411,7 +1473,7 @@
   /** o: {body, file, transcript, reply, album, asFile, channel, x, silent, sendAt, stickerId, thumb, quote} */
   function sendNow(o) {
     var channel = o.channel || current, f = o.file;
-    if (o.topic === undefined) o.topic = channel === current ? topic : 0;
+    if (o.topic === undefined) o.topic = channel === current && topic > 0 ? topic : 0;
     if (o.quote) o.x = Object.assign({}, o.x || {}, { quote: o.quote });
     var m = { id: 'tmp' + (++seq), mine: true, pending: true, body: o.body || '', author: S.me.name, user_id: S.me.id, created_at: nowStamp(), seen_by: 0,
       reply: o.reply ? { id: o.reply.id, author: o.reply.author, text: snippet(o.reply), kind: kindOf(o.reply), mine: o.reply.mine } : null,
@@ -2122,19 +2184,54 @@
 
   /* ------------------------------------------------------------ Find in this chat */
 
-  var hits = [], hitAt = 0, findTimer2 = 0;
-  function openFind() {
-    $('#chat-find').hidden = false; layout.classList.add('finding');
-    var q = $('#chat-find-q'); q.value = ''; q.focus(); $('#chat-find-n').textContent = '';
+  var hits = [], hitAt = 0, findTimer2 = 0, ff = { from: 0, kind: '', d1: '', d2: '' };
+  /** Filters under the search box: sender, kind (photo, video, file, link, voice), dates, and «go to a date». */
+  var ffBar = el('div', { class: 'find-filters', hidden: true });
+  $('#chat-find-list').before(ffBar);
+  function drawFilters() {
+    var c = chan(), people = c ? (c.member_ids || []).map(MP.user) : [];
+    var who = el('select', { class: 'ff-sel', 'aria-label': 'فرستنده', onchange: function () { ff.from = +this.value; runFind(); } }, el('option', { value: 0, text: 'همه افراد' }), people.map(function (u) { return el('option', { value: u.id, text: u.id === S.me.id ? 'خودم' : u.name, selected: ff.from === u.id }); }));
+    var kinds = [['', 'همه'], ['photo', 'عکس'], ['video', 'ویدیو'], ['file', 'فایل'], ['link', 'لینک'], ['voice', 'ویس']];
+    var dateLabel = ff.d1 ? (ff.d1 === ff.d2 ? J.format(ff.d1, false) : J.format(ff.d1, false) + ' تا ' + J.format(ff.d2, false)) : 'تاریخ';
+    ffBar.replaceChildren(
+      isGroup(c) ? who : null,
+      el('div', { class: 'ff-kinds' }, kinds.map(function (k) { return el('button', { type: 'button', class: 'ff-k' + (ff.kind === k[0] ? ' on' : ''), text: k[1], onclick: function () { ff.kind = k[0]; drawFilters(); runFind(); } }); })),
+      el('button', { type: 'button', class: 'ff-k' + (ff.d1 ? ' on' : ''), html: icon('calendar') + dateLabel, onclick: dateFilter }),
+      el('button', { type: 'button', class: 'ff-k ff-jump', html: icon('calendar') + 'رفتن به تاریخ', onclick: jumpDate }));
   }
-  function closeFind() { $('#chat-find').hidden = true; layout.classList.remove('finding'); $('#chat-find-list').hidden = true; hits = []; }
+  function dateFilter() {
+    var f = el('form', { class: 'form' }, el('div', { class: 'form-row' }, MP.dateField('d1', ff.d1 || S.today, 'از'), MP.dateField('d2', ff.d2 || S.today, 'تا')),
+      el('div', { class: 'dialog-actions' }, el('button', { type: 'submit', class: 'btn btn-primary', text: 'اعمال' }), el('button', { type: 'button', class: 'btn btn-secondary', text: 'بدون تاریخ', onclick: function () { ff.d1 = ff.d2 = ''; MP.dialog.close(); drawFilters(); runFind(); } })));
+    f.onsubmit = function (e) { e.preventDefault(); ff.d1 = f.elements.d1.value; ff.d2 = f.elements.d2.value || ff.d1; if (ff.d2 < ff.d1) { var t = ff.d1; ff.d1 = ff.d2; ff.d2 = t; } MP.dialog.close(); drawFilters(); runFind(); };
+    MP.dialog.open('جستجو در بازه تاریخ', f);
+  }
+  /** Jump to a day (Jalali calendar): the first message of that day. */
+  function jumpDate() {
+    var id = current, f = el('form', { class: 'form' }, MP.dateField('d', S.today, 'روز'), MP.actions('برو'));
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      MP.api('channels/' + id + '/date', { query: { date: f.elements.d.value }, noCache: true }).then(function (d) {
+        MP.dialog.close();
+        if (!d.id) { MP.toast('پیامی در این گفت‌وگو نیست'); return; }
+        if (rowsById[d.id]) jumpTo(d.id); else { var t = ++loopToken; fetchFirst(t, d.id).then(function () { var r = rowsById[d.id]; if (r) { r.scrollIntoView({ block: 'start' }); r.classList.add('flash'); } }); }
+      }).catch(MP.soft);
+    };
+    MP.dialog.open('رفتن به تاریخ', f);
+  }
+  function openFind(preset) {
+    $('#chat-find').hidden = false; layout.classList.add('finding'); ffBar.hidden = false;
+    ff = { from: 0, kind: '', d1: '', d2: '' }; drawFilters();
+    var q = $('#chat-find-q'); q.value = typeof preset === 'string' ? preset : ''; q.focus(); $('#chat-find-n').textContent = '';
+    if (q.value) runFind();
+  }
+  function closeFind() { $('#chat-find').hidden = true; layout.classList.remove('finding'); $('#chat-find-list').hidden = true; ffBar.hidden = true; hits = []; }
   $('#chat-find-close').onclick = closeFind;
-  $('#chat-find-q').oninput = function () {
+  function runFind() {
     clearTimeout(findTimer2);
-    var q = this.value.trim(), list = $('#chat-find-list');
-    if (q.length < 2) { hits = []; list.hidden = true; $('#chat-find-n').textContent = ''; return; }
+    var q = $('#chat-find-q').value.trim(), list = $('#chat-find-list'), any = ff.from || ff.kind || ff.d1;
+    if (q.length < 2 && !any) { hits = []; list.hidden = true; $('#chat-find-n').textContent = ''; return; }
     findTimer2 = setTimeout(function () {
-      MP.api('channels/' + current + '/search', { query: { q: q } }).then(function (l) {
+      MP.api('channels/' + current + '/search', { query: { q: q.length >= 2 ? q : '', from: ff.from || '', kind: ff.kind, d1: ff.d1, d2: ff.d2 }, noCache: true }).then(function (l) {
         hits = l; hitAt = 0;
         $('#chat-find-n').textContent = l.length ? fa(1) + ' از ' + fa(l.length) : 'نتیجه‌ای نیست';
         list.replaceChildren.apply(list, l.map(function (h, i) {
@@ -2143,7 +2240,8 @@
         list.hidden = !l.length;
       }).catch(function () {});
     }, 300);
-  };
+  }
+  $('#chat-find-q').oninput = runFind;
   $('#chat-find-q').onkeydown = function (e) { if (e.key === 'Enter' && hits.length) { e.preventDefault(); $('#chat-find-list').hidden = true; showHit(); hitAt = (hitAt + 1) % hits.length; } if (e.key === 'Escape') closeFind(); };
   function showHit() { if (!hits.length) return; $('#chat-find-n').textContent = fa(hitAt + 1) + ' از ' + fa(hits.length); jumpTo(hits[hitAt].id); }
   $('#chat-find-up').onclick = function () { if (!hits.length) return; hitAt = (hitAt + 1) % hits.length; $('#chat-find-list').hidden = true; showHit(); };
@@ -2244,8 +2342,62 @@
     }
     var head = el('div', { class: 'ci-head' }, channelIcon(c, 'xl'), el('h3', { text: c.title }), el('small', { class: c.type === 'direct' && sub === 'آنلاین' ? 'online' : '', text: sub }));
     if (c.type === 'direct') head.append(el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'پروفایل', onclick: function () { MP.dialog.close(); MP.openProfile(c.other); } }));
-    MP.dialog.open('اطلاعات گفت‌وگو', el('div', { class: 'ci-info' }, head, acts, members, seg, pane), { wide: true, focus: false });
+    var st = c.settings || {};
+    if (st.desc) head.append(el('p', { class: 'ci-desc', text: st.desc, dir: 'auto' }));
+    var admin = null;
+    if (isGroup(c)) {
+      admin = el('div', { class: 'ci-admin' },
+        st.mode === 'channel' ? el('span', { class: 'chip', html: icon('speaker') + ' کانال اطلاع‌رسانی' }) : null,
+        st.slow ? el('span', { class: 'chip', html: icon('clock') + ' حالت آهسته: ' + slowLabel(st.slow) }) : null,
+        st.topics ? el('button', { type: 'button', class: 'chip', html: icon('list') + ' تاپیک‌ها', onclick: function () { MP.dialog.close(); select(c.id, 0, { topics: true }); } }) : null,
+        c.role === 'admin' ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('settings') + 'مدیریت گروه', onclick: function () { groupAdmin(c); } }) : el('span', { class: 'chip', text: c.role === 'readonly' ? 'نقش شما: فقط‌خواندنی' : 'نقش شما: عضو' }));
+    }
+    MP.dialog.open('اطلاعات گفت‌وگو', el('div', { class: 'ci-info' }, head, admin, acts, members, seg, pane), { wide: true, focus: false });
     load();
+  }
+
+  var SLOW = [[0, 'خاموش'], [10, '۱۰ ثانیه'], [30, '۳۰ ثانیه'], [60, '۱ دقیقه'], [300, '۵ دقیقه'], [900, '۱۵ دقیقه'], [3600, '۱ ساعت']];
+  function slowLabel(v) { var x = SLOW.filter(function (s2) { return s2[0] === v; })[0]; return x ? x[1] : fa(v) + ' ثانیه'; }
+  /** Group settings for its admins: description, channel mode, slow mode, topics, invite link and roles. */
+  function groupAdmin(c) {
+    var body = MP.dialog.open('مدیریت «' + c.title + '»', MP.skeleton(3), { wide: true, focus: false });
+    var st = c.settings || {};
+    var desc = el('textarea', { class: 'input', rows: 2, maxlength: 500, placeholder: 'درباره این گروه (اختیاری)', value: st.desc || '' });
+    var mode = el('input', { type: 'checkbox', checked: st.mode === 'channel' });
+    var topicsBox = el('input', { type: 'checkbox', checked: !!st.topics });
+    var slow = el('select', null, SLOW.map(function (s2) { return el('option', { value: s2[0], text: s2[1], selected: (st.slow || 0) === s2[0] }); }));
+    var invite = el('div', { class: 'ga-invite' });
+    function drawInvite(url) {
+      invite.replaceChildren(url ? el('input', { class: 'input', readonly: true, dir: 'ltr', value: url, onfocus: function (e) { e.target.select(); } }) : el('small', { class: 'hint', text: 'همکاران با این لینک بدون نیاز به ناظر به گروه اضافه می‌شوند.' }),
+        el('div', { class: 'ga-row' },
+          el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('clip') + (url ? 'کپی لینک' : 'ساخت لینک دعوت'), onclick: function () { if (url) copyText(url); else MP.api('channels/' + c.id + '/invite', { method: 'POST' }).then(function (d) { drawInvite(d.url); copyText(d.url); }).catch(MP.soft); } }),
+          url ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'لینک تازه (قبلی باطل شود)', onclick: function () { MP.api('channels/' + c.id + '/invite', { method: 'POST', body: { reset: 1 } }).then(function (d) { drawInvite(d.url); MP.toast('لینک قبلی دیگر کار نمی‌کند'); }).catch(MP.soft); } }) : null));
+    }
+    drawInvite(st.invite);
+    var roles = el('div', { class: 'ga-roles' }, MP.skeleton(2));
+    MP.api('channels/' + c.id + '/roles', { noCache: true }).then(function (d) {
+      roles.replaceChildren.apply(roles, d.members.map(function (u) {
+        var sel = el('select', { disabled: u.fixed || !d.can_edit, onchange: function () { MP.api('channels/' + c.id + '/roles', { method: 'POST', body: { user_id: u.id, role: sel.value } }).then(function () { MP.toast('نقش ' + u.name + ' ذخیره شد'); MP.loadChannels(); }).catch(MP.soft); } },
+          [['admin', 'مدیر'], ['member', 'عضو'], ['readonly', 'فقط‌خواندنی']].map(function (o) { return el('option', { value: o[0], text: o[1], selected: u.role === o[0] }); }));
+        return el('div', { class: 'ga-role' }, MP.avatar(MP.user(u.id), 'sm'), el('b', { text: u.name + (u.fixed ? ' (همیشه مدیر)' : '') }), sel);
+      }));
+    }).catch(function (e) { roles.replaceChildren(el('p', { class: 'muted', text: e.message })); });
+    var f = el('form', { class: 'form ga' },
+      MP.field('توضیح گروه', desc),
+      c.type === 'group' ? el('label', { class: 'check' }, mode, el('span', null, el('b', { text: 'کانال اطلاع‌رسانی' }), el('small', { class: 'hint', text: ' — فقط مدیران پیام می‌فرستند؛ بقیه می‌خوانند و ری‌اکشن می‌زنند.' }))) : null,
+      el('label', { class: 'check' }, topicsBox, el('span', null, el('b', { text: 'تاپیک‌ها' }), el('small', { class: 'hint', text: ' — گفت‌وگوها جدا از هم، مثلاً «طراحی»، «چاپ» و «مالی».' }))),
+      MP.field('حالت آهسته (فاصله بین دو پیام هر عضو)', slow),
+      c.type === 'group' ? el('div', { class: 'field' }, el('span', { text: 'لینک دعوت همکاران' }), invite) : null,
+      el('div', { class: 'field' }, el('span', { text: 'نقش اعضا' }), el('small', { class: 'hint', text: 'مدیر: سنجاق، تنظیمات و (در کانال) ارسال پیام. فقط‌خواندنی: نمی‌تواند پیام بفرستد.' }), roles),
+      MP.actions('ذخیره تنظیمات'));
+    f.onsubmit = function (e) {
+      e.preventDefault(); MP.busy(f, true);
+      MP.api('channels/' + c.id + '/settings', { method: 'POST', body: { desc: desc.value, mode: mode.checked ? 'channel' : 'chat', slow: +slow.value, topics: topicsBox.checked } }).then(function (n) {
+        replaceChannel(n); MP.dialog.close(); MP.toast('تنظیمات گروه ذخیره شد');
+        if (current === c.id) select(c.id);
+      }).catch(function (err) { MP.busy(f, false); MP.soft(err); });
+    };
+    body.replaceChildren(f);
   }
 
   /* ------------------------------------------------------------ Phone: swipe right anywhere in a chat to go back */
