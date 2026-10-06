@@ -96,6 +96,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 
 <script>window.MP_CLIENT = <?php echo wp_json_encode( array( 'url' => esc_url_raw( rest_url( MP_Rest::NS . '/client/' . $token ) ) ) ); ?>;</script>
 <script src="<?php echo MP_Frontend::asset( 'js/pins.js' ); // phpcs:ignore ?>"></script>
+<script src="<?php echo MP_Frontend::asset( 'js/viewer.js' ); // phpcs:ignore ?>"></script>
 <script src="<?php echo MP_Frontend::asset( 'js/client.js' ); // phpcs:ignore ?>"></script>
 <?php echo MP_Frontend::client_pwa_script( $token, $mp_ch && $mp_ch->client_name ? $mp_ch->client_name : $mp_t ); // phpcs:ignore ?>
 </body>

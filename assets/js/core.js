@@ -730,7 +730,15 @@
       touched: function () { return multi || s > 1.01; }
     };
   };
-  MP.lightbox = function (f) {
+  /** One photo, or all photos of a list (thumbnails underneath, tap one to bring it up). */
+  MP.lightbox = function (f, list) {
+    if (window.MPViewer) {
+      var pics = (list || [f]).filter(function (x) { return x && x.image !== false; });
+      var at = pics.indexOf(f);
+      if (at < 0) { pics.unshift(f); at = 0; }
+      MPViewer.open(pics.map(function (x) { return { url: x.url, mid: x.mid, thumb: x.thumb, name: x.name }; }), at);
+      return;
+    }
     var img = el('img', { src: f.url, alt: f.name, style: { maxWidth: '100%', maxHeight: '70vh', borderRadius: '14px' } }), stage = el('div', { class: 'zoom-stage' }, img);
     MP.zoomable(img, stage);
     MP.dialog.open(f.name, el('div', { style: { textAlign: 'center' } },

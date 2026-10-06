@@ -3492,3 +3492,23 @@ html.reduced-motion .b-jumbo .emj{animation:none!important}
 .app-portal{display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)}
 .app-portal .login-field input{padding-inline-start:14px}
 a.ios-install-btn{display:flex;align-items:center;justify-content:center;text-decoration:none}
+
+/* Photo viewer: thumbnails under the photo (scroll sideways, tap one to bring it up) */
+.gv-strip{display:flex;gap:8px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;margin:0 12px calc(12px + var(--safe-b,0px));padding:8px;border-radius:14px;background:rgba(255,255,255,.07);scrollbar-width:none;touch-action:pan-x;flex:none}
+.gv-strip::-webkit-scrollbar{display:none}
+.gv-th{position:relative;flex:none;width:96px;height:66px;padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:rgba(255,255,255,.08);cursor:pointer;opacity:.55;transition:opacity .15s,border-color .15s,transform .15s;scroll-snap-align:center}
+.gv-th img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.gv-th:hover{opacity:.85}
+.gv-th.on{opacity:1;border-color:#fff;transform:scale(1.04)}
+.gv-th.is-vid::after{content:"";position:absolute;inset:50% auto auto 50%;margin:-11px 0 0 -9px;border:11px solid transparent;border-inline-start:0;border-left:16px solid #fff;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
+.gv:has(.gv-strip) .gv-stage img,.gv:has(.gv-strip) .gv-stage .gv-video{max-height:calc(100dvh - 250px)}
+.gv:has(.gv-strip) .gv-cap{padding-bottom:10px}
+.gv-simple .gv-stage{position:relative}
+.gv-simple .gv-stage img{border-radius:12px}
+.gv{background:#101012}
+.gv-frame{position:relative;display:inline-flex;max-width:100%;max-height:100%}
+.gv-badge{position:absolute;bottom:10px;left:10px;padding:3px 10px;border-radius:99px;background:rgba(0,0,0,.6);font-size:13px;pointer-events:none}
+.gv-simple .gv-cap:empty,.gv-simple .gv-cap[hidden]{display:none}
+.gv-simple.gv-one .gv-cap{padding-bottom:calc(16px + var(--safe-b,0px))}
+@media (min-width:900px){.gv-th{width:120px;height:80px}.gv-strip{justify-content:safe center}}
+@media (max-width:899px){.gv .gv-nav{display:grid;width:40px;height:40px;margin-top:-20px;border-radius:12px;background:rgba(0,0,0,.55)}.gv .gv-nav[hidden]{display:none}.gv-next{left:8px}.gv-prev{right:8px}}

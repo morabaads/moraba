@@ -2421,6 +2421,11 @@
       el('button', { type: 'button', class: 'gv-nav gv-next', 'aria-label': 'بعدی', html: icon('left'), onclick: function () { go(1); } }),
       el('button', { type: 'button', class: 'gv-nav gv-prev', 'aria-label': 'قبلی', html: icon('right'), onclick: function () { go(-1); } }),
       el('div', { class: 'gv-stage' }, img, el('div', { class: 'gv-pins' })), cap);
+    // The chat's other photos as thumbnails underneath: scroll sideways, tap one to bring it up.
+    var strip = window.MPViewer ? MPViewer.strip(photos.map(function (m) { var vd = kindOf(m) === 'video'; return { url: m.file.url, thumb: vd ? (m.x && m.x.thumb_url) : (m.file.thumb || m.file.mid || m.file.url), video: vd }; }), function (k) { i = k; show(); }) : null;
+    if (strip && photos.length > 1) v.append(strip.el);
+    $('.gv-top', v).insertBefore(el('button', { type: 'button', class: 'icon-btn gv-btn', 'aria-label': 'اشتراک‌گذاری', html: icon('share'), onclick: function () { var m = photos[i]; MPViewer.share({ url: m.file.url, name: m.file.name }); } }), count);
+    if (!window.MPViewer) $('.gv-top [aria-label="اشتراک‌گذاری"]', v).remove();
     var z = MP.zoomable(img, $('.gv-stage', v)), noteMode = !!review && !focusPt, pinsBox = $('.gv-pins', v), raf = 0;
     if (noteMode) v.classList.add('noting');
     /** Notes on the photo on screen: replies to it that carry a point. */
@@ -2489,6 +2494,7 @@
       if (m.body) cap.append(el('p', { text: m.body, dir: 'auto' }));
       dl.href = m.file.url + (m.file.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1';
       $('.gv-prev', v).hidden = i === 0; $('.gv-next', v).hidden = i === photos.length - 1;
+      if (strip) strip.set(i);
     }
     function go(d) { var n = i + d; if (n < 0 || n >= photos.length) return; i = n; show(); }
     function key(e) { if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft') go(1); else if (e.key === 'ArrowRight') go(-1); }

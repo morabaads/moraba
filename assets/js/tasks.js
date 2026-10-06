@@ -521,7 +521,7 @@
     // Attachments
     var atts = el('div', { class: 'attachments' });
     d.attachments.forEach(function (f) {
-      var card = el('a', { class: 'att', href: f.url, target: '_blank', rel: 'noopener', onclick: function (e) { if (f.image) { e.preventDefault(); MP.lightbox(f); } } },
+      var card = el('a', { class: 'att', href: f.url, target: '_blank', rel: 'noopener', onclick: function (e) { if (f.image) { e.preventDefault(); MP.lightbox(f, d.attachments.filter(function (y) { return y.image; })); } } },
         f.image ? el('img', { src: f.url, alt: f.name, loading: 'lazy' }) : el('span', { class: 'att-ico', html: icon('file') }),
         el('small', { text: f.name }));
       if (f.can_delete) card.append(el('button', { type: 'button', class: 'att-del', 'aria-label': 'حذف ' + f.name, html: icon('close'), onclick: function (e) {

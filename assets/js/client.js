@@ -499,7 +499,17 @@
         if ((x.sticker || x.gif) && m.file) b.append(h('img', { class: 'b-img cp-stk', src: m.file.url, alt: '' }));
         else if (m.file && /^video\//.test(m.file.mime || '')) b.append(h('video', { controls: '', preload: 'metadata', playsinline: '', src: m.file.url, class: 'b-img' + (x.round ? ' cp-round' : '') }));
         else if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
-        else if (m.file && m.file.image) b.append(h('a', { href: m.file.url, target: '_blank', rel: 'noopener' }, [h('img', { class: 'b-img', src: m.file.url, alt: m.file.name })]));
+        else if (m.file && m.file.image) {
+          // Opens in the viewer with the chat's other photos as thumbnails underneath.
+          var ph = h('a', { class: 'cp-ph', href: m.file.url, target: '_blank', rel: 'noopener', 'data-mid': m.file.mid || '', 'data-thumb': m.file.thumb || '', 'data-name': m.file.name || '' }, [h('img', { class: 'b-img', src: m.file.mid || m.file.url, alt: m.file.name })]);
+          ph.addEventListener('click', function (e) {
+            if (!window.MPViewer) return;
+            e.preventDefault();
+            var all = Array.prototype.slice.call(box.querySelectorAll('a.cp-ph'));
+            MPViewer.open(all.map(function (a) { return { url: a.getAttribute('href'), mid: a.dataset.mid, thumb: a.dataset.thumb, name: a.dataset.name }; }), all.indexOf(this));
+          });
+          b.append(ph);
+        }
         else if (m.file) b.append(h('a', { class: 'file-chip', href: m.file.url, target: '_blank', rel: 'noopener', html: icon('clip') + '<span></span>' }));
         if (m.file && !m.file.image && !/^audio\//.test(m.file.mime || '')) b.querySelector('.file-chip span').textContent = m.file.name;
         if (x.quote) b.append(h('p', { class: 'cp-quote', text: '«' + x.quote + '»' }));
