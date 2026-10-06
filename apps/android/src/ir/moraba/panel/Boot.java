@@ -8,6 +8,7 @@ import android.content.Intent;
 public class Boot extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {
+        NotifyJob.schedule(c, 60000);
         if (!Widgets.any(c)) return;
         Widgets.renderAll(c);
         SyncJob.schedule(c);

@@ -15,7 +15,7 @@ public class ActionActivity extends Activity {
         if ("open".equals(kind)) {
             String url = i.getStringExtra("url");
             if (url != null && !url.isEmpty()) {
-                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignored) { /* no browser */ }
+                startActivity(new Intent(this, MainActivity.class).putExtra("url", url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
         } else if ("task".equals(kind)) {
             sendBroadcast(new Intent(this, Actions.class).setAction(Actions.TASK)

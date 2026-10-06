@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   var box = document.getElementById('otp'); if (!box) return;
-  var root = box.dataset.root, mobile = '', timer = null;
+  // In the Android app the same form signs in staff and clients alike (app/otp/…).
+  var root = box.dataset.root + (box.dataset.mode === 'app' ? 'app/' : ''), mobile = '', timer = null;
   var fMobile = document.getElementById('otp-mobile'), fCode = document.getElementById('otp-code');
   var msg = document.getElementById('otp-msg'), resend = document.getElementById('otp-resend');
   var latin = function (s) { return String(s).replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }).replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }); };

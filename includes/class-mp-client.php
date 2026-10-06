@@ -294,12 +294,23 @@ class MP_Client {
 		if ( ! $contact ) {
 			return self::err( 'این شماره دیگر در این پروژه نیست.', 403 );
 		}
+		self::start_session( $ch, $contact );
+		return array( 'logged_in' => true, 'name' => $contact->name );
+	}
+
+	/** Signs this browser in as the client contact (portal login, or the Android app's shared login). */
+	public static function start_session( $ch, $contact ) {
+		global $wpdb;
 		$exp = time() + self::COOKIE_DAYS * DAY_IN_SECONDS;
 		$val = $contact->id . '|' . $exp . '|' . self::sign( $ch->id . '|' . $contact->id . '|' . $exp . '|' . $ch->token );
 		setcookie( self::cookie_name( $ch ), $val, array( 'expires' => $exp, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
 		$_COOKIE[ self::cookie_name( $ch ) ] = $val;
 		$wpdb->update( self::t( 'client_contacts' ), array( 'last_login' => MP_Util::now() ), array( 'id' => $contact->id ) );
-		return array( 'logged_in' => true, 'name' => $contact->name );
+	}
+
+	/** The client contact signed in to this group in this browser (not a staff preview), or null. */
+	public static function signed_in( $ch ) {
+		return self::real_session( $ch );
 	}
 
 	public static function logout( WP_REST_Request $r ) {

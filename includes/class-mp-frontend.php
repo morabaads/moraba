@@ -82,12 +82,23 @@ class MP_Frontend {
 		if ( get_query_var( 'mp_push_feed' ) ) {
 			MP_Push::feed();
 		}
+		if ( isset( $_GET['mp_client_feed'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			MP_App::client_feed();
+		}
+		if ( isset( $_GET['mp_app'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			MP_App::render();
+		}
 		if ( get_query_var( 'mp_export' ) ) {
 			MP_Export::handle( (string) get_query_var( 'mp_export' ) );
 		}
 		// The address itself, too: works before rewrite rules are refreshed and when a cache or a
 		// messenger drops the query string.
 		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_parse_url( esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '';
+		// The Android app's entry (staff and clients).
+		if ( preg_match( '#/mp-app/?$#', $path ) ) {
+			status_header( 200 );
+			MP_App::render();
+		}
 		if ( preg_match( '#/s/([A-Za-z0-9]{6})/?$#', $path, $pm ) ) {
 			MP_Messages::redirect( $pm[1] );
 		}
@@ -395,12 +406,13 @@ JS;
 	public static function client_pwa_script( $token, $title ) {
 		$pretty = (bool) get_option( 'permalink_structure' );
 		return sprintf(
-			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="1" data-app="%s" defer></script>',
+			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="1" data-app="%s" data-apk="%s" defer></script>',
 			esc_url( self::asset( 'js/pwa.js' ) ),
 			$pretty ? esc_url( add_query_arg( 'mp_sw', 'client', home_url( '/' ) ) ) : '',
 			esc_attr( self::client_scope( $token ) ),
 			esc_url( self::asset( 'img/icon-180.png' ) ),
-			esc_attr( $title )
+			esc_attr( $title ),
+			esc_url( self::apk_url() )
 		);
 	}
 
@@ -416,13 +428,19 @@ JS;
 	/** Install helper: iPhone banner everywhere, plus Android install button and SW on the login page. */
 	public static function pwa_script( $login = false ) {
 		return sprintf(
-			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="%s" defer></script>',
+			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="%s" data-apk="%s" defer></script>',
 			esc_url( self::asset( 'js/pwa.js' ) ),
 			esc_url( add_query_arg( 'mp_sw', 1, home_url( '/' ) ) ),
 			esc_attr( self::scope() ),
 			esc_url( self::asset( 'img/icon-180.png' ) ),
-			$login ? '1' : ''
+			$login ? '1' : '',
+			esc_url( self::apk_url() )
 		);
+	}
+
+	/** The Android app (shipped inside the plugin). */
+	public static function apk_url() {
+		return MP_URL . 'assets/app/moraba.apk?ver=' . MP_VERSION;
 	}
 
 	public static function config() {
@@ -430,6 +448,8 @@ JS;
 			'root'   => esc_url_raw( rest_url( MP_Rest::NS . '/' ) ),
 			'nonce'  => wp_create_nonce( 'wp_rest' ),
 			'user'   => get_current_user_id(),
+			'apk'    => self::apk_url(),
+			'appEntry' => MP_App::url(),
 			'assets' => MP_URL . 'assets/',
 			'version' => MP_VERSION,
 			'emoji'  => array( MP_Chat::emoji_url(), home_url( '/' ) . ( false === strpos( home_url( '/' ), '?' ) ? '?' : '&' ) . 'mp_emoji=' ),

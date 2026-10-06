@@ -94,7 +94,17 @@
   }
   ['attendance', 'task-saved', 'tasks'].forEach(function (ev) { MP.on(ev, refreshWidgets); });
 
+  // In the Android app the phone joins the widgets by itself (no code to copy), once.
+  if (window.MorabaApp) {
+    setTimeout(function () {
+      try {
+        if (MorabaApp.widgetsPaired()) return;
+        MP.api('widget/devices', { method: 'POST', body: { label: 'اپ اندروید' } }).then(function (r) { MorabaApp.pairWidgets(r.code); }).catch(function () {});
+      } catch (e) { /* older app */ }
+    }, 4000);
+  }
   MP.openWidgets = function () {
+    if (window.MorabaApp && MorabaApp.openWidgets) { MorabaApp.openWidgets(); return; }
     var devices = el('div', { class: 'wg-devices' }, el('p', { class: 'muted', text: '…' }));
     var panes = { android: androidPane(devices), windows: windowsPane(), ios: iosPane(devices) };
     var body = el('div', { class: 'wg-body' });

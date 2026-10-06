@@ -880,7 +880,9 @@
         el('button', { type: 'button', class: 'danger', html: icon('logout'), onclick: logout }, 'خروج از حساب')),
       el('p', { class: 'mp-ver', text: 'نسخه ' + String(C.version || '').replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[d]; }) })), { focus: false });
   };
-  MP.standalone = function () { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; };
+  /** The Android app (a WebView with a «MorabaApp» bridge): counts as installed; widgets and notifications are native. */
+  MP.inApp = !!window.MorabaApp;
+  MP.standalone = function () { return MP.inApp || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; };
   var CREATE = [
     ['tasks', 'تسک جدید', function () { MP.taskForm(); }],
     ['video', 'جلسه', function () { MP.meetingForm(); }],

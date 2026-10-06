@@ -20,7 +20,9 @@
   if (cfg.login && cfg.sw && 'serviceWorker' in navigator && (location.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) {
     navigator.serviceWorker.register(cfg.sw, { scope: cfg.scope }).catch(function () { /* optional */ });
   }
-  if (standalone) return;
+  // Inside the Android app (its WebView says «MorabaApp/» in the user agent): no install banners at all.
+  var nativeApp = !!window.MorabaApp || /MorabaApp\//.test(ua);
+  if (standalone || nativeApp) return;
   // Chrome may fire this before the page finishes loading, so listen right away.
   var pending = null;
   if (cfg.login) window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); pending = e; if (started && !dismissed()) showAndroid(e); });
@@ -32,13 +34,13 @@
   var SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   var ADD = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
-  function banner(inner, arrow) {
+  function banner(inner, arrow, head) {
     var b = document.createElement('div');
     b.className = 'ios-install' + (arrow ? ' has-arrow' + (ipad ? ' arrow-top' : '') : '');
     b.setAttribute('role', 'dialog');
     b.setAttribute('aria-label', 'نصب اپلیکیشن');
     b.innerHTML = '<button type="button" class="ios-install-close" aria-label="بستن"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' +
-      '<div class="ios-install-head"><img src="' + cfg.icon + '" alt=""><div><strong>' + (cfg.app ? 'پرتال پروژه را نصب کنید' : 'پنل مربع را نصب کنید') + '</strong><small>' + (cfg.app ? 'مثل یک اپ از صفحه اصلی باز می‌شود؛ پیشرفت، طرح‌ها و گفت‌وگو همیشه دم دست' : 'مثل یک اپ از صفحه اصلی باز می‌شود، تمام‌صفحه و با اعلان') + '</small></div></div>' + inner;
+      '<div class="ios-install-head"><img src="' + cfg.icon + '" alt=""><div><strong>' + (head ? head[0] : cfg.app ? 'پرتال پروژه را نصب کنید' : 'پنل مربع را نصب کنید') + '</strong><small>' + (head ? head[1] : cfg.app ? 'مثل یک اپ از صفحه اصلی باز می‌شود؛ پیشرفت، طرح‌ها و گفت‌وگو همیشه دم دست' : 'مثل یک اپ از صفحه اصلی باز می‌شود، تمام‌صفحه و با اعلان') + '</small></div></div>' + inner;
     b.querySelector('.ios-install-close').onclick = function () { dismiss(); b.classList.add('out'); setTimeout(function () { b.remove(); }, 250); };
     document.body.appendChild(b);
     document.body.classList.add('has-ios-install');
@@ -69,10 +71,17 @@
     };
   }
 
+  /** Android phones: the real app (panel and portal in one, with widgets and notifications). */
+  function showApk() {
+    var b = banner('<p class="ios-install-note">بعد از نصب، آدرس همین سایت را یک بار وارد کنید و با شماره موبایل وارد شوید؛ اپ خودش تشخیص می‌دهد کارمند هستید یا مشتری. اگر گوشی اجازه نصب نداد، «نصب از منابع ناشناس» را برای مرورگر روشن کنید.</p><a class="ios-install-btn" href="' + cfg.apk + '" download="moraba.apk">دانلود اپ (APK)</a>', false,
+      ['اپ اندروید مربع', cfg.app ? 'پرتال پروژه، گفت‌وگو با تیم و اعلان پیام‌ها' : 'پنل، گفت‌وگو، اعلان‌ها و ویجت‌های صفحه اصلی']);
+    b.querySelector('a').addEventListener('click', function () { dismiss(); setTimeout(function () { b.remove(); }, 400); });
+  }
   function start() {
     started = true;
     if (dismissed()) return;
     if (ios) setTimeout(showIOS, cfg.login ? 600 : 2500);
+    else if (/Android/i.test(ua) && cfg.apk) setTimeout(showApk, cfg.login ? 600 : 2500);
     else if (pending) showAndroid(pending);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();

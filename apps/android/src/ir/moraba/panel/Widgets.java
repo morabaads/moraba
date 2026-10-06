@@ -67,11 +67,9 @@ final class Widgets {
 
     static PendingIntent open(Context c, String url, int req) {
         Intent i;
-        if (url == null || url.isEmpty()) {
-            i = new Intent(c, MainActivity.class);
-        } else {
-            i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-        }
+        // Inside the app (the panel opens right where the widget points).
+        i = new Intent(c, MainActivity.class);
+        if (url != null && !url.isEmpty()) i.putExtra("url", url);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         return PendingIntent.getActivity(c, req, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }

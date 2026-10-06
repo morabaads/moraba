@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 <meta name="theme-color" content="#0e0e10">
 <?php include MP_DIR . 'templates/pwa-head.php'; ?>
 <meta name="robots" content="noindex,nofollow">
-<title>MORABA | ورود به پنل</title>
+<title>MORABA | <?php echo empty( $mp_app ) ? 'ورود به پنل' : 'ورود'; ?></title>
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
 </head>
@@ -29,13 +29,17 @@ if ( $mp_support && ! preg_match( '#^(https?://|mailto:|tel:)#', $mp_support ) )
 		<p class="login-sub"><?php echo esc_html( $message ); ?></p>
 		<a class="login-btn" href="<?php echo esc_url( wp_logout_url( MP_Frontend::panel_url() ) ); ?>"><span>ورود با حساب دیگر</span><i class="login-btn-arrow"><?php echo $mp_ic( '<path d="M5 12h14m-6-6 6 6-6 6"/>' ); // phpcs:ignore ?></i></a>
 	<?php else : ?>
-		<?php $mp_otp = MP_Auth::otp_enabled(); ?>
-		<h1>ورود به پنل کارمندان</h1>
+		<?php
+		$mp_otp  = MP_Auth::otp_enabled();
+		$mp_app  = ! empty( $mp_app );
+		$mp_back = $mp_app ? MP_App::url() : MP_Frontend::panel_url();
+		?>
+		<h1><?php echo $mp_app ? 'ورود به مربع' : 'ورود به پنل کارمندان'; ?></h1>
 
 		<section id="login-mobile"<?php echo $mp_otp ? '' : ' hidden'; ?>>
-			<div id="otp" data-root="<?php echo esc_url( rest_url( 'moraba-panel/v1/' ) ); ?>">
+			<div id="otp" data-root="<?php echo esc_url( rest_url( 'moraba-panel/v1/' ) ); ?>"<?php echo $mp_app ? ' data-mode="app"' : ''; ?>>
 				<form id="otp-mobile" class="otp-step" novalidate>
-					<p class="login-sub">شماره موبایل خود را وارد کنید تا کد ورود برایتان پیامک شود.</p>
+					<p class="login-sub"><?php echo $mp_app ? 'کارمند استودیو باشید یا مشتری، فرقی ندارد: شماره موبایل خود را وارد کنید؛ بعد از ورود، پنل یا پرتال پروژه شما خودش باز می‌شود.' : 'شماره موبایل خود را وارد کنید تا کد ورود برایتان پیامک شود.'; ?></p>
 					<label class="login-label" for="otp-m">شماره موبایل</label>
 					<div class="login-field">
 						<span class="login-field-ico"><?php echo $mp_ic( '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 17.5h2"/>' ); // phpcs:ignore ?></span>
@@ -74,7 +78,7 @@ if ( $mp_support && ! preg_match( '#^(https?://|mailto:|tel:)#', $mp_support ) )
 			<?php
 			wp_login_form(
 				array(
-					'redirect'       => MP_Frontend::panel_url(),
+					'redirect'       => $mp_back,
 					'label_username' => 'نام کاربری یا ایمیل',
 					'label_password' => 'رمز عبور',
 					'label_remember' => 'مرا به خاطر بسپار',
@@ -82,7 +86,15 @@ if ( $mp_support && ! preg_match( '#^(https?://|mailto:|tel:)#', $mp_support ) )
 				)
 			);
 			?>
-			<a class="login-link" href="<?php echo esc_url( wp_lostpassword_url( MP_Frontend::panel_url() ) ); ?>">رمز عبور را فراموش کرده‌اید؟</a>
+			<a class="login-link" href="<?php echo esc_url( wp_lostpassword_url( $mp_back ) ); ?>">رمز عبور را فراموش کرده‌اید؟</a>
+			<?php if ( $mp_app ) : ?>
+				<form class="app-portal" onsubmit="var v=this.l.value.trim();if(/\/c\/[A-Za-z0-9]{32}|mp_client=[A-Za-z0-9]{32}/.test(v)){location.href=v;}else{this.querySelector('small').hidden=false;}return false;">
+					<p class="login-sub">مشتری هستید؟ لینک پرتالی را که تیم مربع برایتان فرستاده اینجا بچسبانید.</p>
+					<div class="login-field"><input name="l" type="url" dir="ltr" placeholder="https://…/c/…" autocomplete="off"></div>
+					<small class="otp-msg" hidden>این لینک پرتال مشتری نیست.</small>
+					<button type="submit" class="login-alt"><span>باز کردن پرتال</span></button>
+				</form>
+			<?php endif; ?>
 			<?php if ( $mp_otp ) : ?>
 				<div class="login-or"><span>یا</span></div>
 				<button type="button" class="login-alt" id="to-mobile">

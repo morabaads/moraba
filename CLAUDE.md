@@ -40,6 +40,12 @@ WordPress 6.6 + SQLite plugin in `/tmp/wp`, plugin symlinked into `wp-content/pl
 `php -S localhost:8080 /tmp/router.php`; Playwright (`NODE_PATH=$(npm root -g) node script.js`) with
 `--use-fake-device-for-media-stream` for meeting tests. These live outside the repo and must be recreated in a new environment.
 
+## Android app (`apps/android`, output `assets/app/moraba.apk`)
+- Plain Java, no Gradle/AndroidX. `MainActivity` = the app (WebView on the site's `/mp-app/` → `MP_App`: staff → panel, client → portal, one mobile+code login), `WidgetsActivity` = home-screen widgets, `NotifyJob` = notifications (polls `?mp_push_feed=1` / `?mp_client_feed=1` with the WebView's cookies), `Bridge` = `window.MorabaApp` (auto widget pairing, saveFile, openWidgets).
+- Build: `apps/android/build.sh` (same keystore every time; bump `versionCode` in the manifest). Without an Android SDK (dl.google.com is blocked here): aapt2 from npm `aaptjs3` (bin/x64/linux/aapt2), `ANDROID_JAR` = Maven Central `org/robolectric/android-all/14-robolectric-10818077` jar, and apt `dalvik-exchange apksigner zipalign`:
+  `AAPT2=…/aapt2 ANDROID_JAR=…/android-all.jar SITE=https://… apps/android/build.sh`
+- No emulator here: the APK is checked with `aapt2 dump badging` + dexdump, the web side with a `MorabaApp` stub in Playwright.
+
 ## Conventions
 - UI text Persian; digits shown with `fa()` / `MP_Jalali::digits`; dates stored Gregorian, shown Jalali.
 - varchar columns must fit their values (past bugs: files.context, contracts.status).

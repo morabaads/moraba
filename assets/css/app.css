@@ -3488,3 +3488,7 @@ html.reduced-motion .b-jumbo .emj{animation:none!important}
 .cp-quote{font-style:italic;opacity:.8;border-inline-start:3px solid var(--brand);padding-inline-start:8px}
 .cp-card{font-weight:700}
 .cp-spoiler{background:currentColor;border-radius:4px;cursor:pointer}.cp-spoiler.open{background:none}
+.app-choose{display:grid;gap:8px;margin-top:10px}
+.app-portal{display:grid;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)}
+.app-portal .login-field input{padding-inline-start:14px}
+a.ios-install-btn{display:flex;align-items:center;justify-content:center;text-decoration:none}
