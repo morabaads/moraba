@@ -221,6 +221,7 @@ class MP_Install {
 			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			pinned_at datetime DEFAULT NULL,
 			pinned_msg bigint(20) unsigned NOT NULL DEFAULT 0,
+			settings text NULL,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
 			KEY token (token),
@@ -424,9 +425,96 @@ class MP_Install {
 			as_file tinyint(1) NOT NULL DEFAULT 0,
 			edited_at datetime NULL,
 			updated_at datetime NULL,
+			extra longtext NULL,
+			topic_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			silent tinyint(1) NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY channel_id (channel_id),
-			KEY updated (channel_id,updated_at)
+			KEY updated (channel_id,updated_at),
+			KEY topic (channel_id,topic_id)
+		) $c;";
+
+		// Chat extras: poll votes, edit history, «delete for me», topics, roles, scheduled messages, stickers.
+		$t[] = 'CREATE TABLE ' . self::table( 'poll_votes' ) . " (
+			message_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			opt smallint(5) unsigned NOT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (message_id,user_id,opt)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'msg_edits' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			message_id bigint(20) unsigned NOT NULL,
+			body text NOT NULL,
+			edited_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY message_id (message_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'msg_hidden' ) . " (
+			user_id bigint(20) unsigned NOT NULL,
+			message_id bigint(20) unsigned NOT NULL,
+			PRIMARY KEY  (user_id,message_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'chat_topics' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			channel_id bigint(20) unsigned NOT NULL,
+			title varchar(80) NOT NULL,
+			color varchar(10) NOT NULL DEFAULT '',
+			sort int(11) NOT NULL DEFAULT 0,
+			closed tinyint(1) NOT NULL DEFAULT 0,
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY channel_id (channel_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'topic_reads' ) . " (
+			topic_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			last_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			PRIMARY KEY  (topic_id,user_id)
+		) $c;";
+
+		// role: admin | member | readonly (members without a row are «member»).
+		$t[] = 'CREATE TABLE ' . self::table( 'chat_roles' ) . " (
+			channel_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			role varchar(10) NOT NULL DEFAULT 'member',
+			PRIMARY KEY  (channel_id,user_id)
+		) $c;";
+
+		$t[] = 'CREATE TABLE ' . self::table( 'chat_scheduled' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			channel_id bigint(20) unsigned NOT NULL,
+			user_id bigint(20) unsigned NOT NULL,
+			topic_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			body text NOT NULL,
+			file_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			reply_to bigint(20) unsigned NOT NULL DEFAULT 0,
+			extra longtext NULL,
+			silent tinyint(1) NOT NULL DEFAULT 0,
+			send_at datetime NOT NULL,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY send_at (send_at),
+			KEY channel_user (channel_id,user_id)
+		) $c;";
+
+		// kind: sticker | gif. pack: the pack's name (stickers) or '' (GIFs).
+		$t[] = 'CREATE TABLE ' . self::table( 'stickers' ) . " (
+			id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			kind varchar(10) NOT NULL DEFAULT 'sticker',
+			pack varchar(60) NOT NULL DEFAULT '',
+			file_id bigint(20) unsigned NOT NULL,
+			emoji varchar(16) NOT NULL DEFAULT '',
+			sort int(11) NOT NULL DEFAULT 0,
+			created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+			created_at datetime NOT NULL,
+			PRIMARY KEY  (id),
+			KEY kind (kind,pack)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'reactions' ) . " (
@@ -441,6 +529,7 @@ class MP_Install {
 			channel_id bigint(20) unsigned NOT NULL,
 			user_id bigint(20) unsigned NOT NULL,
 			last_id bigint(20) unsigned NOT NULL DEFAULT 0,
+			got_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			PRIMARY KEY  (channel_id,user_id)
 		) $c;";
 
@@ -628,6 +717,10 @@ class MP_Install {
 			size bigint(20) unsigned NOT NULL DEFAULT 0,
 			path varchar(255) NOT NULL,
 			created_at datetime NOT NULL,
+			thumb text NULL,
+			mid_path varchar(255) NOT NULL DEFAULT '',
+			w int(11) NOT NULL DEFAULT 0,
+			h int(11) NOT NULL DEFAULT 0,
 			PRIMARY KEY  (id),
 			KEY ctx (context,context_id)
 		) $c;";

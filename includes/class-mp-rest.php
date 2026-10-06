@@ -168,7 +168,8 @@ class MP_Rest {
 	}
 
 	public static function heartbeat() {
-		update_user_meta( self::uid(), 'mp_last_seen', time() );
+		MP_Live::seen( self::uid() );
+		MP_Chat::flush_scheduled();
 		return array( 'counts' => self::counts( self::uid() ), 'today' => MP_Util::today(), 'now' => current_time( 'H:i' ) );
 	}
 
@@ -1292,7 +1293,7 @@ class MP_Rest {
 			// «all» = a manager pinned it for everyone; «me» = pinned in my own list only.
 			'pinned'      => ! empty( $ch->pinned_at ) ? 'all' : ( in_array( (int) $ch->id, self::my_pins( $uid ), true ) ? 'me' : '' ),
 			'pinned_at'   => ! empty( $ch->pinned_at ) ? $ch->pinned_at : '',
-		);
+		) + MP_Chat::channel_extra( $ch, $uid );
 	}
 
 	/** Conversations a person pinned for themselves (newest pin last). */
@@ -1339,6 +1340,9 @@ class MP_Rest {
 			if ( (int) $reader !== (int) $m->user_id && $last >= (int) $m->id ) {
 				++$seen;
 			}
+		}
+		if ( ! $reads && (int) $m->user_id === (int) $uid ) {
+			$seen = MP_Chat::seen_count( $m );
 		}
 		if ( ! empty( $m->deleted_at ) && MP_Util::is_manager( $uid ) && ( $m->body || $m->file_id ) ) {
 			// Messages are archived, never erased: supervisors still see what was archived.
@@ -1580,10 +1584,11 @@ class MP_Rest {
 			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
 		}
 		// Older history (scrolling up): a page before ?before, nothing else.
+		$where = MP_Chat::list_where( $ch, $uid, $r );
 		if ( (int) $r['before'] ) {
-			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id < %d ORDER BY id DESC LIMIT 60) x ORDER BY id', $ch->id, (int) $r['before'] ) );
+			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id < %d' . $where . ' ORDER BY id DESC LIMIT 60) x ORDER BY id', $ch->id, (int) $r['before'] ) ); // phpcs:ignore
 			MP_Chat::preload( $rows );
-			$reads = self::channel_reads( $ch->id );
+			$reads = MP_Chat::reads_for( $ch, $r );
 			$out   = array();
 			foreach ( $rows as $m ) {
 				$out[] = self::message_payload( $m, $uid, $reads );
@@ -1595,21 +1600,27 @@ class MP_Rest {
 		if ( $after && $r['wait'] && '' !== (string) $r['sig'] ) {
 			MP_Chat::wait( $ch, (string) $r['sig'] );
 		}
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id > %d ORDER BY id DESC LIMIT ' . ( $after ? 200 : 80 ) . ') x ORDER BY id', $ch->id, $after ) );
-		if ( $rows ) {
-			$last = (int) end( $rows )->id;
-			$prev = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT last_id FROM ' . self::t( 'reads' ) . ' WHERE channel_id = %d AND user_id = %d', $ch->id, $uid ) );
-			if ( $last > $prev ) {
-				$wpdb->replace( self::t( 'reads' ), array( 'channel_id' => $ch->id, 'user_id' => $uid, 'last_id' => $last ) );
-			}
+		MP_Chat::flush_scheduled();
+		// ?around=ID (a message link, a date jump): the page that holds it, not the newest one.
+		$around = (int) $r['around'];
+		if ( $around && ! $after ) {
+			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id >= %d' . $where . ' ORDER BY id LIMIT 40) x UNION SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id < %d' . $where . ' ORDER BY id DESC LIMIT 40) y ORDER BY id', $ch->id, $around, $ch->id, $around ) ); // phpcs:ignore
+		} else {
+			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id > %d' . $where . ' ORDER BY id DESC LIMIT ' . ( $after ? 200 : 80 ) . ') x ORDER BY id', $ch->id, $after ) ); // phpcs:ignore
+		}
+		// ?peek=1 (holding a chat in the list): look without marking anything read.
+		if ( $rows && ! $r['peek'] ) {
+			MP_Chat::mark_read( $ch, $uid, (int) end( $rows )->id, $r );
 		}
 		MP_Chat::preload( $rows );
-		$reads = self::channel_reads( $ch->id );
+		$reads = MP_Chat::reads_for( $ch, $r );
 		$out   = array();
 		foreach ( $rows as $m ) {
 			$out[] = self::message_payload( $m, $uid, $reads );
 		}
 		$seen = array();
+		$got  = array();
+		$gmap = MP_Chat::got_map( $ch->id );
 		$mine = $wpdb->get_col( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND user_id = %d ORDER BY id DESC LIMIT 50', $ch->id, $uid ) );
 		foreach ( $mine as $mid ) {
 			$n = 0;
@@ -1619,11 +1630,17 @@ class MP_Rest {
 				}
 			}
 			$seen[ (int) $mid ] = $n;
+			foreach ( $gmap as $reader => $g ) {
+				if ( (int) $reader !== $uid && $g >= (int) $mid ) {
+					$got[ (int) $mid ] = 1;
+					break;
+				}
+			}
 		}
 		// Edited / reacted / pinned messages already on screen (?since = the server time of the previous answer).
 		$changed = array();
 		if ( $after && MP_Util::valid_datetime( (string) $r['since'] ) ) {
-			$crow = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id <= %d AND updated_at >= %s ORDER BY id LIMIT 100', $ch->id, $after, $r['since'] ) );
+			$crow = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id <= %d AND updated_at >= %s' . $where . ' ORDER BY id LIMIT 100', $ch->id, $after, $r['since'] ) ); // phpcs:ignore
 			MP_Chat::preload( $crow );
 			foreach ( $crow as $m ) {
 				$changed[] = self::message_payload( $m, $uid, $reads );
@@ -1636,6 +1653,8 @@ class MP_Rest {
 			'messages' => $out,
 			'has_more' => ! $after && count( $rows ) >= 80,
 			'seen'     => (object) $seen,
+			'got'      => (object) $got,
+			'hidden'   => MP_Chat::hidden_since( $uid, $ch->id, (string) $r['since'] ),
 			'changed'  => $changed,
 			'pinned'   => MP_Chat::pinned( $ch, $uid ),
 			'members'  => count( self::channel_members( $ch ) ),
@@ -1644,6 +1663,7 @@ class MP_Rest {
 			'activity' => self::activity_of( $ch->id, $uid ),
 			'now'      => MP_Util::now(),
 			'sig'      => MP_Chat::sig( $ch ),
+			'has_newer'=> $around && ! $after && $rows && (int) end( $rows )->id < (int) $wpdb->get_var( $wpdb->prepare( 'SELECT MAX(id) FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d', $ch->id ) ),
 		);
 	}
 
@@ -1654,29 +1674,14 @@ class MP_Rest {
 		if ( ! $ch ) {
 			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
 		}
-		$key   = 'mp_act_' . $ch->id;
-		$list  = get_transient( $key );
-		$list  = is_array( $list ) ? $list : array();
-		$state = MP_Util::pick( $r['state'], array( 'typing', 'recording', 'idle' ), 'idle' );
-		if ( 'idle' === $state ) {
-			unset( $list[ $uid ] );
-		} else {
-			$list[ $uid ] = array( $state, time() );
-		}
-		set_transient( $key, $list, MINUTE_IN_SECONDS );
+		$state = MP_Util::pick( $r['state'], array( 'typing', 'recording', 'video', 'uploading', 'idle' ), 'idle' );
+		MP_Live::set_activity( (int) $ch->id, $uid, $state );
 		return array( 'ok' => true );
 	}
 
 	public static function activity_of( $channel_id, $uid ) {
-		$list = get_transient( 'mp_act_' . $channel_id );
-		$out  = array();
-		foreach ( is_array( $list ) ? $list : array() as $who => $a ) {
-			if ( (int) $who !== (int) $uid && time() - $a[1] <= 6 ) {
-				$u     = get_userdata( $who );
-				$out[] = array( 'user_id' => (int) $who, 'name' => $u ? $u->display_name : '', 'state' => $a[0] );
-			}
-		}
-		return $out;
+		$a = MP_Live::activity( $uid, $channel_id );
+		return isset( $a[ (int) $channel_id ] ) ? $a[ (int) $channel_id ] : array();
 	}
 
 	/** DELETE messages/{id} — people delete their own messages; the row is kept for the site admin. */
@@ -1708,6 +1713,7 @@ class MP_Rest {
 			);
 			$list[ (int) $m->id ] = time();
 			set_transient( $key, $list, 20 * MINUTE_IN_SECONDS );
+			MP_Live::bump();
 			MP_Audit::log( 'delete', 'message', $m->id, 'پاک کردن کامل پیام ' . ( $u ? $u->display_name : ( $m->guest_name ? $m->guest_name : 'مشتری' ) ) . ': ' . wp_trim_words( $m->body ? $m->body : '(فایل/ویس)', 10 ) );
 			return array( 'id' => (int) $m->id, 'removed' => true );
 		}
@@ -1718,6 +1724,7 @@ class MP_Rest {
 		if ( empty( $m->deleted_at ) ) {
 			$wpdb->update( self::t( 'messages' ), array( 'deleted_at' => MP_Util::now(), 'deleted_by' => $uid, 'updated_at' => MP_Util::now() ), array( 'id' => $m->id ) );
 			MP_Audit::log( 'archive', 'message', $m->id, 'آرشیو پیام: ' . wp_trim_words( $m->body ? $m->body : '(فایل/ویس)', 10 ) );
+			MP_Live::bump();
 		}
 		$m->deleted_at = MP_Util::now();
 		return self::message_payload( $m, $uid );
@@ -1737,28 +1744,56 @@ class MP_Rest {
 		if ( ! $ch ) {
 			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
 		}
+		$can = MP_Chat::can_post( $ch, $uid );
+		if ( is_wp_error( $can ) ) {
+			return $can;
+		}
 		$file = (int) $r['file_id'] ? MP_Files::claim( (int) $r['file_id'], 'message', $ch->id ) : 0;
-		if ( '' === trim( $body ) && ! $file ) {
+		$row  = array( 'channel_id' => $ch->id, 'user_id' => $uid, 'body' => $body, 'file_id' => $file, 'created_at' => MP_Util::now() );
+		$row  = MP_Chat::send_fields( $r, $ch, $row );
+		if ( is_wp_error( $row ) ) {
+			return $row;
+		}
+		if ( '' === trim( $body ) && ! $file && empty( $row['extra'] ) ) {
 			return self::err( 'متن پیام را بنویسید یا فایلی پیوست کنید.' );
 		}
-		$row = array( 'channel_id' => $ch->id, 'user_id' => $uid, 'body' => $body, 'file_id' => $file, 'created_at' => MP_Util::now() );
-		$row = MP_Chat::send_fields( $r, $ch, $row );
-		$fo  = $file ? MP_Files::get( $file ) : null;
+		$fo = $file ? MP_Files::get( $file ) : null;
 		if ( $fo && 0 === strpos( $fo->mime, 'audio/' ) && '' !== trim( (string) $r['transcript'] ) ) {
 			$row['transcript'] = MP_Util::long_text( $r['transcript'], 4000 ); // captured live while recording
 		}
+		// «Send later»: kept aside and posted at its time (by the live connection, the heartbeat or cron).
+		$at = (string) $r['send_at'];
+		if ( '' !== $at ) {
+			return MP_Chat::schedule( $ch, $uid, $row, $at );
+		}
+		$mid = self::post_message( $ch, $uid, $row );
+		return self::message_payload( $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d', $mid ) ), $uid );
+	}
+
+	/** Stores a staff message and tells the right people (not for a «silent» one). Returns its id. */
+	public static function post_message( $ch, $uid, array $row ) {
+		global $wpdb;
 		$wpdb->insert( self::t( 'messages' ), $row );
 		$mid = (int) $wpdb->insert_id;
-		$wpdb->replace( self::t( 'reads' ), array( 'channel_id' => $ch->id, 'user_id' => $uid, 'last_id' => $mid ) );
-		$preview = '' !== trim( $body ) ? wp_trim_words( $body, 12 ) : ( $fo && 0 === strpos( $fo->mime, 'audio/' ) ? 'پیام صوتی' : 'فایل' );
+		$wpdb->replace( self::t( 'reads' ), array( 'channel_id' => $ch->id, 'user_id' => $uid, 'last_id' => $mid, 'got_id' => $mid ) );
+		MP_Live::set_activity( (int) $ch->id, $uid, 'idle' );
+		MP_Live::bump();
+		if ( ! empty( $row['silent'] ) ) {
+			return $mid;
+		}
+		$m       = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d', $mid ) );
+		$preview = MP_Chat::snippet( $m );
+		$actor   = get_userdata( $uid );
+		$actor   = $actor ? $actor->display_name : '';
 		if ( 'direct' === $ch->type ) {
 			$other = (int) $ch->user_a === $uid ? (int) $ch->user_b : (int) $ch->user_a;
 			if ( ! MP_Chat::muted( $ch->id, $other ) ) {
-				MP_Notify::event( 'message_direct', $other, array( 'ACTOR' => wp_get_current_user()->display_name, 'PREVIEW' => $preview ), 'messages', $ch->id );
+				MP_Notify::event( 'message_direct', $other, array( 'ACTOR' => $actor, 'PREVIEW' => $preview ), 'messages', $ch->id );
 			}
 		}
-		MP_Chat::mentions( $ch, $uid, $body, $preview );
-		return self::message_payload( $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d', $mid ) ), $uid );
+		MP_Chat::mentions( $ch, $uid, (string) $row['body'], $preview, $actor );
+		MP_Chat::reply_notify( $ch, $uid, $m, $preview, $actor );
+		return $mid;
 	}
 
 	/* ------------------------------------------------------------------ Client group (public, by token) */

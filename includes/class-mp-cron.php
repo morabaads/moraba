@@ -35,7 +35,12 @@ class MP_Cron {
 			$wpdb->prepare( "SELECT * FROM $table WHERE fired_at IS NULL AND CONCAT(remind_date, ' ', remind_time) <= %s LIMIT 200", $now )
 		);
 		foreach ( $due as $r ) {
-			MP_Notify::event( 'reminder', $r->user_id, array( 'TITLE' => $r->title, 'NOTE' => (string) $r->note ), 'reminders', $r->id, true );
+			if ( preg_match( '/^chat:(\d+):(\d+)$/', (string) $r->note, $cm ) ) {
+				// «Remind me about this message»: opens the message itself.
+				MP_Notify::event( 'reminder', $r->user_id, array( 'TITLE' => $r->title, 'NOTE' => 'برای دیدن پیام بزنید' ), 'chatmsg', (int) $cm[2], true );
+			} else {
+				MP_Notify::event( 'reminder', $r->user_id, array( 'TITLE' => $r->title, 'NOTE' => (string) $r->note ), 'reminders', $r->id, true );
+			}
 			if ( 'none' === $r->repeat_every ) {
 				$wpdb->update( $table, array( 'fired_at' => MP_Util::now() ), array( 'id' => $r->id ) );
 				continue;
@@ -48,6 +53,7 @@ class MP_Cron {
 			$wpdb->update( $table, array( 'remind_date' => $next ), array( 'id' => $r->id ) );
 		}
 
+		MP_Chat::flush_scheduled();
 		MP_Daily::tick();
 		MP_Digest::tick();
 		MP_Contracts::tick();

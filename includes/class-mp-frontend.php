@@ -229,6 +229,8 @@ self.addEventListener('fetch',e=>{
   const u=new URL(r.url);
   if(u.pathname.includes('/wp-json/')||u.search.includes('mp_file')||u.search.includes('rest_route'))return;
   if(ASSETS.includes(r.url)){e.respondWith(caches.match(r).then(m=>m||fetch(r)));return;}
+  // The panel page itself: from the network, and the last copy when there is no internet (chats open offline).
+  if(r.mode==='navigate'&&u.pathname===new URL(START).pathname&&!u.search){e.respondWith(fetch(r).then(res=>{if(res.ok){const c=res.clone();caches.open('shell-panel').then(x=>x.put(START,c)).catch(()=>{});}return res;}).catch(()=>caches.open('shell-panel').then(x=>x.match(START)).then(m=>m||Response.error())));return;}
   if(r.mode==='navigate'){e.respondWith(fetch(r).catch(()=>new Response('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><style>@font-face{font-family:Dana;src:url('+FONT+') format("woff2");font-weight:10 990}body{font-family:Dana,Tahoma,sans-serif;direction:rtl;text-align:center;padding:40px}</style><body>اتصال اینترنت برقرار نیست؛ دوباره تلاش کنید.</body>',{headers:{'Content-Type':'text/html; charset=utf-8'}})));}
 });
 // Push without payload: read the newest notification with the user's own session, then show it.
@@ -239,7 +241,9 @@ self.addEventListener('push',e=>{
     return fetch(FEED,{credentials:'include',cache:'no-store'}).then(r=>r.json()).then(n=>{
       if(!n||!n.title)return self.registration.showNotification('پنل مربع',{body:'اعلان جدید دارید',icon:ICON,badge:ICON,dir:'rtl',lang:'fa',data:{url:START}});
       if(self.navigator&&self.navigator.setAppBadge)self.navigator.setAppBadge(n.count).catch(()=>{});
-      return self.registration.showNotification(n.title,{body:n.body,icon:ICON,badge:ICON,tag:n.tag,renotify:true,dir:'rtl',lang:'fa',data:{url:n.url}});
+      const o={body:n.body,icon:ICON,badge:ICON,tag:n.tag,renotify:true,dir:'rtl',lang:'fa',data:{url:n.url,channel:n.channel||0}};
+      if(n.channel)o.actions=[{action:'reply',title:'پاسخ'},{action:'read',title:'خوانده شد'}];
+      return self.registration.showNotification(n.title,o);
     }).catch(()=>self.registration.showNotification('پنل مربع',{body:'اعلان جدید دارید',icon:ICON,dir:'rtl',data:{url:START}}));
   }));
 });
@@ -282,7 +286,11 @@ self.addEventListener('widgetclick',e=>{
 self.addEventListener('message',e=>{if(e.data&&e.data.type==='widgets')e.waitUntil(wall());});
 self.addEventListener('notificationclick',e=>{
   e.notification.close();
-  const url=(e.notification.data&&e.notification.data.url)||START;
+  const d=e.notification.data||{};
+  // «خوانده شد»: marks the chat read without opening the panel.
+  if(e.action==='read'&&d.channel){e.waitUntil(fetch(FEED+'&read='+d.channel,{credentials:'include',cache:'no-store',headers:{'X-MP-Push':'1'}}).then(()=>self.navigator&&self.navigator.clearAppBadge?null:null).catch(()=>{}));return;}
+  // «پاسخ»: opens the chat with the keyboard ready.
+  const url=e.action==='reply'&&d.channel?START.split('#')[0]+'#chat-'+d.channel+'-reply':(d.url||START);
   e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{
     const c=list.find(x=>x.url.split('#')[0]===START.split('#')[0]);
     if(c){c.postMessage({type:'open',url:url});return c.focus();}
@@ -421,6 +429,7 @@ JS;
 		return array(
 			'root'   => esc_url_raw( rest_url( MP_Rest::NS . '/' ) ),
 			'nonce'  => wp_create_nonce( 'wp_rest' ),
+			'user'   => get_current_user_id(),
 			'assets' => MP_URL . 'assets/',
 			'version' => MP_VERSION,
 			'emoji'  => array( MP_Chat::emoji_url(), home_url( '/' ) . ( false === strpos( home_url( '/' ), '?' ) ? '?' : '&' ) . 'mp_emoji=' ),

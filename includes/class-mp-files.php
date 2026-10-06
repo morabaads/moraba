@@ -61,7 +61,7 @@ class MP_Files {
 		if ( ! $file ) {
 			return null;
 		}
-		return array(
+		$out = array(
 			'id'    => (int) $file->id,
 			'name'  => $file->name,
 			'mime'  => $file->mime,
@@ -69,6 +69,63 @@ class MP_Files {
 			'image' => 0 === strpos( $file->mime, 'image/' ),
 			'url'   => self::url( $file->id ),
 		);
+		// Photos: a tiny blurred preview (shown at once) and a screen-sized copy, before the original.
+		if ( ! empty( $file->thumb ) ) {
+			$out['thumb'] = $file->thumb;
+		}
+		if ( ! empty( $file->mid_path ) ) {
+			$out['mid'] = add_query_arg( 'v', 'mid', $out['url'] );
+		}
+		if ( ! empty( $file->w ) ) {
+			$out['w'] = (int) $file->w;
+			$out['h'] = (int) $file->h;
+		}
+		return $out;
+	}
+
+	/**
+	 * For a chat photo: its size, a ~24px blurred JPEG as a data URI and, for big photos, a 1280px copy.
+	 * Needs GD or Imagick (WordPress's image editor); without one the photo simply loads as before.
+	 */
+	public static function make_variants( $file ) {
+		global $wpdb;
+		if ( ! $file || ! preg_match( '#^image/(jpeg|png|webp|gif)$#', $file->mime ) || ! empty( $file->thumb ) ) {
+			return $file;
+		}
+		$path = self::dir() . '/' . $file->path;
+		$size = @getimagesize( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		if ( ! $size || $size[0] * $size[1] > 40000000 ) {
+			return $file;
+		}
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		$row = array( 'w' => (int) $size[0], 'h' => (int) $size[1] );
+		$ed  = wp_get_image_editor( $path );
+		if ( ! is_wp_error( $ed ) ) {
+			$tmp = self::dir() . '/chunks';
+			wp_mkdir_p( $tmp );
+			$t = $tmp . '/t-' . wp_generate_password( 12, false, false ) . '.jpg';
+			$ed->resize( 24, 24 );
+			$ed->set_quality( 50 );
+			$saved = $ed->save( $t, 'image/jpeg' );
+			if ( ! is_wp_error( $saved ) && is_file( $saved['path'] ) ) {
+				$row['thumb'] = 'data:image/jpeg;base64,' . base64_encode( (string) file_get_contents( $saved['path'] ) ); // phpcs:ignore
+				@unlink( $saved['path'] ); // phpcs:ignore
+			}
+			if ( max( $size[0], $size[1] ) > 1600 && 'image/gif' !== $file->mime ) {
+				$ed2 = wp_get_image_editor( $path );
+				if ( ! is_wp_error( $ed2 ) ) {
+					$ed2->resize( 1280, 1280 );
+					$ed2->set_quality( 82 );
+					$mid = preg_replace( '/\.[a-z0-9]+$/i', '', $file->path ) . '-mid.jpg';
+					$s2  = $ed2->save( self::dir() . '/' . $mid, 'image/jpeg' );
+					if ( ! is_wp_error( $s2 ) ) {
+						$row['mid_path'] = $mid;
+					}
+				}
+			}
+		}
+		$wpdb->update( MP_Install::table( 'files' ), $row, array( 'id' => $file->id ) );
+		return self::get( $file->id );
 	}
 
 	/**
@@ -193,8 +250,8 @@ class MP_Files {
 	public static function can_read( $file, $client_token = '' ) {
 		global $wpdb;
 		$uid = get_current_user_id();
-		if ( 'client_logo' === $file->context ) {
-			return true; // a client group's logo is public, like the page it sits on
+		if ( 'client_logo' === $file->context || 'sticker' === $file->context ) {
+			return true; // a client group's logo and the studio's stickers are public, like the page they sit on
 		}
 		// Meeting chat files and the design on show: a signed link opens them for the meeting's guests.
 		$mk = isset( $_GET['mk'] ) ? (string) wp_unslash( $_GET['mk'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification, WordPress.Security.ValidatedSanitizedInput
@@ -260,6 +317,10 @@ class MP_Files {
 			exit( 'Not found' );
 		}
 		$path = self::dir() . '/' . $file->path;
+		if ( isset( $_GET['v'] ) && 'mid' === $_GET['v'] && ! empty( $file->mid_path ) && is_file( self::dir() . '/' . $file->mid_path ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			$path       = self::dir() . '/' . $file->mid_path;
+			$file->mime = 'image/jpeg';
+		}
 		if ( ! is_file( $path ) ) {
 			status_header( 404 );
 			exit( 'Not found' );
@@ -277,6 +338,7 @@ class MP_Files {
 		// Safari only plays audio when the server answers byte-range requests.
 		$size  = filesize( $path );
 		$start = 0;
+		header( 'Cache-Control: private, max-age=2592000' );
 		$end   = $size - 1;
 		header( 'Accept-Ranges: bytes' );
 		if ( isset( $_SERVER['HTTP_RANGE'] ) && preg_match( '/bytes=(\d*)-(\d*)/', (string) wp_unslash( $_SERVER['HTTP_RANGE'] ), $rm ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput

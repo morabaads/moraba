@@ -15,10 +15,12 @@
   }).then(function () {
     document.body.classList.remove('is-loading');
     var start = (location.hash || '').slice(1);
+    if (MP.liveStart) MP.liveStart();
     // Home-screen shortcuts (manifest): #new-task, #punch.
     if (start === 'new-task') { MP.showView('dashboard'); setTimeout(function () { MP.taskForm(); }, 300); }
     else if (start === 'widgets') { MP.showView('dashboard'); setTimeout(MP.openWidgets, 300); }
     else if (/^task-\d+$/.test(start)) { MP.showView('mytasks'); setTimeout(function () { MP.openTask(+start.slice(5)); }, 300); }
+    else if (MP.chatRoute && MP.chatRoute(start)) { /* a chat, a message link or an invite */ }
     else if (start === 'punch') { MP.showView('attendance'); setTimeout(function () { var c = document.getElementById('punch-chip'); if (c) c.click(); }, 300); }
     else MP.showView(start || 'dashboard');
     MP.renderPrompts();
@@ -27,6 +29,7 @@
     window.addEventListener('hashchange', function () {
       var v = location.hash.slice(1);
       if (/^task-\d+$/.test(v)) { MP.openTask(+v.slice(5)); return; }
+      if (MP.chatRoute && MP.chatRoute(v)) return;
       if (v === 'widgets') { MP.openWidgets(); return; }
       if (v && v !== S.view) MP.showView(v);
     });

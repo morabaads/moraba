@@ -79,7 +79,60 @@
     if (res.status === 401 || (data && data.code === 'rest_cookie_invalid_nonce')) err.message = 'نشست شما منقضی شده است؛ صفحه را دوباره باز کنید.';
     return err;
   }
+  /**
+   * A small key/value store on the device (IndexedDB): chats and messages open at once and without internet.
+   * Every call is safe to fail (private mode, full disk): it then simply resolves to null.
+   */
+  MP.kv = (function () {
+    var dbp = null;
+    function db() {
+      if (dbp) return dbp;
+      dbp = new Promise(function (resolve) {
+        try {
+          var req = indexedDB.open('moraba-panel', 1);
+          req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+      return dbp;
+    }
+    function run(mode, fn) {
+      return db().then(function (d) {
+        if (!d) return null;
+        return new Promise(function (resolve) {
+          try {
+            var tx = d.transaction('kv', mode), st = tx.objectStore('kv'), r = fn(st);
+            tx.oncomplete = function () { resolve(r && 'result' in r ? r.result : null); };
+            tx.onerror = tx.onabort = function () { resolve(null); };
+          } catch (e) { resolve(null); }
+        });
+      });
+    }
+    var scope = (C && C.user ? C.user : 'u') + ':';
+    return {
+      get: function (k) { return run('readonly', function (st) { return st.get(scope + k); }); },
+      set: function (k, v) { return run('readwrite', function (st) { return st.put(v, scope + k); }); },
+      del: function (k) { return run('readwrite', function (st) { return st.delete(scope + k); }); }
+    };
+  })();
+  // Reads worth keeping for offline use: the panel opens from the last copy when there is no internet.
+  var OFFLINE = /^(bootstrap|tasks|projects|channels|reminders|notifications|meetings|leaves|attendance|stickers)(\?|$)|^channels\/\d+\/messages\?after=0$/;
   MP.api = function (path, opts) {
+    opts = opts || {};
+    if ((!opts.method || opts.method === 'GET') && !opts.noCache) {
+      var key = path + (opts.query ? '?' + Object.keys(opts.query).filter(function (k) { return opts.query[k] !== undefined && opts.query[k] !== null && opts.query[k] !== ''; }).map(function (k) { return k + '=' + opts.query[k]; }).join('&') : '');
+      key = key.replace(/\?$/, '');
+      if (OFFLINE.test(key)) {
+        return MP.apiRaw(path, opts).then(function (d) { MP.kv.set('api:' + key, d); return d; }, function (err) {
+          if (err && err.status) throw err;
+          return MP.kv.get('api:' + key).then(function (d) { if (d === null || d === undefined) throw err; MP.offlineData = true; return d; });
+        });
+      }
+    }
+    return MP.apiRaw(path, opts);
+  };
+  MP.apiRaw = function (path, opts) {
     opts = opts || {};
     var url = C.root + path;
     if (opts.query) {
@@ -917,6 +970,7 @@
       calendar: function () { var t = MP.taskById(n.ref_id); MP.showView('calendar', { date: t ? t.date : S.today }); },
       task: function () { MP.openTask(n.ref_id); },
       messages: function () { MP.showView('messages', { channel: n.ref_id }); },
+      chatmsg: function () { MP.openMessage(n.ref_id); },
       meeting: function () { MP.showView('meetings', { open: n.ref_id }); },
       meetings: function () { MP.showView('meetings', { open: n.ref_id }); },
       projects: function () { if (n.ref_id) S.projectId = n.ref_id; MP.showView('projects'); },
@@ -1303,7 +1357,7 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', function (e) {
       var d = e.data || {};
-      if (d.type === 'open' && d.url) { var v = d.url.split('#')[1]; if (v) MP.showView(v); MP.refreshCounts(); }
+      if (d.type === 'open' && d.url) { var v = d.url.split('#')[1]; if (v && !(MP.chatRoute && MP.chatRoute(v))) MP.showView(v); MP.refreshCounts(); }
       if (d.type === 'refresh') MP.refreshCounts();
     });
   }

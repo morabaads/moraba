@@ -3125,3 +3125,18 @@ i.emj{font-style:normal;color:transparent;overflow:hidden;white-space:nowrap;tex
 i.emj::selection{color:transparent;background:rgba(80,140,255,.35)}
 @media (max-width:900px){.composer textarea,.ss-cap{font-size:16px}}
 .mp-ver{margin:8px 0 2px;text-align:center;font-size:11.5px;color:var(--muted);opacity:.8}
+
+/* ================================================================ Chat: live state (typing in the list, ticks, online, @) */
+.ci-pv{flex:1;min-width:0;display:flex}
+.ci-pv>small{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-typing{display:inline-flex!important;align-items:center;gap:5px;color:var(--brand-strong);font-weight:700}
+html.dark .ci-typing{color:var(--brand)}
+.chat-item.active .ci-typing{color:inherit}
+.ci-at{flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;font-weight:900;font-size:13px;line-height:1;cursor:pointer}
+.chat-item .badge.ci-mark{min-width:12px;width:12px;height:12px;padding:0}
+.chat-item[data-other]>.avatar,.chat-item[data-other]>.initials{position:relative}
+.chat-item.is-online::before{content:'';position:absolute;z-index:2;inset-inline-start:46px;top:44px;width:13px;height:13px;border-radius:50%;background:var(--ok);border:2.5px solid var(--surface)}
+.chat-item.is-online.active::before{border-color:var(--brand)}
+.b-meta .seen.got .icon{opacity:.75}
+.msg-row.other .b-meta .seen{display:none}
+.ci-tick .icon{opacity:.8}

@@ -124,17 +124,35 @@ class MP_Push {
 			status_header( 401 );
 			exit( '{}' );
 		}
+		// «خوانده شد» on a chat notification (only from the service worker: it sends this header).
+		if ( isset( $_GET['read'] ) && ! empty( $_SERVER['HTTP_X_MP_PUSH'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			$ch = MP_Rest::channel_for( (int) $_GET['read'], $uid ); // phpcs:ignore WordPress.Security.NonceVerification
+			if ( $ch ) {
+				MP_Chat::mark_read( $ch, $uid, MP_Chat::last_id( $ch->id ) );
+				$wpdb->query( $wpdb->prepare( 'UPDATE ' . MP_Install::table( 'notifications' ) . " SET is_read = 1 WHERE user_id = %d AND target = 'messages' AND ref_id = %d", $uid, $ch->id ) );
+			}
+			exit( '{"ok":true}' );
+		}
 		$n     = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0 ORDER BY id DESC LIMIT 1', $uid ) );
 		$count = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0', $uid ) );
 		$views = array( 'calendar' => 'calendar', 'task' => 'mytasks', 'messages' => 'messages', 'meeting' => 'dashboard', 'projects' => 'projects', 'reminders' => 'reminders', 'attendance' => 'attendance', 'reports' => 'reports' );
+		$chat = $n && 'messages' === $n->target && $n->ref_id;
+		$url  = MP_Frontend::panel_url() . '#' . ( isset( $views[ $n ? $n->target : '' ] ) ? $views[ $n->target ] : 'dashboard' );
+		if ( $chat ) {
+			$url = MP_Frontend::panel_url() . '#chat-' . (int) $n->ref_id;
+		} elseif ( $n && 'chatmsg' === $n->target ) {
+			$url = MP_Frontend::panel_url() . '#msg-' . (int) $n->ref_id;
+		}
 		echo wp_json_encode(
 			$n ? array(
-				'id'    => (int) $n->id,
-				'title' => $n->title,
-				'body'  => MP_Jalali::digits( $n->detail ),
-				'url'   => MP_Frontend::panel_url() . '#' . ( isset( $views[ $n->target ] ) ? $views[ $n->target ] : 'dashboard' ),
-				'tag'   => 'mp-' . $n->id,
-				'count' => $count,
+				'id'      => (int) $n->id,
+				'title'   => $n->title,
+				'body'    => MP_Jalali::digits( $n->detail ),
+				'url'     => $url,
+				// One notification per chat: a new message replaces the previous one, like Telegram.
+				'tag'     => $chat ? 'mp-chat-' . (int) $n->ref_id : 'mp-' . $n->id,
+				'channel' => $chat ? (int) $n->ref_id : 0,
+				'count'   => $count,
 			) : array( 'count' => 0 ),
 			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 		);

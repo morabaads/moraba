@@ -9,7 +9,7 @@
   var chatLayer = null;
   function closeChat() { finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx(); closeAttach();
     layout.classList.remove('open'); document.body.classList.remove('chat-full');
-    current = 0; stop(); renderList();
+    current = 0; stop(); renderList(); liveRestart();
     if (chatLayer) { var l = chatLayer; chatLayer = null; MP.popLayer(l); }
   }
   var box = $('#chat-messages'), layout = $('#chat-layout'), text = $('#composer-text');
@@ -20,6 +20,7 @@
   var mineRows = {};        // my message id → its ticks node
   var unreadFrom = 0;       // first unread message when the chat was opened
   var newBelow = 0;         // others' messages that arrived while scrolled up
+  var topic = 0;            // open topic, in a group with topics
 
   MP.loadChannels = function () { return MP.api('channels').then(function (l) { S.channels = l; MP.emit('channels'); if (MP.visible('messages')) renderList(); }); };
   function chan(id) { return S.channels.filter(function (x) { return x.id === (id || current); })[0] || null; }
@@ -160,15 +161,16 @@
   function chatRow(c) {
     var draft = c.id !== current ? draftOf(c.id) : '';
     var mine = c.last && c.last.mine && !c.last.deleted;
-    var item = el('button', { type: 'button', class: 'chat-item' + (c.id === current ? ' active' : '') + (c.pinned ? ' pinned' : '') + (c.muted ? ' muted' : '') + (c.unread ? ' has-unread' : ''), onclick: function () { if (!item.dataset.swiped) select(c.id); } },
+    var item = el('button', { type: 'button', class: 'chat-item' + (c.id === current ? ' active' : '') + (c.pinned ? ' pinned' : '') + (c.muted ? ' muted' : '') + (c.unread || c.marked ? ' has-unread' : '') + (c.type === 'direct' && isOnline(c.other) ? ' is-online' : ''), dataset: c.type === 'direct' ? { id: c.id, other: c.other } : { id: c.id }, onclick: function () { if (!item.dataset.swiped) select(c.id); } },
       channelIcon(c),
       el('span', { class: 'ci-copy' },
         el('span', { class: 'ci-line' },
           el('strong', null, c.title, c.muted ? el('i', { class: 'ci-mute', html: icon('bell-off') }) : null),
-          c.last ? el('span', { class: 'ci-time' }, mine ? el('i', { class: 'ci-tick' + (c.last.seen_by ? ' seen' : ''), html: icon(c.last.seen_by ? 'checks' : 'check') }) : null, el('time', { text: listTime(c.last.created_at) })) : null),
+          c.last ? el('span', { class: 'ci-time' }, mine && c.type !== 'saved' ? el('i', { class: 'ci-tick' + (c.last.seen_by ? ' seen' : ''), html: icon(c.last.seen_by || c.last.got ? 'checks' : 'check') }) : null, el('time', { text: listTime(c.last.created_at) })) : null),
         el('span', { class: 'ci-line' },
-          draft ? el('small', { class: 'ci-draft' }, el('b', { text: 'پیش‌نویس: ' }), draft.replace(/\s+/g, ' ')) : preview(c),
-          c.unread ? el('span', { class: 'badge' + (c.muted ? ' muted' : ''), text: fa(c.unread) }) : c.pinned ? el('span', { class: 'ci-pin', title: c.pinned === 'all' ? 'سنجاق برای همه' : 'سنجاق برای من', html: icon('pin') }) : null)));
+          el('span', { class: 'ci-pv' }, draft ? el('small', { class: 'ci-draft' }, el('b', { text: 'پیش‌نویس: ' }), draft.replace(/\s+/g, ' ')) : preview(c)),
+          c.mention && c.mention[0] ? el('span', { class: 'ci-at', title: 'شما را صدا زده‌اند', text: '@', onclick: function (e) { e.stopPropagation(); select(c.id, c.mention[1]); } }) : null,
+          c.unread ? el('span', { class: 'badge' + (c.muted ? ' muted' : ''), text: fa(c.unread) }) : c.marked ? el('span', { class: 'badge ci-mark' }) : c.pinned ? el('span', { class: 'ci-pin', title: c.pinned === 'all' ? 'سنجاق برای همه' : 'سنجاق برای من', html: icon('pin') }) : null)));
     longPress(item, function () { chatMenu(c, item); });
     swipeRow(item, c);
     return item;
@@ -231,8 +233,9 @@
     $('#chat-title').replaceChildren(document.createTextNode(c.title));
     if (c.muted) $('#chat-title').append(el('i', { class: 'ci-mute', html: icon('bell-off') }));
     var sub = $('#chat-sub');
-    sub.classList.toggle('online', c.type === 'direct' && lastSeen(c.last_seen) === 'آنلاین');
-    sub.textContent = c.type === 'direct' ? lastSeen(c.last_seen) : c.type === 'saved' ? 'فقط خودتان می‌بینید' : c.type === 'client' ? 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : fa(c.members) + ' عضو';
+    var ls = c.type === 'direct' ? lastSeen(Math.max(seenOf(c.other), c.last_seen || 0)) : '';
+    sub.classList.toggle('online', ls === 'آنلاین' && navigator.onLine);
+    sub.textContent = !navigator.onLine ? 'در انتظار اتصال…' : c.type === 'direct' ? ls : c.settings && c.settings.mode === 'channel' ? 'کانال · ' + fa(c.members) + ' عضو' : c.type === 'saved' ? 'فقط خودتان می‌بینید' : c.type === 'client' ? 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : fa(c.members) + ' عضو';
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
@@ -250,12 +253,14 @@
 
   /* ------------------------------------------------------------ Opening a chat */
 
-  function select(id, jump) {
+  function select(id, jump, opts) {
     var c = chan(id);
     if (!c) return;
+    opts = opts || {};
     if (current && current !== id) { saveDraft(current, editing ? '' : text.value.trim()); }
     endSelect(); closeFind(); clearCtx(false);
-    current = id; lastId = 0; firstId = 0; hasMore = false; sig = ''; since = ''; msgs = {}; rowsById = {}; mineRows = {}; albumRows = {}; newBelow = 0;
+    current = id; resetRows(); sig = ''; since = ''; newBelow = 0; hasNewer = false;
+    topic = opts.topic || 0;
     unreadFrom = c.unread ? c.read_id + 1 : 0;
     showActivity([]);
     layout.classList.add('open');
@@ -267,37 +272,74 @@
     drawHead(); showPinned(null); downBtn();
     text.value = draftOf(id); composerState(); autoGrow();
     $('#composer').hidden = false;
+    if (c.marked) { c.marked = false; MP.api('channels/' + id + '/mark', { method: 'POST', body: { on: false } }).catch(function () {}); }
     c.unread = 0; renderList();
     var token = ++loopToken;
-    fetchFirst(token).then(function () {
+    // At once: the copy kept on this device; the server's answer replaces it a moment later.
+    MP.kv.get(snapKey(id)).then(function (snap) {
+      if (token !== loopToken || !snap || !snap.messages || !snap.messages.length || !box.querySelector('.sk')) return;
+      box.replaceChildren(); resetRows();
+      snap.messages.forEach(function (m) { place(m, false); });
+      decorate(); box.scrollTop = box.scrollHeight;
+    });
+    liveRestart();
+    fetchFirst(token, jump).then(function () {
+      if (token !== loopToken) return;
       if (jump) jumpTo(jump);
-      if (!MP.isMobile()) text.focus();
-      loop(token);
+      if (opts.reply) text.focus();
+      else if (!MP.isMobile()) text.focus();
     });
   }
+  function resetRows() { lastId = 0; firstId = 0; hasMore = false; msgs = {}; rowsById = {}; mineRows = {}; albumRows = {}; }
+  function snapKey(id) { return 'api:channels/' + id + '/messages?after=0'; }
+  /** The newest messages of the open chat, kept on the device for an instant (and offline) start next time. */
+  var snapTimer = 0;
+  function saveSnapshot() {
+    clearTimeout(snapTimer);
+    var id = current;
+    snapTimer = setTimeout(function () {
+      if (id !== current || topic || hasNewer) return;
+      var list = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return typeof m.id === 'number'; }).sort(function (a, b) { return a.id - b.id; }).slice(-80);
+      MP.kv.set(snapKey(id), { messages: list.map(function (m) { var o = Object.assign({}, m); delete o.o; return o; }), has_more: true });
+    }, 600);
+  }
+  var hasNewer = false;
 
   /** First page: the newest ~80 messages; then the unread line and the right scroll position. */
-  function fetchFirst(token) {
-    return MP.api('channels/' + current + '/messages', { query: { after: 0 } }).then(function (d) {
+  function fetchFirst(token, around) {
+    var q = { after: 0, topic: topic || '' };
+    // A message far back (a link, a search hit, a date): open the page that holds it.
+    if (around && typeof around === 'number') q.around = around;
+    return MP.api('channels/' + current + '/messages', { query: q, noCache: !!(q.around || q.topic) }).then(function (d) {
       if (token !== loopToken) return;
-      box.replaceChildren();
-      hasMore = d.has_more;
+      box.replaceChildren(); resetRows();
+      hasMore = d.has_more || !!q.around; hasNewer = !!d.has_newer;
       d.messages.forEach(function (m) { place(m, false); });
       afterBatch(d);
       decorate();
       if (!box.querySelector('.msg-row, .sys-msg')) box.append(MP.empty('chat', current && chan() && chan().type === 'saved' ? 'پیام‌های ذخیره‌شده' : 'اولین پیام را بفرستید', current && chan() && chan().type === 'saved' ? 'هر پیامی را اینجا فوروارد کنید یا یادداشت بگذارید؛ فقط خودتان می‌بینید.' : 'پیام‌ها برای همه اعضای گفت‌وگو نمایش داده می‌شود.', null, true));
       var line = $('.unread-sep', box);
       if (line) box.scrollTop = Math.max(0, line.offsetTop - 60); else box.scrollTop = box.scrollHeight;
+      downBtn();
       MP.refreshCounts();
+      saveSnapshot();
     }).catch(function (e) { if (token === loopToken) box.replaceChildren(MP.empty('chat', 'پیام‌ها باز نشد', e.message, { text: 'تلاش دوباره', onclick: function () { select(current); } }, true)); });
   }
 
-  /** The held request: answers at once when something changes, otherwise after ~6 s; then asks again. */
-  function loop(token) {
-    if (token !== loopToken || !current) return;
-    if (document.hidden) { setTimeout(function () { loop(token); }, 1500); return; }
+  /**
+   * News for the open chat. The live connection says when something changed (sig); this fetches just that.
+   * Without a live connection it also runs every few seconds as a fallback.
+   */
+  var pulling = false, pullAgain = false;
+  function loop(token) { pull(token); }
+  function pull(token) {
+    token = token || loopToken;
+    if (token !== loopToken || !current || !lastId && !firstId && !Object.keys(msgs).length && box.querySelector('.sk')) return;
+    if (pulling) { pullAgain = true; return; }
+    pulling = true;
     var id = current;
-    MP.api('channels/' + id + '/messages', { query: { after: lastId, wait: 1, sig: sig, since: since } }).then(function (d) {
+    MP.api('channels/' + id + '/messages', { query: { after: lastId, since: since, topic: topic || '' }, noCache: true }).then(function (d) {
+      pulling = false;
       if (token !== loopToken || id !== current) return;
       var nearBottom = atBottom();
       var fresh = d.messages.filter(function (m) { return !msgs[m.id]; });
@@ -309,16 +351,113 @@
         if (theirs) MP.haptic(8);
         if (nearBottom) box.scrollTop = box.scrollHeight; else { newBelow += theirs; downBtn(); }
         MP.loadChannels(); MP.refreshCounts();
+        saveSnapshot();
       }
-      loop(token);
-    }).catch(function () { setTimeout(function () { loop(token); }, 3000); });
+      if (pullAgain) { pullAgain = false; pull(token); }
+    }).catch(function () { pulling = false; });
   }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && current) { var t = ++loopToken; loop(t); } });
   function stop() { loopToken++; }
+
+  /* ------------------------------------------------------------ Live connection (Server-Sent Events, else a held request) */
+
+  var C = window.MP_CONFIG;
+  var live = { es: null, mode: 'sse', v: '', helloT: 0, fails: 0, polling: 0, open: 0, chTimer: 0, last: null };
+  S.seen = S.seen || {}; S.act = S.act || {};
+  function liveStart() {
+    if (live.es || live.polling || document.hidden || !navigator.onLine) return;
+    live.open = current;
+    if (live.mode === 'poll' || !window.EventSource) { livePoll(); return; }
+    var es;
+    try { es = new EventSource(C.root + 'live?_wpnonce=' + encodeURIComponent(C.nonce) + (current ? '&open=' + current : ''), { withCredentials: true }); } catch (e) { live.mode = 'poll'; livePoll(); return; }
+    live.es = es;
+    var hello = false;
+    // A host that holds streamed output back never says hello in time: the held request takes over.
+    live.helloT = setTimeout(function () { if (!hello) { liveStop(); live.mode = 'poll'; liveStart(); } }, 6000);
+    es.addEventListener('hello', function (e) { hello = true; clearTimeout(live.helloT); live.fails = 0; onLive(JSON.parse(e.data)); });
+    es.addEventListener('state', function (e) { onLive(JSON.parse(e.data)); });
+    es.onerror = function () {
+      if (es.readyState === 2) { // closed for good (an error page, a lost session): try again a bit later
+        liveStop(); live.fails++;
+        if (live.fails > 3) live.mode = 'poll';
+        setTimeout(liveStart, Math.min(30000, 2000 * live.fails));
+      }
+    };
+  }
+  function livePoll() {
+    var my = ++live.polling;
+    (function go() {
+      if (live.polling !== my || document.hidden) { if (live.polling === my) live.polling = 0; return; }
+      MP.api('live', { query: { mode: 'poll', v: live.v, open: current || '' }, noCache: true }).then(function (d) {
+        if (live.polling !== my) return;
+        onLive(d); go();
+      }).catch(function () { if (live.polling === my) setTimeout(go, 4000); });
+    })();
+  }
+  function liveStop() { clearTimeout(live.helloT); if (live.es) { live.es.close(); live.es = null; } live.polling = 0; }
+  function liveRestart() { if (live.open === current && (live.es || live.polling)) return; liveStop(); liveStart(); }
+  MP.liveStart = liveStart;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { liveStop(); return; }
+    liveStart();
+    if (current) pull();
+    MP.loadChannels();
+  });
+  window.addEventListener('online', function () { liveStop(); liveStart(); if (current) { drawHead(); pull(); } });
+  window.addEventListener('offline', function () { liveStop(); if (current) drawHead(); });
+  // Safety net: if the live connection is down for a while, the open chat still updates.
+  setInterval(function () { if (!document.hidden && current && !live.es && !live.polling) pull(); }, 8000);
+
+  /** One live update: chat list changes, typing, presence and whether the open chat has news. */
+  function onLive(d) {
+    if (!d) return;
+    if (d.v) live.v = d.v;
+    var prevSeen = S.seen;
+    S.seen = d.seen || S.seen; S.act = d.act || {};
+    var changed = false, total = 0;
+    Object.keys(d.ch || {}).forEach(function (k) {
+      var st = d.ch[k], c = chan(+k);
+      if (!c) { changed = true; return; }
+      if (c.last_id !== st[0] || (+k !== current && c.unread !== st[1]) || (c.mention || [0])[0] !== st[2]) changed = true;
+      // The others read or received my last message: the list's ticks change.
+      if (live.last && live.last[k] && (live.last[k][4] !== st[4] || live.last[k][5] !== st[5]) && c.last && c.last.mine) changed = true;
+      if (!c.muted && !c.arch_me) total += +k === current ? 0 : st[1];
+    });
+    if (S.channels && S.channels.some(function (c) { return !c.archived && d.ch && !d.ch[c.id]; })) changed = true;
+    live.last = d.ch || live.last;
+    if (changed) { clearTimeout(live.chTimer); live.chTimer = setTimeout(function () { MP.loadChannels(); }, 120); }
+    if (S.boot && S.boot.counts && S.boot.counts.messages !== total) { S.boot.counts.messages = total; MP.updateBadges(S.boot.counts); }
+    paintActivity();
+    showActivity(current ? S.act[current] || [] : []);
+    var c = chan();
+    if (c && c.type === 'direct' && (!prevSeen || prevSeen[c.other] !== S.seen[c.other])) drawHead();
+    paintOnline();
+    if (current && d.sig && d.sig !== sig) pull();
+  }
+  function seenOf(uid) { return S.seen && S.seen[uid] ? S.seen[uid] : 0; }
+  function isOnline(uid) { var t = seenOf(uid); return t && Date.now() / 1000 - t < 90; }
+  /** Typing / recording shows in the chat list in place of the last message, as in Telegram. */
+  function paintActivity() {
+    $$('#chat-list .chat-item[data-id]').forEach(function (row) {
+      var id = +row.dataset.id, a = S.act[id], pv = $('.ci-pv', row);
+      if (!pv) return;
+      if (a && a.length) {
+        if (!pv._orig) pv._orig = Array.prototype.slice.call(pv.childNodes);
+        var c = chan(id), rec = a.filter(function (x) { return x.state === 'recording'; }).length;
+        var who = c && c.type === 'direct' ? '' : a.map(function (x) { return x.name.split(' ')[0]; }).slice(0, 2).join(' و ') + ' ';
+        pv.replaceChildren(el('small', { class: 'ci-typing' }, who + (rec ? 'در حال ضبط ویس' : a[0].state === 'uploading' ? 'در حال ارسال فایل' : a[0].state === 'video' ? 'در حال ضبط ویدیو' : 'در حال نوشتن'), el('span', { class: 'act-dots' }, el('b'), el('b'), el('b'))));
+      } else if (pv._orig) { pv.replaceChildren.apply(pv, pv._orig); pv._orig = null; }
+    });
+  }
+  /** Green dot on a private chat's avatar while the other person is online. */
+  function paintOnline() {
+    $$('#chat-list .chat-item[data-other]').forEach(function (row) { row.classList.toggle('is-online', !!isOnline(+row.dataset.other)); });
+  }
+  setInterval(function () { paintOnline(); var c = chan(); if (c && c.type === 'direct' && !document.hidden) drawHead(); }, 30000);
 
   /** Everything except new messages: ticks, edits/reactions, deletions, typing, pinned message, sync point. */
   function afterBatch(d) {
-    Object.keys(d.seen || {}).forEach(function (mid) { if (mineRows[mid]) setSeen(mineRows[mid], d.seen[mid]); if (msgs[mid]) msgs[mid].seen_by = d.seen[mid]; });
+    Object.keys(d.seen || {}).forEach(function (mid) { var g = !!(d.got && d.got[mid]); if (mineRows[mid]) setSeen(mineRows[mid], d.seen[mid], g); if (msgs[mid]) { msgs[mid].seen_by = d.seen[mid]; msgs[mid].got = g; } });
+    (d.hidden || []).forEach(function (id) { if (msgs[id]) removeRow(id); });
     (d.changed || []).forEach(function (m) { if (msgs[m.id]) update(m); });
     if (!S.manager) (d.deleted || []).forEach(function (id) { if (msgs[id] && !msgs[id].deleted) { msgs[id].deleted = true; msgs[id].body = ''; msgs[id].file = null; update(msgs[id]); } });
     (d.removed || []).forEach(removeRow);
@@ -453,14 +592,16 @@
     else if (m.mine && chan() && chan().type !== 'saved') {
       var seen = el('span', { class: 'seen' }); meta.append(seen);
       (list || [m]).forEach(function (x) { mineRows[x.id] = seen; });
-      setSeen(seen, m.seen_by);
+      setSeen(seen, m.seen_by, m.got);
     }
     return meta;
   }
-  function setSeen(node, n) {
-    node.innerHTML = icon(n ? 'checks' : 'check');
+  /** ✓ sent · ✓✓ grey: reached the other person's device · ✓✓ coloured: read. */
+  function setSeen(node, n, got) {
+    node.innerHTML = icon(n || got ? 'checks' : 'check');
     node.classList.toggle('on', !!n);
-    node.title = n ? 'دیده شد' + (n > 1 ? ' توسط ' + fa(n) + ' نفر' : '') : 'ارسال شد';
+    node.classList.toggle('got', !n && !!got);
+    node.title = n ? 'خوانده شد' + (n > 1 ? ' توسط ' + fa(n) + ' نفر' : '') : got ? 'رسید (هنوز خوانده نشده)' : 'ارسال شد';
   }
   function quote(q) {
     return el('button', { type: 'button', class: 'b-quote', onclick: function (e) { e.stopPropagation(); jumpTo(q.id); } },
@@ -516,7 +657,7 @@
   function atBottom() { return box.scrollHeight - box.scrollTop - box.clientHeight < 140; }
   function downBtn() {
     var b = $('#chat-down'), n = $('#chat-down-n');
-    b.hidden = !current || atBottom();
+    b.hidden = !current || (atBottom() && !hasNewer);
     n.hidden = !newBelow; n.textContent = fa(newBelow);
   }
   // The date chip stuck at the top shows while scrolling and fades out a moment after (Telegram).
@@ -531,7 +672,10 @@
     downBtn();
     if (box.scrollTop < 300 && hasMore && !loadingOld && current) loadOlder();
   }, { passive: true });
-  $('#chat-down').onclick = function () { box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); newBelow = 0; downBtn(); };
+  $('#chat-down').onclick = function () {
+    if (hasNewer) { select(current, 0, { topic: topic }); return; }
+    box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); newBelow = 0; downBtn();
+  };
 
   /** Older history, kept in place on screen while it is added above. */
   function loadOlder() {
@@ -559,7 +703,9 @@
         r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash');
         return;
       }
-      if (!hasMore || tries++ > 25) { MP.toast('این پیام در دسترس نیست'); return; }
+      if (!hasMore || id > lastId) { MP.toast('این پیام در دسترس نیست'); return; }
+      // Far back: open the page around it instead of loading page after page.
+      if (tries++ > 3) { var t = ++loopToken; fetchFirst(t, id).then(function () { var r2 = rowsById[id]; if (r2) { r2.scrollIntoView({ block: 'center' }); r2.classList.add('flash'); } else MP.toast('این پیام در دسترس نیست'); }); return; }
       loadOlder().then(function (more) { if (more !== false) go(); });
     })();
   }
@@ -1538,7 +1684,7 @@
             var who = name.value;
             if (n.sms_sent === false) MP.toast(who + ' اضافه شد، ولی پیامک ارسال نشد: ' + (n.sms_error || 'خطای سرویس پیامک'), { error: true, duration: 9000 });
             else MP.toast(who + ' اضافه شد' + (n.sms_sent ? ' و لینک برایش پیامک شد' : ''));
-            draw(n); if (c.id === current) fetchNew(true);
+            draw(n); if (c.id === current) pull();
           }).catch(MP.soft);
       };
       var list = el('div', { class: 'tio-history' });
@@ -1855,11 +2001,31 @@
     renderList();
     MP.loadChannels().then(function () {
       var target = opts.channel || current || (window.innerWidth > 860 && S.channels[0] && S.channels[0].id);
-      if (target) select(target);
+      if (opts.channel && !chan(opts.channel)) { MP.toast('این گفت‌وگو پیدا نشد یا به آن دسترسی ندارید.'); target = 0; }
+      if (target) select(target, opts.msg || 0, { topic: opts.topic || 0, reply: opts.reply });
       else { layout.classList.remove('open'); $('#composer').hidden = true; box.replaceChildren(MP.empty('chat', 'یک گفت‌وگو را انتخاب کنید', null, null, true)); }
     });
   }
   MP.view('messages', { open: open });
+
+  /** Addresses inside the panel: #chat-12 (a chat), #chat-12-reply (from a notification), #msg-345 (a message link), #join-… (an invite). */
+  MP.chatRoute = function (h) {
+    var m;
+    if ((m = /^chat-(\d+)(-reply)?$/.exec(h))) { MP.showView('messages', { channel: +m[1], reply: !!m[2] }); return true; }
+    if ((m = /^msg-(\d+)$/.exec(h))) { MP.openMessage(+m[1]); return true; }
+    if ((m = /^join-([A-Za-z0-9]{10,})$/.exec(h))) { joinGroup(m[1]); return true; }
+    return false;
+  };
+  MP.openMessage = function (id) {
+    MP.api('messages/' + id + '/locate').then(function (d) { MP.showView('messages', { channel: d.channel_id, msg: d.id, topic: d.topic_id }); }).catch(MP.soft);
+  };
+  function joinGroup(token) {
+    MP.api('chat-join', { method: 'POST', body: { token: token } }).then(function (c) {
+      if (!chan(c.id)) S.channels.push(c);
+      MP.toast('به گروه «' + c.title + '» پیوستید', { icon: 'check' });
+      MP.showView('messages', { channel: c.id });
+    }).catch(function (e) { MP.soft(e); MP.showView('messages'); });
+  }
   var origShow = MP.showView;
   MP.showView = function (name, opts) {
     if (name !== 'messages') { stop(); document.body.classList.remove('chat-full'); layout.classList.remove('open'); if (chatLayer) { var l = chatLayer; chatLayer = null; MP.popLayer(l); } }

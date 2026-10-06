@@ -102,7 +102,7 @@ class MP_Rest_Work {
 		}
 		if ( 'message' === $context ) {
 			// The message is sent separately with this file_id; keep context_id so the claim check passes.
-			return MP_Files::payload( $file );
+			return MP_Files::payload( MP_Files::make_variants( $file ) );
 		}
 		if ( 'task' === $context ) {
 			$task = MP_Rest::get_task( $cid );
