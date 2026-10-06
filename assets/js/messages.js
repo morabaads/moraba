@@ -576,8 +576,19 @@
     else if (k === 'voice' || k === 'round') list = ['شنیدم 👍', 'باشه', 'بررسی می‌کنم'];
     else if (k === 'poll' || k === 'sticker') { bar.hidden = true; return; }
     else list = ['دریافت شد', 'باشه 👍', 'بررسی می‌کنم', 'ممنون 🙏'];
-    bar.replaceChildren.apply(bar, list.map(function (t) { return el('button', { type: 'button', class: 'qr-chip', text: t, onclick: function () { bar.hidden = true; sendNow({ body: t }); } }); }));
-    MP.emojify(bar);
+    // Folded behind a small arrow above the composer; a tap opens the answers (the choice is remembered).
+    var open = false;
+    try { open = localStorage.getItem('mp_qr_open') === '1'; } catch (e) { /* private mode */ }
+    var chips = el('div', { class: 'qr-chips' }, list.map(function (t) { return el('button', { type: 'button', class: 'qr-chip', text: t, onclick: function () { bar.hidden = true; sendNow({ body: t }); } }); }));
+    var tog = el('button', { type: 'button', class: 'qr-toggle', 'aria-expanded': String(open), 'aria-label': 'جواب‌های آماده', title: 'جواب‌های آماده', onclick: function () {
+      open = !bar.classList.contains('open');
+      bar.classList.toggle('open', open); tog.setAttribute('aria-expanded', String(open)); tog.innerHTML = icon(open ? 'arrow-down' : 'arrow-up');
+      try { localStorage.setItem('mp_qr_open', open ? '1' : ''); } catch (e) { /* private mode */ }
+    } });
+    tog.innerHTML = icon(open ? 'arrow-down' : 'arrow-up');
+    bar.classList.toggle('open', open);
+    bar.replaceChildren(tog, chips);
+    MP.emojify(chips);
     bar.hidden = false;
   }
   text.addEventListener('input', function () { var bar = $('#quick-replies'); if (bar) bar.hidden = !!text.value || bar.hidden; if (!text.value) quickReplies(); });

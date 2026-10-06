@@ -3436,7 +3436,13 @@ html.reduced-motion .b-jumbo .emj{animation:none!important}
 .sum-chip{display:inline-flex;align-items:center;gap:5px;margin-inline-start:8px;padding:3px 10px;border:0;border-radius:99px;background:var(--brand);color:#fff;font:700 12px Dana,Tahoma,sans-serif;cursor:pointer}
 .sum-chip .icon{width:14px;height:14px}
 .ai-text{white-space:pre-wrap;line-height:1.9;font-size:14.5px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}
-.quick-replies{display:flex;gap:6px;overflow-x:auto;padding:0 4px 8px;scrollbar-width:none;animation:fade-in .2s}
+.quick-replies{position:relative;display:flex;flex-direction:column;align-items:center;padding:0 4px;animation:fade-in .2s}
+.qr-toggle{position:absolute;bottom:calc(100% + 2px);inset-inline-end:10px;display:grid;place-items:center;width:44px;height:20px;padding:0;border:1px solid var(--line-strong);border-bottom:0;border-radius:12px 12px 0 0;background:var(--surface);color:var(--muted);cursor:pointer}
+.qr-toggle:hover{color:var(--brand-strong)}
+.qr-toggle .icon{width:15px;height:15px}
+.qr-chips{display:none;align-self:stretch;gap:6px;overflow-x:auto;padding:0 0 8px;scrollbar-width:none}
+.quick-replies.open .qr-chips{display:flex;animation:qr-open .2s var(--ease)}
+@keyframes qr-open{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .qr-chip{flex:none;padding:6px 12px;border-radius:99px;border:1px solid var(--line-strong);background:var(--surface-2);color:inherit;font:600 13px Dana,Tahoma,sans-serif;cursor:pointer;transition:transform .12s}
 .qr-chip:hover{border-color:var(--brand);color:var(--brand-strong)}
 .qr-chip:active{transform:scale(.94)}
