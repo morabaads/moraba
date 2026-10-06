@@ -390,16 +390,24 @@ class MP_Rest_Work {
 
 	/* ------------------------------------------------------------------ Attendance */
 
+	/** A stored local time as a real Unix timestamp (through the site's time zone, whatever PHP's own is set to). */
+	private static function ts( $local ) {
+		$d = date_create( $local, wp_timezone() );
+		return $d ? $d->getTimestamp() : 0;
+	}
+
 	private static function session_payload( $s ) {
-		$end = $s->check_out ? strtotime( $s->check_out ) : current_time( 'timestamp' ); // phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp
+		$start = self::ts( $s->check_in );
+		$end   = $s->check_out ? self::ts( $s->check_out ) : time();
 		return array(
+			'started'   => $start,
 			'id'        => (int) $s->id,
 			'user_id'   => (int) $s->user_id,
 			'date'      => $s->work_date,
 			'check_in'  => substr( $s->check_in, 11, 5 ),
 			'check_out' => $s->check_out ? substr( $s->check_out, 11, 5 ) : '',
 			'open'      => ! $s->check_out,
-			'seconds'   => max( 0, $end - strtotime( $s->check_in ) ),
+			'seconds'   => max( 0, $end - $start ),
 			'note'      => $s->note,
 		);
 	}
@@ -418,14 +426,18 @@ class MP_Rest_Work {
 		$sql  = 'SELECT * FROM ' . self::t( 'attendance' ) . ' WHERE work_date BETWEEN %s AND %s' . ( $user ? ' AND user_id = %d' : '' ) . ' ORDER BY work_date DESC, check_in DESC';
 		$rows = $wpdb->get_results( $user ? $wpdb->prepare( $sql, $from, $to, $user ) : $wpdb->prepare( $sql, $from, $to ) );
 		$open = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'attendance' ) . ' WHERE user_id = %d AND check_out IS NULL ORDER BY id DESC LIMIT 1', self::uid() ) );
-		$today = 0;
-		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'attendance' ) . ' WHERE user_id = %d AND work_date = %s', self::uid(), MP_Util::today() ) ) as $s ) {
-			$today += self::session_payload( $s )['seconds'];
+		// Today's finished sessions; the open one counts in full even when it began before midnight.
+		$closed = 0;
+		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'attendance' ) . ' WHERE user_id = %d AND work_date = %s AND check_out IS NOT NULL', self::uid(), MP_Util::today() ) ) as $s ) {
+			$closed += self::session_payload( $s )['seconds'];
 		}
+		$op = $open ? self::session_payload( $open ) : null;
 		return array(
 			'sessions' => array_map( array( __CLASS__, 'session_payload' ), $rows ),
-			'open'     => $open ? self::session_payload( $open ) : null,
-			'today'    => $today,
+			'open'     => $op,
+			'closed'   => $closed,
+			'today'    => $closed + ( $op ? $op['seconds'] : 0 ),
+			'now'      => time(),
 		);
 	}
 

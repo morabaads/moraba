@@ -7,10 +7,18 @@
   /* ------------------------------------------------------------ Attendance state + top chip */
 
   MP.loadAttendance = function () {
-    return MP.api('attendance', { query: { from: J.addDays(S.today, -30), to: S.today } }).then(function (a) { S.attendance = a; drawChip(); MP.emit('attendance'); return a; });
+    return MP.api('attendance', { query: { from: J.addDays(S.today, -30), to: S.today } }).then(function (a) { a.loadedAt = Date.now(); S.attendance = a; drawChip(); MP.emit('attendance'); return a; });
   };
+  /**
+   * Worked today, live: finished sessions plus the open one counted from its real check-in moment (corrected for
+   * the device clock being off), so a reload, a stale answer or midnight never restarts it from zero.
+   */
   function liveToday() {
     var a = S.attendance; if (!a) return 0;
+    if (a.open && a.open.started && a.now) {
+      if (a.skew === undefined) a.skew = (a.loadedAt || Date.now()) / 1000 - a.now;
+      return (a.closed || 0) + Math.max(0, Date.now() / 1000 - a.skew - a.open.started);
+    }
     return a.today + (a.open ? (Date.now() - a.loadedAt) / 1000 : 0);
   }
   function drawChip() {
