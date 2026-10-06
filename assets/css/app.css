@@ -3056,7 +3056,8 @@ html.dark .composer textarea{background:var(--surface-3)}
   .chat-tabs{padding:0 12px 8px}
   .chat-item{border-radius:0;padding:8px 16px}
   .chat-item .ci-copy{padding-bottom:9px;border-bottom:1px solid var(--line);margin-bottom:-9px;align-self:stretch;align-content:center}
-  .chat-item:last-of-type .ci-copy{border-bottom:0}
+  .cs-wrap:last-of-type .chat-item .ci-copy,.chat-item.found:last-of-type .ci-copy{border-bottom:0}
+  .cs-wrap{margin:0}
   .chat-item.active{background:none;color:inherit}
   .chat-item.active small{color:var(--muted)}
   .chat-layout.open.swiping-back .chat-pane{box-shadow:-10px 0 30px rgba(0,0,0,.25)}
@@ -3140,3 +3141,44 @@ html.dark .ci-typing{color:var(--brand)}
 .b-meta .seen.got .icon{opacity:.75}
 .msg-row.other .b-meta .seen{display:none}
 .ci-tick .icon{opacity:.8}
+
+/* ---- Chat list: swipe actions, archive, peek, pin order */
+.cs-wrap{position:relative;overflow:hidden;border-radius:var(--r)}
+.cs-wrap>.chat-item{position:relative;z-index:1;background:var(--surface)}
+.chat-list .cs-wrap>.chat-item:not(.active):hover{background:var(--surface-2)}
+.cs-acts{position:absolute;inset-block:0;display:flex;z-index:0;visibility:hidden}
+.cs-wrap[data-side=left] .cs-left,.cs-wrap.sw-open .cs-left{visibility:visible}
+.cs-wrap[data-side=right] .cs-right{visibility:visible}
+.cs-left{right:0}.cs-right{left:0}
+.cs-act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:72px;border:0;color:#fff;font-size:11.5px;font-weight:700}
+.cs-act .icon{width:22px;height:22px}
+.cs-act.cs-mute{background:#8e8e93}.cs-act.cs-pin{background:#2f9e5a}.cs-act.cs-arch{background:#5b6ee1}.cs-act.cs-read{background:var(--info,#2f80ed);width:90px}
+.cs-wrap.sw-full .cs-left{width:100%}.cs-wrap.sw-full .cs-act.cs-arch{flex:1;align-items:flex-end;padding-inline-end:24px}
+.cs-wrap.sw-full .cs-act:not(.cs-arch){display:none}
+.cs-wrap.sw-armed .cs-act.cs-read{filter:brightness(1.12)}
+@media (pointer:fine){.cs-acts{display:none}}
+.chat-arch-row .ci-ico.arch{background:var(--surface-3);color:var(--ink-2)}
+.chat-arch-top{display:flex;align-items:center;gap:8px;font-size:15px}
+.chat-arch-hint{margin:0 12px 8px;font-size:12px;color:var(--muted)}
+html.dark .cs-wrap>.chat-item{background:var(--surface)}
+@media (max-width:760px){.cs-wrap{border-radius:0}.cs-wrap>.chat-item{background:var(--bg)}}
+.pk-layer{position:fixed;inset:0;z-index:130;display:grid;place-items:center;padding:16px;opacity:0;transition:opacity .16s}
+.pk-layer.in{opacity:1}
+.pk-shade{position:absolute;inset:0;background:rgba(0,0,0,.35);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.pk-box{position:relative;display:grid;gap:8px;width:min(420px,100%);max-height:calc(100dvh - 32px);transform:scale(.94);transition:transform .2s var(--ease)}
+.pk-layer.in .pk-box{transform:none}
+.pk-card{display:grid;grid-template-rows:auto 1fr;width:100%;height:min(52dvh,420px);padding:0;border:0;border-radius:18px;overflow:hidden;background-color:var(--chat-bg);background-image:var(--chat-wall);background-size:180px;text-align:right;color:var(--ink);box-shadow:0 18px 50px rgba(0,0,0,.3)}
+.pk-head{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+.pk-title{display:grid;min-width:0}.pk-title b{font-size:15px}.pk-title small{font-size:12px;color:var(--muted)}
+.pk-msgs{display:flex;flex-direction:column;gap:4px;padding:10px;overflow:auto}
+.pk-row{display:flex}.pk-row.me{justify-content:flex-start}.pk-row.other{justify-content:flex-end}
+.pk-bub{display:grid;gap:2px;max-width:80%;padding:6px 10px;border-radius:14px;background:var(--bub-other);font-size:13.5px;line-height:1.55;box-shadow:0 1px 1px rgba(0,0,0,.12)}
+.pk-row.me .pk-bub{background:var(--bub-me);color:var(--bub-me-ink)}
+.pk-bub b{font-size:12px;color:var(--brand-strong)}
+.pk-bub img{max-width:180px;max-height:140px;border-radius:10px;object-fit:cover}
+.pk-bub time{font-size:10.5px;opacity:.7;justify-self:end}
+.pk-menu{position:relative;inset:auto;max-height:40dvh;overflow:auto}
+.po-list{display:grid;gap:6px}
+.po-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;background:var(--surface-2)}
+.po-row b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.po-row .ci-ico,.po-row .avatar,.po-row .initials{width:34px;height:34px;border-radius:50%}
