@@ -168,13 +168,16 @@
     var head = el('span', { class: 'bk-head' }, MP.iconEl(c.t === 'task' ? 'tasks' : 'folder'), el('small', { text: c.t === 'task' ? 'تسک' : 'پروژه' }));
     if (c.gone) { node.replaceChildren(head, el('b', { text: c.title || 'حذف شده' }), el('small', { class: 'bk-meta', text: 'در دسترس نیست' })); return; }
     var meta = c.t === 'task'
-      ? [el('span', { class: 'bk-st st-' + c.status, text: CARD_ST[c.status] || c.status }), c.user ? el('span', { text: c.user }) : null, c.date ? el('span', { text: J.format(c.date, false) + (c.time ? ' ' + MP.timeFa(c.time) : '') }) : null]
-      : [el('span', { class: 'bk-st', text: fa(c.done) + ' از ' + fa(c.tasks) + ' تسک' }), c.end ? el('span', { text: 'تا ' + J.format(c.end, false) }) : null];
+      ? [el('span', { class: 'bk-st st-' + c.status, text: CARD_ST[c.status] || c.status || '…' }), c.user ? el('span', { text: c.user }) : null, c.date ? el('span', { text: J.format(c.date, false) + (c.time ? ' ' + MP.timeFa(c.time) : '') }) : null]
+      : [el('span', { class: 'bk-st', text: c.tasks === undefined ? '…' : fa(c.done) + ' از ' + fa(c.tasks) + ' تسک' }), c.end ? el('span', { text: 'تا ' + J.format(c.end, false) }) : null];
     var bar = c.t === 'project' && c.tasks ? el('span', { class: 'bk-bar' }, el('i', { style: { width: Math.round(c.done / c.tasks * 100) + '%' } })) : null;
     node.replaceChildren(head, el('b', { text: c.title, dir: 'auto' }), el('span', { class: 'bk-meta' }, meta), bar);
   }
   /** Every few seconds while the chat is open: the cards' newest state (status changes show without reloading). */
-  var cardTimer = setInterval(function () {
+  var cardSoon = 0;
+  function refreshCardsSoon() { clearTimeout(cardSoon); cardSoon = setTimeout(refreshCards, 300); }
+  setInterval(refreshCards, 20000);
+  function refreshCards() {
     if (document.hidden || !current) return;
     var nodes = $$('[data-card]', box); if (!nodes.length) return;
     var t = [], p = [];
@@ -185,7 +188,7 @@
         if (c) { c.t = a[0]; c.id = +a[1]; n.classList.toggle('done', c.status === 'done'); n.classList.toggle('gone', !!c.gone); fillCard(n, c); }
       });
     }).catch(function () {});
-  }, 20000);
+  }
   function stickerEl(m) {
     var img = el('img', { class: 'b-stk', src: m.file.url, alt: m.x && m.x.gif ? 'GIF' : 'استیکر', loading: 'lazy' });
     return el('span', { class: 'b-stk-wrap' + (m.x && m.x.gif ? ' gif' : '') }, img);
@@ -471,7 +474,8 @@
     drawHead(); showPinned(null); downBtn();
     text.value = draftOf(id); composerState(); autoGrow();
     $('#composer').hidden = false;
-    postLock(c);
+    postLock(c); applyLook(c);
+    var qrb = $('#quick-replies'); if (qrb) qrb.hidden = true;
     // A group with topics opens on its list of topics (unless a topic or a message was asked for).
     if (c.settings && c.settings.topics && !topic && (!jump || opts.topics)) { showTopics(c); liveRestart(); return; }
     if (c.marked) { c.marked = false; MP.api('channels/' + id + '/mark', { method: 'POST', body: { on: false } }).catch(function () {}); }
@@ -492,6 +496,92 @@
       else if (!MP.isMobile()) text.focus();
     });
   }
+  /* ------------------------------------------------------------ Look: wallpaper, colour and text size (per chat) */
+
+  var WALLS = [
+    ['', 'پیش‌فرض', ''],
+    ['plain', 'ساده', 'none'],
+    ['dots', 'نقطه‌ها', 'radial-gradient(rgba(127,127,127,.22) 1.5px, transparent 1.6px) 0 0/18px 18px'],
+    ['sunset', 'غروب', 'linear-gradient(160deg,#ffcf9c 0%,#f28a24 55%,#b85e1a 100%)'],
+    ['ocean', 'اقیانوس', 'linear-gradient(160deg,#89c2ff 0%,#3a6fd8 60%,#243b8a 100%)'],
+    ['mint', 'نعنایی', 'linear-gradient(160deg,#d6f5e3 0%,#8fd3b1 60%,#3e9d77 100%)'],
+    ['lilac', 'یاسی', 'linear-gradient(160deg,#efe1ff 0%,#b79af2 60%,#6b4bc2 100%)'],
+    ['night', 'شب', 'linear-gradient(160deg,#16222a 0%,#2b3a4a 60%,#0f1418 100%)']
+  ];
+  var ACCENTS = ['', '#3a8ee6', '#2fa36b', '#8e5be8', '#e0559b', '#e5484d', '#6b7280'];
+  var FONTS = [[0, 'پیش‌فرض', ''], [1, 'کوچک', '13.5px'], [2, 'معمولی', '14.5px'], [3, 'بزرگ', '16px'], [4, 'خیلی بزرگ', '18px']];
+  function globalFont() { try { return +localStorage.getItem('mp_chat_font') || 0; } catch (e) { return 0; } }
+  function applyLook(c) {
+    var lk = (c && c.look) || {}, w = WALLS.filter(function (x) { return x[0] === (lk.bg || ''); })[0] || WALLS[0], pane = box.parentNode;
+    box.style.background = w[2] ? w[2] : '';
+    if (w[0] === 'dots') box.style.backgroundColor = 'var(--chat-bg)';
+    pane.style.setProperty('--bub-me', lk.accent || '');
+    if (!lk.accent) pane.style.removeProperty('--bub-me');
+    var f = FONTS[lk.font || globalFont()] || FONTS[0];
+    if (f[2]) pane.style.setProperty('--msg-fs', f[2]); else pane.style.removeProperty('--msg-fs');
+    pane.classList.toggle('dark-wall', w[0] === 'night' || w[0] === 'ocean');
+  }
+  function chatLook(c) {
+    var lk = Object.assign({ bg: '', accent: '', font: 0 }, c.look || {});
+    var prev = el('div', { class: 'lk-prev' });
+    var body = el('div', { class: 'form lk' });
+    function save() {
+      MP.api('channels/' + c.id + '/look', { method: 'POST', body: lk }).then(function (d) { c.look = d.look[c.id] || null; if (current === c.id) applyLook(c); }).catch(MP.soft);
+    }
+    function draw() {
+      var w = WALLS.filter(function (x) { return x[0] === lk.bg; })[0] || WALLS[0];
+      prev.style.background = w[2] || ''; prev.className = 'lk-prev' + (w[2] ? '' : ' def');
+      prev.style.setProperty('--bub-me', lk.accent || 'var(--brand)');
+      prev.style.setProperty('--msg-fs', (FONTS[lk.font || globalFont()] || FONTS[0])[2] || '14.5px');
+      prev.replaceChildren(el('span', { class: 'lk-b other', text: 'سلام! طرح جدید آماده است؟' }), el('span', { class: 'lk-b me', text: 'بله، همین الان می‌فرستم 👍' }));
+      MP.emojify(prev);
+      body.replaceChildren(prev,
+        el('div', { class: 'field' }, el('span', { text: 'پس‌زمینه این گفت‌وگو' }), el('div', { class: 'lk-walls' }, WALLS.map(function (x) {
+          return el('button', { type: 'button', class: 'lk-wall' + (lk.bg === x[0] ? ' on' : '') + (x[2] ? '' : ' def'), style: x[2] && x[2] !== 'none' ? { background: x[2] } : null, title: x[1], onclick: function () { lk.bg = x[0]; draw(); save(); } }, el('small', { text: x[1] }));
+        }))),
+        el('div', { class: 'field' }, el('span', { text: 'رنگ پیام‌های شما' }), el('div', { class: 'tp-colors' }, ACCENTS.map(function (x) {
+          return el('button', { type: 'button', class: 'pe-color' + ((lk.accent || '') === x ? ' on' : ''), style: { background: x || 'var(--brand)' }, 'aria-label': x || 'پیش‌فرض', onclick: function () { lk.accent = x; draw(); save(); } });
+        }))),
+        el('div', { class: 'field' }, el('span', { text: 'اندازه متن پیام‌ها (همه گفت‌وگوها)' }), el('div', { class: 'seg' }, FONTS.slice(1).map(function (x) {
+          return el('button', { type: 'button', 'aria-selected': String((globalFont() || 2) === x[0]), text: x[1], onclick: function () { try { localStorage.setItem('mp_chat_font', x[0]); } catch (e) { /* private mode */ } draw(); if (current) applyLook(chan()); } });
+        }))));
+    }
+    draw();
+    MP.dialog.open('ظاهر گفت‌وگو', body);
+  }
+
+  /* ------------------------------------------------------------ AI summary and quick replies */
+
+  function summarize(c, all) {
+    var body = MP.dialog.open('خلاصه هوشمند', el('div', { class: 'ai-sum' }, el('p', { class: 'hint', text: 'دستیار پنل در حال خواندن پیام‌هاست…' }), MP.skeleton(3)));
+    MP.api('channels/' + c.id + '/summary', { method: 'POST', body: { all: all ? 1 : 0 } }).then(function (d) {
+      var p = el('div', { class: 'ai-text', dir: 'auto' }); MP.chatKit.format(d.summary, p);
+      body.replaceChildren(el('small', { class: 'hint', text: (d.unread ? 'خلاصه ' + fa(d.count) + ' پیام نخوانده' : 'خلاصه ' + fa(d.count) + ' پیام آخر') + ' «' + c.title + '»' }), MP.emojify(p),
+        el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('copy') + 'کپی', onclick: function () { copyText(d.summary); } }),
+          el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('bookmark') + 'ذخیره در پیام‌های ذخیره‌شده', onclick: function () { MP.api('channels/saved', { method: 'POST' }).then(function (sv) { return MP.api('channels/' + sv.id + '/messages', { method: 'POST', body: { body: '**خلاصه «' + c.title + '»**\n' + d.summary } }); }).then(function () { MP.toast('ذخیره شد'); MP.loadChannels(); }).catch(MP.soft); } })));
+    }).catch(function (e) { body.replaceChildren(el('p', { class: 'hint', text: e.message })); });
+  }
+  /** One-tap answers under the last message from someone else («دریافت شد»، «بررسی می‌کنم»…). */
+  function quickReplies() {
+    var bar = $('#quick-replies');
+    if (!bar) { bar = el('div', { id: 'quick-replies', class: 'quick-replies', hidden: true }); $('#composer').prepend(bar); }
+    var c = chan();
+    var last = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return typeof m.id === 'number' && m.kind !== 'system'; }).sort(function (a, b) { return b.id - a.id; })[0];
+    var fresh = last && (Date.now() - new Date(String(last.created_at).replace(' ', 'T')).getTime()) < 2 * 864e5;
+    if (!c || !last || last.mine || last.deleted || !fresh || text.value || editing || c.can_post === false || c.type === 'saved' || $('#composer').classList.contains('recording')) { bar.hidden = true; return; }
+    var b = plainText(last.body || ''), k = kindOf(last), list;
+    if (/[؟?]\s*$/.test(b) || /^(آیا|میشه|می‌شه|می‌تونی|میتونی)/.test(b)) list = ['بله', 'نه', 'بررسی می‌کنم', 'بعداً خبر می‌دم'];
+    else if (/(ممنون|مرسی|متشکرم|سپاس)/.test(b)) list = ['خواهش می‌کنم 🌹', 'قربانت 🙏', 'وظیفه بود'];
+    else if (k === 'photo' || k === 'file' || k === 'video') list = ['دریافت شد 👍', 'عالیه 👌', 'بررسی می‌کنم', 'نیاز به اصلاح داره'];
+    else if (k === 'voice' || k === 'round') list = ['شنیدم 👍', 'باشه', 'بررسی می‌کنم'];
+    else if (k === 'poll' || k === 'sticker') { bar.hidden = true; return; }
+    else list = ['دریافت شد', 'باشه 👍', 'بررسی می‌کنم', 'ممنون 🙏'];
+    bar.replaceChildren.apply(bar, list.map(function (t) { return el('button', { type: 'button', class: 'qr-chip', text: t, onclick: function () { bar.hidden = true; sendNow({ body: t }); } }); }));
+    MP.emojify(bar);
+    bar.hidden = false;
+  }
+  text.addEventListener('input', function () { var bar = $('#quick-replies'); if (bar) bar.hidden = !!text.value || bar.hidden; if (!text.value) quickReplies(); });
+
   /* ------------------------------------------------------------ Topics (a group split into separate conversations) */
 
   var topicNames = {};
@@ -560,7 +650,24 @@
       MP.kv.set(snapKey(id), { messages: list.map(function (m) { var o = Object.assign({}, m); delete o.o; return o; }), has_more: true });
     }, 600);
   }
-  var hasNewer = false;
+  var hasNewer = false, sumN = 0;
+  /** Many unread messages and the AI assistant is on: offer a summary on the «unread» line. */
+  function summaryChip() {
+    sumN = 0;
+    if (!S.boot.channels.ai || !unreadFrom) return;
+    var n = Object.keys(msgs).filter(function (k) { var m = msgs[k]; return typeof m.id === 'number' && m.id >= unreadFrom && !m.mine && !m.deleted; }).length;
+    if (n >= 12) { sumN = n; decorate(); }
+  }
+  /** Very long chats stay light: past ~500 rows, the oldest leave the page (scrolling up brings them back). */
+  function trimRows() {
+    var rows = $$('.msg-row, .sys-msg', box);
+    if (rows.length < 500 || !atBottom()) return;
+    var cut = rows.slice(0, rows.length - 400), gone = {};
+    cut.forEach(function (r) { gone[r.dataset.id] = 1; Object.keys(rowsById).forEach(function (k) { if (rowsById[k] === r) { delete rowsById[k]; delete msgs[k]; delete mineRows[k]; } }); r.remove(); });
+    var ids = Object.keys(msgs).map(Number).filter(function (x) { return !isNaN(x); });
+    firstId = ids.length ? Math.min.apply(null, ids) : firstId; hasMore = true;
+    decorate();
+  }
 
   /** First page: the newest ~80 messages; then the unread line and the right scroll position. */
   function fetchFirst(token, around) {
@@ -580,6 +687,8 @@
       downBtn();
       MP.refreshCounts();
       saveSnapshot();
+      quickReplies();
+      summaryChip(d);
     }).catch(function (e) { if (token === loopToken) box.replaceChildren(MP.empty('chat', 'پیام‌ها باز نشد', e.message, { text: 'تلاش دوباره', onclick: function () { select(current); } }, true)); });
   }
 
@@ -609,6 +718,8 @@
         if (nearBottom) box.scrollTop = box.scrollHeight; else { newBelow += theirs; downBtn(); }
         MP.loadChannels(); MP.refreshCounts();
         saveSnapshot();
+        quickReplies();
+        trimRows();
       }
       if (pullAgain) { pullAgain = false; pull(token); }
     }).catch(function () { pulling = false; });
@@ -778,7 +889,11 @@
     rows.forEach(function (r) {
       var m = msgs[r.dataset.id] || {}, day = String(m.created_at || '').slice(0, 10);
       if (day && day !== prevDay) { box.insertBefore(el('div', { class: 'day-sep' }, el('span', { text: day === S.today ? 'امروز' : day === J.addDays(S.today, -1) ? 'دیروز' : J.formatLong(day) })), r); prevDay = day; prev = null; }
-      if (!unreadDone && unreadFrom && typeof m.id === 'number' && m.id >= unreadFrom && !m.mine) { box.insertBefore(el('div', { class: 'unread-sep' }, el('span', { text: 'پیام‌های خوانده‌نشده' })), r); unreadDone = true; prev = null; }
+      if (!unreadDone && unreadFrom && typeof m.id === 'number' && m.id >= unreadFrom && !m.mine) {
+        box.insertBefore(el('div', { class: 'unread-sep' }, el('span', { text: 'پیام‌های خوانده‌نشده' }),
+          sumN ? el('button', { type: 'button', class: 'sum-chip', html: icon('list') + 'خلاصه ' + fa(sumN) + ' پیام نخوانده', onclick: function () { summarize(chan()); } }) : null), r);
+        unreadDone = true; prev = null;
+      }
       if (!r.classList.contains('msg-row')) { prev = null; return; }
       var same = prev && prev.dataset.who === r.dataset.who && (+r.dataset.t - +prev.dataset.t) < 600;
       r.classList.toggle('g-first', !same);
@@ -817,6 +932,8 @@
     }
     if (m.fwd_from) b.append(el('span', { class: 'b-fwd' }, MP.iconEl('forward'), 'فوروارد از ', el('b', { text: m.fwd_from })));
     if (m.reply) b.append(quote(m.reply, m.x && m.x.quote, m.x && m.x.pt));
+    var rv = (list[list.length - 1].x || {}).review || (m.x || {}).review;
+    if (rv) b.append(el('span', { class: 'b-review ' + rv.state, html: icon(rv.state === 'ok' ? 'check' : 'edit') + (rv.state === 'ok' ? 'تأیید شد' : 'نیاز به اصلاح') + (rv.name ? ' · ' + esc(rv.name.split(' ')[0]) : '') }));
     var kind = kindOf(m), caps = list.map(function (x) { return x.body; }).filter(Boolean), caption = caps[0] || '';
     if (kind === 'sticker' || kind === 'gif') { b.append(stickerEl(m)); b.classList.add('b-sticker', 'media-only'); }
     else if (kind === 'round') { b.append(roundEl(m)); b.classList.add('b-sticker', 'media-only'); }
@@ -836,6 +953,9 @@
       list.forEach(function (x, i) { if (x.body) capBox.append(el('button', { type: 'button', class: 'b-cap', onclick: function (e) { e.stopPropagation(); gallery(x.id); } }, el('i', { text: fa(i + 1) }), richText(x.body))); });
       b.append(capBox);
     } else if (caption && kind !== 'poll') b.append(richText(caption));
+    // «#task» in the text: its live card under the message.
+    var ref = caption && kind !== 'card' ? /\]\((task|project):(\d+)\)/.exec(caption) : null;
+    if (ref) { var rt = /\[#?([^\]]+)\]\((?:task|project):/.exec(caption); b.append(cardEl({ x: { card: { t: ref[1], id: +ref[2], title: rt ? rt[1] : '', status: '' } } })); refreshCardsSoon(); }
     if (caption && !m.file && !m.reply && !m.fwd_from && MP.onlyEmoji(caption)) b.classList.add('jumbo');
     var url = caption && !m.file ? (caption.match(URL_RE) || [])[0] : '';
     if (url) b.append(linkCard(url.replace(/[.,،)!؟?]+$/, '')));
@@ -992,10 +1112,11 @@
     }).catch(function () { loadingOld = false; return false; });
   }
   /** Scrolls to a message (loading older pages if needed) and flashes it. */
-  function jumpTo(id) {
+  function jumpTo(id, pt) {
     var tries = 0;
     (function go() {
       var r = rowsById[id];
+      if (r && pt && msgs[id] && msgs[id].file) { gallery(id, $('.b-ph', r), true, pt); return; }
       if (r) {
         r.scrollIntoView({ block: 'center', behavior: 'smooth' });
         r.classList.remove('flash'); void r.offsetWidth; r.classList.add('flash');
@@ -1436,8 +1557,19 @@
 
   // «@» suggestions: the chat's members.
   var mPop = $('#mention-pop'), mList = [], mIdx = 0, mStart = -1;
+  var mKind = '@';
   function mentionCheck() {
     var c = chan(), pos = text.selectionStart, before = text.value.slice(0, pos), m = before.match(/(^|\s)@([^\s@]*)$/);
+    // «#»: a task or project of the panel, inserted as a link that opens it (and shows its card).
+    var h = before.match(/(^|\s)#([^\s#]*)$/);
+    if (c && h) {
+      var hq = MP.norm(h[2]);
+      var tl = S.tasks.filter(function (t) { return !hq || MP.norm(t.title).indexOf(hq) >= 0; }).sort(function (a, b) { return (b.project_id === c.project_id) - (a.project_id === c.project_id) || b.id - a.id; }).slice(0, 6).map(function (t) { return { t: 'task', id: t.id, name: t.title, sub: (MP.STATUS[t.status] || '') + (t.project_id && MP.project(t.project_id) ? ' · ' + MP.project(t.project_id).name : '') }; });
+      var pl = S.projects.filter(function (p) { return !hq || MP.norm(p.name).indexOf(hq) >= 0; }).slice(0, 3).map(function (p) { return { t: 'project', id: p.id, name: p.name, sub: 'پروژه' }; });
+      mList = pl.concat(tl);
+      if (mList.length) { mKind = '#'; mStart = pos - h[2].length - 1; mIdx = 0; drawMentions(); return; }
+    }
+    mKind = '@';
     if (!c || !isGroup(c) || !m) { mPop.hidden = true; return; }
     mStart = pos - m[2].length - 1;
     var q = MP.norm(m[2]);
@@ -1447,12 +1579,19 @@
   }
   function drawMentions() {
     mPop.replaceChildren.apply(mPop, mList.map(function (u, i) {
+      if (mKind === '#') return el('button', { type: 'button', class: i === mIdx ? 'on' : '', onpointerdown: function (e) { e.preventDefault(); pickMention(u); } }, el('span', { class: 'mp-ref', html: icon(u.t === 'task' ? 'tasks' : 'folder') }), el('span', null, el('b', { text: u.name }), el('small', { text: u.sub })));
       return el('button', { type: 'button', class: i === mIdx ? 'on' : '', onpointerdown: function (e) { e.preventDefault(); pickMention(u); } }, MP.avatar(u, 'sm'), el('span', null, el('b', { text: u.name }), u.title ? el('small', { text: u.title }) : null));
     }));
     mPop.hidden = false;
   }
   function pickMention(u) {
     var pos = text.selectionStart;
+    if (mKind === '#') {
+      var ins = '[#' + u.name.replace(/[\[\]]/g, '') + '](' + u.t + ':' + u.id + ') ';
+      text.value = text.value.slice(0, mStart) + ins + text.value.slice(pos);
+      text.setSelectionRange(mStart + ins.length, mStart + ins.length);
+      mPop.hidden = true; text.focus(); composerState(); return;
+    }
     text.value = text.value.slice(0, mStart) + '@' + u.name + ' ' + text.value.slice(pos);
     var at = mStart + u.name.length + 2; text.setSelectionRange(at, at);
     mPop.hidden = true; text.focus(); composerState();
@@ -2127,9 +2266,12 @@
       body.replaceChildren(l.length ? el('div', { class: 'menu' }, l.map(function (u) { return el('div', { class: 'seen-row' }, MP.avatar(u, 'sm'), el('span', { text: u.name })); })) : el('p', { class: 'muted', text: 'هنوز کسی ندیده است.' }));
     }).catch(MP.soft);
   }
+  /** Message → task; the new task's live card is posted in the chat as a reply to the message. */
   function toTask(m, body) {
-    var c = chan(), t = (body || (m.file ? m.file.name : '')).replace(/\s+/g, ' ').trim();
-    MP.taskForm({ taskTitle: t.slice(0, 190), projectId: c && c.project_id ? c.project_id : 0 });
+    var c = chan(), ch = current, t = plainText(body || (m.file ? m.file.name : '')).replace(/\s+/g, ' ').trim();
+    MP.taskForm({ taskTitle: t.slice(0, 190), projectId: c && c.project_id ? c.project_id : 0, onSaved: function (saved, b) {
+      if (saved && saved.id && (!c || c.can_post !== false)) sendNow({ body: '', reply: m, channel: ch, x: { card: { t: 'task', id: saved.id, title: b.title } } });
+    } });
   }
 
   /* ------------------------------------------------------------ Forward */
@@ -2249,19 +2391,72 @@
 
   /* ------------------------------------------------------------ Gallery (all photos of the chat, swipe between them) */
 
-  function gallery(startId, fromEl) {
-    var photos = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return (kindOf(m) === 'photo' || kindOf(m) === 'video') && !m.deleted && m.file; }).sort(function (a, b) { return (typeof a.id === 'number' ? a.id : 1e15) - (typeof b.id === 'number' ? b.id : 1e15); });
+  /**
+   * The viewer: photos and videos of the chat. On a design (photo) it also takes notes on a point of the image
+   * (each note is a reply that remembers the point) and «تأیید» / «نیاز به اصلاح».
+   */
+  function gallery(startId, fromEl, review, focusPt) {
+    var photos = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return ((kindOf(m) === 'photo' || kindOf(m) === 'video') || m.id === startId && m.file && m.file.image) && !m.deleted && m.file; }).sort(function (a, b) { return (typeof a.id === 'number' ? a.id : 1e15) - (typeof b.id === 'number' ? b.id : 1e15); });
     var i = Math.max(0, photos.map(function (m) { return m.id; }).indexOf(startId));
     if (!photos.length) return;
     var img = el('img', { alt: '' }), cap = el('div', { class: 'gv-cap' }), count = el('span', { class: 'gv-n' }), vid = null;
     var dl = el('a', { class: 'icon-btn gv-btn', 'aria-label': 'دانلود', html: icon('download'), target: '_blank', rel: 'noopener' });
     var v = el('div', { class: 'gv', role: 'dialog', 'aria-label': 'عکس‌ها' },
       el('div', { class: 'gv-top' }, el('button', { type: 'button', class: 'icon-btn gv-btn', 'aria-label': 'بستن', html: icon('close'), onclick: close }), count, el('span', { class: 'gv-sp' }),
+        el('button', { type: 'button', class: 'gv-tool gv-note', html: icon('pin') + '<span>نظر روی طرح</span>', onclick: function () { noteMode = !noteMode; v.classList.toggle('noting', noteMode); if (noteMode) MP.toast('روی نقطه‌ای از طرح بزنید تا نظرتان را بنویسید'); } }),
+        el('button', { type: 'button', class: 'gv-tool gv-ok', html: icon('check') + '<span>تأیید</span>', onclick: function () { reviewIt('ok'); } }),
+        el('button', { type: 'button', class: 'gv-tool gv-fix', html: icon('edit') + '<span>نیاز به اصلاح</span>', onclick: function () { reviewIt('fix'); } }),
         el('button', { type: 'button', class: 'icon-btn gv-btn', 'aria-label': 'رفتن به پیام', html: icon('chat'), onclick: function () { var id = photos[i].id; close(); jumpTo(id); } }), dl),
       el('button', { type: 'button', class: 'gv-nav gv-next', 'aria-label': 'بعدی', html: icon('left'), onclick: function () { go(1); } }),
       el('button', { type: 'button', class: 'gv-nav gv-prev', 'aria-label': 'قبلی', html: icon('right'), onclick: function () { go(-1); } }),
-      el('div', { class: 'gv-stage' }, img), cap);
-    var z = MP.zoomable(img, $('.gv-stage', v));
+      el('div', { class: 'gv-stage' }, img, el('div', { class: 'gv-pins' })), cap);
+    var z = MP.zoomable(img, $('.gv-stage', v)), noteMode = !!review && !focusPt, pinsBox = $('.gv-pins', v), raf = 0;
+    if (noteMode) v.classList.add('noting');
+    /** Notes on the photo on screen: replies to it that carry a point. */
+    function notes(m) {
+      return Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (x) { return x.reply && x.reply.id === m.id && x.x && x.x.pt && !x.deleted; }).sort(function (a, b) { return (typeof a.id === 'number' ? a.id : 1e15) - (typeof b.id === 'number' ? b.id : 1e15); });
+    }
+    function drawPins() {
+      var m = photos[i];
+      pinsBox.replaceChildren();
+      if (!m || kindOf(m) === 'video') return;
+      notes(m).forEach(function (x, n) {
+        var pin = el('button', { type: 'button', class: 'gv-pin' + (focusPt && Math.abs(focusPt.x - x.x.pt.x) < 1e-3 && Math.abs(focusPt.y - x.x.pt.y) < 1e-3 ? ' focus' : ''), dataset: { x: x.x.pt.x, y: x.x.pt.y }, text: fa(n + 1),
+          onclick: function (e) { e.stopPropagation(); $$('.gv-pin', pinsBox).forEach(function (p2) { p2.classList.remove('focus'); }); pin.classList.add('focus'); } },
+          el('span', { class: 'gv-pin-tip' }, el('b', { text: x.mine ? 'شما' : x.author }), el('span', { text: plainText(x.body), dir: 'auto' })));
+        pinsBox.append(pin);
+      });
+      placePins();
+    }
+    function placePins() {
+      var r = img.getBoundingClientRect(), sr = $('.gv-stage', v).getBoundingClientRect();
+      $$('.gv-pin', pinsBox).forEach(function (p2) { p2.style.left = (r.left - sr.left + +p2.dataset.x * r.width) + 'px'; p2.style.top = (r.top - sr.top + +p2.dataset.y * r.height) + 'px'; });
+    }
+    (function loop() { if (!v.isConnected && raf) return; placePins(); raf = requestAnimationFrame(loop); })();
+    img.addEventListener('click', function (e) {
+      if (!noteMode || z.zoomed() && z.touched && z.touched()) return;
+      var m = photos[i]; if (typeof m.id !== 'number') return;
+      var c = chan(); if (c && c.can_post === false) { MP.toast(c.post_why); return; }
+      var r = img.getBoundingClientRect(), pt = { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
+      var old = $('.gv-note-form', v); if (old) old.remove();
+      var inp = el('input', { class: 'input', maxlength: 1000, placeholder: 'نظر شما درباره این نقطه…', dir: 'auto' });
+      var f = el('form', { class: 'gv-note-form', style: { left: Math.min(innerWidth - 290, Math.max(10, e.clientX - 140)) + 'px', top: Math.min(innerHeight - 70, e.clientY + 14) + 'px' } }, inp, el('button', { type: 'submit', class: 'btn btn-primary btn-sm', html: icon('send') }));
+      f.onsubmit = function (ev) {
+        ev.preventDefault(); var t = inp.value.trim(); if (!t) return;
+        f.remove();
+        sendNow({ body: t, reply: m, x: { pt: pt } });
+        setTimeout(drawPins, 50);
+      };
+      v.append(f); inp.focus();
+    });
+    function reviewIt(state) {
+      var m = photos[i]; if (typeof m.id !== 'number') return;
+      var cur = m.x && m.x.review && m.x.review.state;
+      MP.api('messages/' + m.id + '/review', { method: 'POST', body: { state: cur === state ? '' : state } }).then(function (n) {
+        update(n); photos[i] = msgs[n.id] || n; show(); pull();
+        MP.toast(cur === state ? 'برداشته شد' : state === 'ok' ? 'طرح تأیید شد' : 'برای اصلاح علامت خورد', { icon: state === 'ok' ? 'check' : 'edit' });
+      }).catch(MP.soft);
+    }
     function show() {
       var m = photos[i]; z.reset();
       if (vid) { vid.pause(); vid.remove(); vid = null; }
@@ -2275,6 +2470,10 @@
         if (m.file.mid) { img.src = m.file.mid; var full = new Image(); full.onload = function () { if (photos[i] === m) img.src = m.file.url; }; full.src = m.file.url; } else img.src = m.file.url;
       }
       count.textContent = fa(i + 1) + ' از ' + fa(photos.length);
+      var isPhoto = kindOf(m) !== 'video', rvs = m.x && m.x.review ? m.x.review.state : '';
+      $$('.gv-tool', v).forEach(function (b2) { b2.hidden = !isPhoto || typeof m.id !== 'number'; });
+      $('.gv-ok', v).classList.toggle('on', rvs === 'ok'); $('.gv-fix', v).classList.toggle('on', rvs === 'fix');
+      drawPins();
       cap.replaceChildren(el('b', { text: m.mine ? 'شما' : m.author }), el('small', { text: MP.relTime(m.created_at) }));
       if (m.body) cap.append(el('p', { text: m.body, dir: 'auto' }));
       dl.href = m.file.url + (m.file.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1';
@@ -2287,7 +2486,7 @@
     v.addEventListener('pointerdown', function (e) { sx = z.zoomed() || e.target.closest('button, a') ? null : { x: e.clientX, y: e.clientY }; });
     v.addEventListener('pointerup', function (e) { if (!sx) return; var dx = e.clientX - sx.x, dy = e.clientY - sx.y; sx = null; if (z.touched()) return; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1); else if (dy > 120) close(); });
     var layer = MP.pushLayer(function () { layer = null; close(); });
-    function close() { if (vid) vid.pause(); document.removeEventListener('keydown', key); v.classList.add('out'); setTimeout(function () { v.remove(); }, 160); if (layer) { var l = layer; layer = null; MP.popLayer(l); } }
+    function close() { cancelAnimationFrame(raf); raf = 1; if (vid) vid.pause(); document.removeEventListener('keydown', key); v.classList.add('out'); setTimeout(function () { v.remove(); }, 160); if (layer) { var l = layer; layer = null; MP.popLayer(l); } }
     document.addEventListener('keydown', key);
     document.body.append(v); show();
     // Opens from the photo's own place (Telegram's zoom-in).
@@ -2715,6 +2914,9 @@
     items.push(['folder', c.arch_me ? 'بیرون آوردن از بایگانی' : 'بایگانی', function () { archiveChat(c, !c.arch_me); }]);
     if (c.pinned === 'me' && S.channels.filter(function (x) { return x.pinned === 'me'; }).length > 1) items.push(['list', 'ترتیب سنجاق‌ها', pinOrder]);
     items.push(['eye', 'اطلاعات گفت‌وگو', function () { chatInfo(c); }]);
+    if (S.boot.channels.ai && c.last) items.push(['list', 'خلاصه هوشمند پیام‌ها', function () { summarize(c); }]);
+    items.push(['image', 'ظاهر گفت‌وگو', function () { chatLook(c); }]);
+    if (isGroup(c) && c.role === 'admin') items.push(['settings', 'مدیریت گروه', function () { groupAdmin(c); }]);
     items.push(sep);
     // The same settings as the buttons above an open conversation.
     if (c.type === 'client') {

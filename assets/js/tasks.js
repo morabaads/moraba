@@ -310,6 +310,7 @@
           else MP.toast(many ? fa(saved.created) + ' تسک تکرارشونده ساخته شد' : 'تسک جدید اضافه شد');
           MP.lastCreated = saved.id;
           MP.loadTasks().then(function () { MP.emit('task-saved', saved); });
+          if (opts.onSaved && !t) opts.onSaved(saved, body);
           MP.refreshCounts(); MP.audit();
         })
         .catch(function (err) { MP.busy(form, false); MP.soft(err); });
