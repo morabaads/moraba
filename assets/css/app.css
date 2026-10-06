@@ -3355,3 +3355,36 @@ html.dark .chat-sched{color:var(--brand)}
 .rr-acts{display:flex;align-items:center;gap:12px}.rr-flip{background:rgba(255,255,255,.14);color:#fff}
 dialog.pe{width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0}
 dialog.pe::backdrop{background:#000}
+
+/* ---- Chat: voice player, player bar, effects, translate, delete options */
+.v-btns{display:flex;gap:4px;align-items:center}
+.v-speed{font:800 10.5px Dana,Tahoma,sans-serif;padding:2px 6px;border-radius:99px;border:0;background:var(--brand);color:#fff;cursor:pointer}
+.msg-row.me .v-speed{background:#fff;color:var(--brand-strong)}
+.v-dur{white-space:nowrap}
+.chat-player{position:relative;display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface);border-bottom:1px solid var(--line);overflow:hidden}
+.chat-player .cp-play{background:var(--brand);color:#fff;border-radius:50%}
+.cp-copy{flex:1;min-width:0;display:grid;border:0;background:none;color:inherit;text-align:right;cursor:pointer;line-height:1.35}
+.cp-copy b{font-size:13px}.cp-copy small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-rate{padding:3px 8px;border-radius:99px;border:1px solid var(--line-strong);background:none;color:var(--brand-strong);font:800 12px Dana,Tahoma,sans-serif;cursor:pointer}
+.cp-prog{position:absolute;bottom:0;inset-inline-start:0;height:2px;background:var(--brand);transition:width .25s linear}
+.b-edited{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+.b-silent .icon{width:12px;height:12px;opacity:.7}
+.b-react.pop{animation:rx-pop .45s var(--ease)}
+@keyframes rx-pop{40%{transform:scale(1.35)}}
+.rx-p{position:fixed;z-index:400;pointer-events:none;font-size:18px}
+.rx-p .emj{width:20px;height:20px}
+.msg-row.b-new .b-jumbo .emj,.msg-row .b-jumbo.wiggle .emj{animation:emoji-in .7s cubic-bezier(.2,1.6,.4,1)}
+@keyframes emoji-in{0%{transform:scale(.2) rotate(-25deg)}60%{transform:scale(1.15) rotate(8deg)}100%{transform:none}}
+.b-jumbo{cursor:pointer}
+html.reduced-motion .b-jumbo .emj{animation:none!important}
+.b-tr{margin-top:6px;padding:6px 9px;border-radius:9px;background:rgba(127,127,127,.13)}
+.b-tr p{margin:2px 0 0;font-size:14px;line-height:1.6;white-space:pre-wrap}
+.b-tr-h{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;opacity:.8}.b-tr-h .icon{width:13px;height:13px}
+.b-tr-x{margin-inline-start:auto;border:0;background:none;color:inherit;font-size:16px;cursor:pointer;line-height:1}
+.quote-fab{position:fixed;z-index:200;display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border:0;border-radius:99px;background:var(--dark,#1d1d1f);color:#fff;font:700 12.5px Dana,Tahoma,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.3);cursor:pointer;animation:fade-in .12s}
+.quote-fab .icon{width:14px;height:14px}
+.del-opts .btn{justify-content:flex-start}
+.ed-list{display:grid;gap:8px}
+.ed-item{padding:8px 10px;border-radius:12px;background:var(--surface-2)}
+.ed-item.now{border:1px solid var(--brand)}
+.ed-item small{font-size:11.5px;color:var(--muted)}

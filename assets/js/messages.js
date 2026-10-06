@@ -197,7 +197,7 @@
     var dur = el('span', { class: 'rd-dur', text: clock(m.x && m.x.dur) });
     var wrap = el('button', { type: 'button', class: 'b-round-wrap', 'aria-label': 'پخش پیام ویدیویی', onclick: function (e) {
       e.stopPropagation();
-      if (v.muted) { if (playing && playing !== v) playing.pause(); playing = v; v.muted = false; v.loop = false; v.currentTime = 0; v.play().catch(function () {}); wrap.classList.add('on'); }
+      if (v.muted) { if (playing && playing !== v) playing.pause(); if (VP.m) VP.audio.pause(); playing = v; v.muted = false; v.loop = false; v.currentTime = 0; v.play().catch(function () {}); wrap.classList.add('on'); }
       else if (v.paused) v.play().catch(function () {}); else v.pause();
     } }, v, dur, el('span', { class: 'rd-snd', html: icon('speaker') }));
     v.addEventListener('timeupdate', function () { if (!v.muted) { dur.textContent = clock(v.currentTime); wrap.style.setProperty('--p', v.duration ? v.currentTime / v.duration : 0); } });
@@ -793,7 +793,7 @@
     return r;
   }
   function metaOf(m, list) {
-    var meta = el('span', { class: 'b-meta' }, m.edited ? el('em', { text: 'ویرایش‌شده' }) : null, el('time', { text: hm(m.created_at) }));
+    var meta = el('span', { class: 'b-meta' }, m.silent ? el('i', { class: 'b-silent', title: 'بی‌صدا فرستاده شد', html: icon('bell-off') }) : null, m.edited ? el('em', { class: 'b-edited', title: 'دیدن تاریخچه ویرایش', text: 'ویرایش‌شده', onclick: function (e) { e.stopPropagation(); editHistory(m); } }) : null, el('time', { text: hm(m.created_at) }));
     if (m.pending || m.failed) meta.append(el('span', { class: 'b-sending', html: icon('clock') }));
     else if (m.mine && chan() && chan().type !== 'saved') {
       var seen = el('span', { class: 'seen' }); meta.append(seen);
@@ -860,10 +860,33 @@
     var m = list[list.length - 1]; // an album's reactions belong to its last photo
     if (!m.reactions || !m.reactions.length) return null;
     return el('div', { class: 'b-reacts' }, m.reactions.map(function (x) {
-      return el('button', { type: 'button', class: 'b-react' + (x.mine ? ' mine' : ''), title: x.names.join('، '), onclick: function (e) { e.stopPropagation(); react(m, x.emoji); } },
+      return el('button', { type: 'button', class: 'b-react' + (x.mine ? ' mine' : ''), dataset: { e: x.emoji }, title: x.names.join('، '), onclick: function (e) { e.stopPropagation(); react(m, x.emoji); } },
         el('span', { class: 'br-e', text: x.emoji }), x.count > 1 || isGroup(chan()) ? el('span', { text: fa(x.count) }) : null);
     }));
   }
+
+  /* Select part of a message's text: a «نقل‌قول» button appears; it replies quoting only that part. */
+  (function () {
+    var qb = el('button', { type: 'button', class: 'quote-fab', hidden: true, html: icon('reply') + 'نقل‌قول' });
+    document.body.append(qb);
+    var target = null;
+    function check() {
+      var s2 = window.getSelection(), t = s2 && String(s2).trim();
+      if (!t || !s2.rangeCount || !current) { qb.hidden = true; return; }
+      var node = s2.anchorNode && (s2.anchorNode.nodeType === 1 ? s2.anchorNode : s2.anchorNode.parentNode), row = node && node.closest && node.closest('.msg-row');
+      if (!row || !box.contains(row) || !node.closest('.b-text') || selecting) { qb.hidden = true; return; }
+      var m = msgs[row.dataset.id]; if (!m || typeof m.id !== 'number') { qb.hidden = true; return; }
+      target = { m: m, part: t.slice(0, 600) };
+      var rc = s2.getRangeAt(0).getBoundingClientRect();
+      qb.hidden = false;
+      qb.style.top = Math.max(8, rc.top - 42) + 'px';
+      qb.style.left = Math.max(8, Math.min(innerWidth - qb.offsetWidth - 8, rc.left + rc.width / 2 - qb.offsetWidth / 2)) + 'px';
+    }
+    document.addEventListener('selectionchange', function () { clearTimeout(qb._t); qb._t = setTimeout(check, 180); });
+    box.addEventListener('scroll', function () { qb.hidden = true; }, { passive: true });
+    qb.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    qb.onclick = function () { if (!target) return; qb.hidden = true; var t2 = target; window.getSelection().removeAllRanges(); startReply(t2.m, t2.part); };
+  })();
 
   /* ------------------------------------------------------------ Scrolling */
 
@@ -966,41 +989,116 @@
 
   var SPEAKER = icon('speaker');
   function clock(sec) { sec = isFinite(sec) ? Math.max(0, Math.round(sec || 0)) : 0; return J.faDigits(Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2)); }
-  var playing = null;
-  function voiceBubble(m) {
-    var audio = new Audio(); audio.preload = 'metadata'; audio.src = m.file.url;
-    var btn = el('button', { type: 'button', class: 'v-play', 'aria-label': 'پخش پیام صوتی', html: icon('play') });
-    var bars = el('div', { class: 'v-wave' }), dur = el('span', { class: 'v-dur', text: '۰:۰۰' });
-    // A stable pseudo-waveform from the message id, so every voice looks distinct but never changes.
-    for (var i = 0, seed = m.id * 9301 + 49297; i < 28; i++) { seed = (seed * 9301 + 49297) % 233280; bars.append(el('i', { style: { height: (25 + seed / 233280 * 75) + '%' } })); }
-    function paint() {
-      var p = audio.duration ? audio.currentTime / audio.duration : 0, n = Math.round(p * bars.children.length);
-      Array.prototype.forEach.call(bars.children, function (b, k) { b.classList.toggle('on', k < n); });
-      dur.textContent = clock(probing ? 0 : audio.paused && !audio.currentTime ? audio.duration : audio.currentTime);
+  var playing = null; // the video playing with sound (round videos)
+
+  /*
+   * One voice player for the whole panel: the bar above the chat keeps playing while you move to another chat,
+   * 1× / 1.5× / 2× speed, and the next voice of the same chat plays by itself (Telegram).
+   */
+  var VP = { audio: new Audio(), m: null, channel: 0, title: '', views: {}, rate: 1, probing: false, queue: [] };
+  try { VP.rate = +localStorage.getItem('mp_voice_rate') || 1; } catch (e) { /* private mode */ }
+  VP.audio.preload = 'metadata';
+  MP.voicePlayer = VP;
+  function vpDur() { var d = VP.audio.duration; return isFinite(d) && d > 0 ? d : (VP.m && VP.m.x && VP.m.x.dur) || 0; }
+  function vpPaint() {
+    var m = VP.m; if (!m) return;
+    var v = VP.views[m.id], d = vpDur(), p = d ? VP.audio.currentTime / d : 0;
+    if (v && v.bars.isConnected) {
+      var n = Math.round(p * v.bars.children.length);
+      Array.prototype.forEach.call(v.bars.children, function (b, k) { b.classList.toggle('on', k < n); });
+      v.dur.textContent = clock(VP.probing ? 0 : VP.audio.currentTime || 0) + (d ? ' / ' + clock(d) : '');
     }
+    var bar = $('#chat-player');
+    if (bar) $('i.cp-prog', bar).style.width = p * 100 + '%';
+  }
+  function vpState() {
+    Object.keys(VP.views).forEach(function (id) {
+      var v = VP.views[id], on = VP.m && +id === VP.m.id && !VP.audio.paused;
+      if (!v.btn.isConnected) { delete VP.views[id]; return; }
+      v.btn.innerHTML = icon(on ? 'pause' : 'play'); v.btn.classList.toggle('on', on);
+      v.speed.hidden = !(VP.m && +id === VP.m.id);
+      v.speed.textContent = VP.rate === 1 ? '۱×' : VP.rate === 1.5 ? '۱٫۵×' : '۲×';
+      if (!(VP.m && +id === VP.m.id)) { Array.prototype.forEach.call(v.bars.children, function (b) { b.classList.remove('on'); }); v.dur.textContent = clock(v.m.x && v.m.x.dur); }
+    });
+    playerBar();
+  }
+  function vpPlay(m, channel) {
+    if (playing) { playing.pause(); playing = null; }
+    if (VP.m && VP.m.id === m.id) { if (VP.audio.paused) VP.audio.play().catch(vpFail); else VP.audio.pause(); return; }
+    VP.m = m; VP.channel = channel || current; VP.title = (chan(VP.channel) || {}).title || '';
+    VP.audio.src = m.file.url; VP.audio.playbackRate = VP.rate;
+    VP.audio.play().catch(vpFail);
+    vpState();
+  }
+  function vpFail() { MP.toast('پخش این صدا در این مرورگر ممکن نشد.', { error: true }); }
+  function vpStop() { VP.audio.pause(); VP.m = null; vpState(); }
+  function vpNext() {
+    // The next voice in the same chat (messages on screen), as Telegram plays a run of voices.
+    if (!VP.m || VP.channel !== current) return null;
+    return Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (x) { return typeof x.id === 'number' && x.id > VP.m.id && kindOf(x) === 'voice' && !x.deleted; }).sort(function (a, b) { return a.id - b.id; })[0] || null;
+  }
+  VP.audio.addEventListener('loadedmetadata', function () {
     // WebM from MediaRecorder has no duration in its header: seeking far forces the browser to find it.
-    var probing = false;
-    audio.addEventListener('loadedmetadata', function () {
-      if (audio.duration === Infinity) { probing = true; audio.currentTime = 1e7; }
-      paint();
-    });
-    audio.addEventListener('durationchange', function () {
-      if (probing && isFinite(audio.duration)) { probing = false; audio.currentTime = 0; }
-      paint();
-    });
-    audio.addEventListener('timeupdate', paint);
-    audio.addEventListener('play', function () { btn.innerHTML = icon('pause'); btn.classList.add('on'); });
-    audio.addEventListener('pause', function () { btn.innerHTML = icon('play'); btn.classList.remove('on'); });
-    audio.addEventListener('ended', function () { audio.currentTime = 0; paint(); });
-    btn.onclick = function () {
-      if (playing && playing !== audio) playing.pause();
-      playing = audio;
-      if (audio.paused) audio.play().catch(function () { MP.toast('پخش این صدا در این مرورگر ممکن نشد.', { error: true }); }); else audio.pause();
+    if (VP.audio.duration === Infinity) { VP.probing = true; VP.audio.currentTime = 1e7; }
+    VP.audio.playbackRate = VP.rate; vpPaint();
+  });
+  VP.audio.addEventListener('durationchange', function () { if (VP.probing && isFinite(VP.audio.duration)) { VP.probing = false; VP.audio.currentTime = 0; } vpPaint(); });
+  VP.audio.addEventListener('timeupdate', vpPaint);
+  VP.audio.addEventListener('play', vpState);
+  VP.audio.addEventListener('pause', vpState);
+  VP.audio.addEventListener('ended', function () {
+    var next = vpNext();
+    if (next) { vpPlay(next, VP.channel); var r = rowsById[next.id]; if (r && atBottom() === false) r.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+    else { VP.audio.currentTime = 0; vpStop(); }
+  });
+  function vpRate() {
+    VP.rate = VP.rate === 1 ? 1.5 : VP.rate === 1.5 ? 2 : 1;
+    VP.audio.playbackRate = VP.rate;
+    try { localStorage.setItem('mp_voice_rate', VP.rate); } catch (e) { /* private mode */ }
+    vpState();
+  }
+  /** The bar above the chat while a voice plays (stays when another chat is opened). */
+  function playerBar() {
+    var bar = $('#chat-player');
+    if (!bar) {
+      bar = el('div', { id: 'chat-player', class: 'chat-player', hidden: true },
+        el('button', { type: 'button', class: 'icon-btn sm cp-play', 'aria-label': 'پخش / توقف', onclick: function () { if (VP.m) vpPlay(VP.m, VP.channel); } }),
+        el('button', { type: 'button', class: 'cp-copy', onclick: function () { if (!VP.m) return; if (VP.channel !== current) select(VP.channel, VP.m.id); else jumpTo(VP.m.id); } }, el('b'), el('small')),
+        el('button', { type: 'button', class: 'cp-rate', 'aria-label': 'سرعت پخش', onclick: vpRate }),
+        el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'بستن پخش', html: icon('close'), onclick: vpStop }),
+        el('i', { class: 'cp-prog' }));
+      $('#chat-pinbar').before(bar);
+    }
+    bar.hidden = !VP.m;
+    if (!VP.m) return;
+    $('.cp-play', bar).innerHTML = icon(VP.audio.paused ? 'play' : 'pause');
+    $('.cp-copy b', bar).textContent = VP.m.mine ? 'شما' : VP.m.author;
+    $('.cp-copy small', bar).textContent = 'پیام صوتی' + (VP.title && VP.channel !== current ? ' · ' + VP.title : '');
+    $('.cp-rate', bar).textContent = VP.rate === 1 ? '۱×' : VP.rate === 1.5 ? '۱٫۵×' : '۲×';
+  }
+  function voiceBubble(m) {
+    var btn = el('button', { type: 'button', class: 'v-play', 'aria-label': 'پخش پیام صوتی', html: icon('play') });
+    var bars = el('div', { class: 'v-wave' }), dur = el('span', { class: 'v-dur', text: clock(m.x && m.x.dur) });
+    var wave = m.x && m.x.wave && m.x.wave.length ? m.x.wave : null;
+    // The real waveform when it was recorded here; else a stable pseudo-waveform from the message id.
+    for (var i = 0, n = 32, seed = (typeof m.id === 'number' ? m.id : 7) * 9301 + 49297; i < n; i++) {
+      seed = (seed * 9301 + 49297) % 233280;
+      var h = wave ? 14 + wave[Math.floor(i * wave.length / n)] / 31 * 86 : 25 + seed / 233280 * 75;
+      bars.append(el('i', { style: { height: h + '%' } }));
+    }
+    var speed = el('button', { type: 'button', class: 'v-speed', hidden: true, onclick: function (e) { e.stopPropagation(); vpRate(); } });
+    btn.onclick = function (e) { e.stopPropagation(); if (typeof m.id === 'number' || m.file) vpPlay(m, current); };
+    bars.onclick = function (e) {
+      e.stopPropagation();
+      if (!VP.m || VP.m.id !== m.id) { vpPlay(m, current); return; }
+      var r = bars.getBoundingClientRect(), d = vpDur();
+      if (d) { VP.audio.currentTime = (r.right - e.clientX) / r.width * d; vpPaint(); }
     };
-    bars.onclick = function (e) { var r = bars.getBoundingClientRect(); if (audio.duration && isFinite(audio.duration)) { audio.currentTime = (r.right - e.clientX) / r.width * audio.duration; paint(); } };
+    VP.views[m.id] = { btn: btn, bars: bars, dur: dur, speed: speed, m: m };
     var textBox = el('div', { class: 'v-text', hidden: true });
     var toText = el('button', { type: 'button', class: 'v-totext', text: 'متن' });
-    toText.onclick = function () {
+    toText.onclick = function (e) {
+      e.stopPropagation();
       if (!textBox.hidden) { textBox.hidden = true; toText.classList.remove('on'); return; }
       function show(t) { textBox.textContent = t; textBox.hidden = false; toText.classList.add('on'); }
       if (m.transcript) { show(m.transcript); return; }
@@ -1009,7 +1107,8 @@
         .then(function (d) { m.transcript = d.transcript; show(d.transcript); })
         .catch(MP.soft).then(function () { toText.disabled = false; toText.textContent = 'متن'; });
     };
-    return el('div', { class: 'v-msg' }, el('div', { class: 'v-row' }, btn, bars, el('div', { class: 'v-side' }, dur, toText)), textBox);
+    setTimeout(vpState, 0);
+    return el('div', { class: 'v-msg' }, el('div', { class: 'v-row' }, btn, bars, el('div', { class: 'v-side' }, dur, el('span', { class: 'v-btns' }, speed, toText))), textBox);
   }
 
   // Text to speech: the device's Persian voice when it has one, else the server's service.
@@ -1227,7 +1326,7 @@
     composerState();
   }
   $('#cc-x').onclick = function () { clearCtx(); };
-  function startReply(m) { if (editing) clearCtx(); replyTo = m; setCtx('reply', m); }
+  function startReply(m, part) { if (editing) clearCtx(); replyTo = m; setCtx('reply', m); replyPart = part || ''; if (replyPart) { $('#cc-text').textContent = '«' + replyPart + '»'; MP.emojify($('#cc-text')); } }
   function startEdit(m) { replyTo = null; editing = m; text.value = m.body || ''; autoGrow(); setCtx('edit', m); composerState(); text.setSelectionRange(text.value.length, text.value.length); }
 
   // Emoji panel, in groups like Telegram's, with «recent» first.
@@ -1784,6 +1883,8 @@
     var b = $('.bubble', r), lastTap = 0, timer = 0, st = null, LIMIT = 64;
     r.addEventListener('click', function (e) {
       if (selecting) { e.preventDefault(); toggleSel(r, list); return; }
+      var jb = e.target.closest('.b-jumbo');
+      if (jb) { jb.classList.remove('wiggle'); void jb.offsetWidth; jb.classList.add('wiggle'); }
       if (e.target.closest('a, button, video, audio, .v-msg')) return;
       var now = Date.now();
       if (now - lastTap < 320) { lastTap = 0; react(m, '❤️'); heartPop(b); } else lastTap = now;
@@ -1815,6 +1916,20 @@
     r.addEventListener('pointerup', end);
     r.addEventListener('pointercancel', function () { clearTimeout(timer); timer = 0; if (st && st.on) { b.style.transform = ''; r.classList.remove('rp-reveal', 'rp-armed'); } st = null; });
   }
+  /** A small burst of the emoji around the reaction (Telegram's reaction effect). */
+  function burst(id, emoji) {
+    if (document.documentElement.classList.contains('reduced-motion')) return;
+    var r = rowsById[id]; if (!r) return;
+    var btn = $$('.b-react', r).filter(function (b) { return b.dataset.e === emoji; })[0]; if (!btn) return;
+    btn.classList.remove('pop'); void btn.offsetWidth; btn.classList.add('pop');
+    var rect = btn.getBoundingClientRect(), cx = rect.left + 14, cy = rect.top + rect.height / 2;
+    for (var i = 0; i < 9; i++) {
+      var a = Math.PI * 2 * i / 9 + Math.random() * .5, d = 34 + Math.random() * 30;
+      var p = el('span', { class: 'rx-p', style: { left: cx + 'px', top: cy + 'px' } }, MP.emojiImg(emoji));
+      document.body.append(p);
+      p.animate([{ transform: 'translate(-50%,-50%) scale(.4)', opacity: 1 }, { transform: 'translate(calc(-50% + ' + Math.cos(a) * d + 'px), calc(-50% + ' + Math.sin(a) * d + 'px)) scale(1)', opacity: 0 }], { duration: 650 + Math.random() * 250, easing: 'cubic-bezier(.2,.8,.2,1)' }).onfinish = (function (n) { return function () { n.remove(); }; })(p);
+    }
+  }
   function heartPop(b) { var h = el('span', { class: 'heart-pop', text: '❤️' }); b.append(h); setTimeout(function () { h.remove(); }, 800); }
 
   function react(m, emoji) {
@@ -1824,6 +1939,7 @@
     rs.forEach(function (x) { if (x.mine) { x.mine = false; x.count--; } });
     if (!had || had.emoji !== emoji) { var t = rs.filter(function (x) { return x.emoji === emoji; })[0]; if (t) { t.count++; t.mine = true; } else rs.push({ emoji: emoji, count: 1, mine: true, names: [S.me.name] }); }
     update(Object.assign({}, m, { reactions: rs.filter(function (x) { return x.count > 0; }) }));
+    if (!had || had.emoji !== emoji) burst(m.id, emoji);
     MP.api('messages/' + m.id + '/react', { method: 'POST', body: { emoji: emoji } }).then(update).catch(function (e) { update(m); MP.soft(e); });
   }
   function pin(m, on) {
@@ -1841,19 +1957,28 @@
     var last = list[list.length - 1], c = chan(), k = kindOf(m), mineNum = typeof m.id === 'number';
     if (!mineNum) return;
     var body = list.map(function (x) { return x.body; }).filter(Boolean)[0] || '';
+    // Text selected inside this message: «reply» quotes only that part (Telegram's quote).
+    var sel = window.getSelection ? String(window.getSelection()) : '', part = '';
+    if (sel.trim() && window.getSelection().anchorNode && r.contains(window.getSelection().anchorNode)) part = sel.trim().slice(0, 600);
     var items = [];
-    items.push(['reply', 'پاسخ', function () { startReply(m); }]);
-    if (body) items.push(['copy', 'کپی متن', function () { copyText(body); }]);
-    if (m.mine && !m.kind && k !== 'voice') items.push(['edit', 'ویرایش', function () { startEdit(list.filter(function (x) { return x.body; })[0] || m); }]);
+    if (c && c.can_post !== false) items.push(['reply', part ? 'پاسخ به بخش انتخاب‌شده' : 'پاسخ', function () { startReply(m, part); }]);
+    if (body) items.push(['copy', part ? 'کپی بخش انتخاب‌شده' : 'کپی متن', function () { copyText(part || plainText(body)); }]);
+    if (m.mine && !m.kind && k !== 'voice' && k !== 'poll' && k !== 'sticker' && k !== 'round') items.push(['edit', 'ویرایش', function () { startEdit(list.filter(function (x) { return x.body; })[0] || m); }]);
     items.push(pinned && pinned.id === m.id ? ['pin', 'برداشتن سنجاق', function () { pin(m, false); }] : ['pin', 'سنجاق کردن', function () { pin(m, true); }]);
     items.push(['forward', 'فوروارد', function () { forwardPick(list); }]);
+    items.push(['clip', 'کپی لینک پیام', function () { copyText(location.href.split('#')[0] + '#msg-' + m.id); }]);
     if (c && c.type !== 'saved') items.push(['bookmark', 'ذخیره در پیام‌های ذخیره‌شده', function () { forwardTo(list, null); }]);
+    items.push(['alarm', 'یادآوری این پیام…', function () { remindMsg(m); }]);
     if (body || m.file) items.push(['tasks', 'تبدیل به تسک', function () { toTask(m, body); }]);
-    if (m.file && k !== 'voice') items.push(['download', 'دانلود', function () { list.forEach(function (x) { if (x.file) window.open(x.file.url + (x.file.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1', '_blank'); }); }]);
+    if ((k === 'photo' || k === 'file' && m.file && m.file.image) && !m.deleted) items.push(['eye', 'نظر روی طرح و تأیید', function () { gallery(m.id, null, true); }]);
+    if (body && !/^[\s\p{Emoji}]*$/u.test(body)) items.push(['repeat', 'ترجمه', function () { translateMsg(m, r); }]);
+    if (k === 'gif' || m.file && /gif$/i.test(m.file.mime || '') && k !== 'sticker') items.push(['image', 'ذخیره در GIFها', function () { MP.api('stickers', { method: 'POST', body: { kind: 'gif', file_id: m.file.id, message_id: m.id } }).then(function (d) { stickerData = d; MP.toast('در GIFها ذخیره شد'); }).catch(MP.soft); }]);
+    if (m.file && k !== 'voice' && k !== 'sticker') items.push(['download', 'دانلود', function () { list.forEach(function (x) { if (x.file) window.open(x.file.url + (x.file.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1', '_blank'); }); }]);
     if (body) items.push(['speaker', 'خواندن با صدا', function () { speak(m, el('span')); }]);
     if (m.mine && isGroup(c)) items.push(['checks', 'دیده‌شده توسط…', function () { seenList(m); }]);
+    if (m.edited) items.push(['edit', 'تاریخچه ویرایش', function () { editHistory(m); }]);
     items.push(['checks', 'انتخاب', function () { startSelect(r, list); }]);
-    if ((m.mine && !m.archived) || S.manager) items.push(['trash', 'حذف', function () { list.forEach(function (x, i) { if (i === 0) askDelete(x); else if (!S.manager) archiveMsg(x, true); }); }, true]);
+    items.push(['trash', 'حذف', function () { askDelete2(list); }, true]);
     var strip = el('div', { class: 'ctx-reacts' }, REACTIONS.map(function (e) {
       var mine = (last.reactions || []).some(function (x) { return x.mine && x.emoji === e; });
       return el('button', { type: 'button', class: mine ? 'on' : '', 'aria-label': e, onclick: function () { close(); react(last, e); } }, MP.emojiImg(e));
@@ -1886,6 +2011,53 @@
       r.classList.remove('ctx-lifted'); shade.remove(); menu.remove();
     }
     openMenu = close;
+  }
+  /** Delete: for everyone (my messages; a supervisor: anyone's), only for me, or (supervisor) erase for good. */
+  function askDelete2(list) {
+    list = list.filter(function (x) { return typeof x.id === 'number'; });
+    if (!list.length) return;
+    var mineAll = list.every(function (x) { return x.mine && !x.archived; }), n = list.length;
+    var what = n > 1 ? fa(n) + ' پیام' : 'این پیام';
+    var f = el('div', { class: 'form del-opts' },
+      el('p', { class: 'hint', text: list[0].body ? '«' + plainText(list[0].body).slice(0, 90) + '»' : what }),
+      mineAll || S.manager ? el('button', { type: 'button', class: 'btn btn-secondary', html: icon('trash') + 'حذف برای همه', onclick: function () { MP.dialog.close(); list.forEach(function (x, i) { archiveMsg(x, i > 0); }); endSelect(); } }) : null,
+      el('button', { type: 'button', class: 'btn btn-secondary', html: icon('eye') + 'حذف فقط برای من', onclick: function () { MP.dialog.close(); list.forEach(hideMsg); endSelect(); MP.toast(n > 1 ? 'پیام‌ها برای شما حذف شد' : 'پیام برای شما حذف شد'); } }),
+      S.manager && n === 1 ? el('button', { type: 'button', class: 'btn btn-danger', html: icon('trash') + 'پاک کردن برای همیشه (ناظر)', onclick: function () { MP.dialog.close(); eraseMsg(list[0]); } }) : null,
+      el('small', { class: 'hint', text: '«برای همه»: از گفت‌وگوی همه برداشته می‌شود و فقط ناظر آن را در آرشیو می‌بیند. «فقط برای من»: دیگران همچنان آن را می‌بینند.' }));
+    MP.dialog.open('حذف ' + what, f);
+  }
+  function hideMsg(m) { MP.api('messages/' + m.id + '/hide', { method: 'POST' }).then(function () { removeRow(m.id); MP.loadChannels(); }).catch(MP.soft); }
+  function editHistory(m) {
+    var body = MP.dialog.open('تاریخچه ویرایش', MP.skeleton(2));
+    MP.api('messages/' + m.id + '/edits').then(function (l) {
+      body.replaceChildren(el('div', { class: 'ed-list' }, l.map(function (e) {
+        var p = el('p', { class: 'b-text', dir: 'auto' }); MP.chatKit.format(e.body, p);
+        return el('article', { class: 'ed-item' + (e.now ? ' now' : '') }, el('small', { text: (e.now ? 'نسخه فعلی · ' : '') + J.format(e.at.slice(0, 10), false) + ' ' + MP.timeFa(e.at.slice(11, 16)) }), MP.emojify(p));
+      })));
+    }).catch(MP.soft);
+  }
+  /** Translation through the panel's AI service when it is set up; otherwise Google Translate. */
+  function translateMsg(m, r) {
+    var src = plainText(m.body || m.transcript || ''), latin = (src.match(/[a-z]/gi) || []).length > (src.match(/[\u0600-\u06ff]/g) || []).length;
+    var to = latin ? 'fa' : 'en';
+    if (!S.boot.channels.ai) { window.open('https://translate.google.com/?sl=auto&tl=' + to + '&text=' + encodeURIComponent(src), '_blank', 'noopener'); return; }
+    var b = $('.bubble', r), box2 = el('div', { class: 'b-tr' }, el('small', { text: 'در حال ترجمه…' }));
+    var old = $('.b-tr', b); if (old) old.remove();
+    var meta = $('.b-meta', b); b.insertBefore(box2, meta && meta.parentNode === b ? meta : null);
+    MP.api('messages/' + m.id + '/translate', { method: 'POST', body: { to: to } }).then(function (d) {
+      box2.replaceChildren(el('small', { class: 'b-tr-h' }, MP.iconEl('repeat'), to === 'fa' ? 'ترجمه فارسی' : 'English', el('button', { type: 'button', class: 'b-tr-x', text: '×', onclick: function (e) { e.stopPropagation(); box2.remove(); } })), el('p', { dir: 'auto', text: d.text }));
+      b.classList.remove('meta-in');
+    }).catch(function (e) { box2.remove(); MP.soft(e); });
+  }
+  /** «Remind me about this message»: a reminder that opens the message itself. */
+  function remindMsg(m) {
+    MP.chatKit.pickTime('یادآوری این پیام').then(function (at) {
+      if (!at) return;
+      MP.api('messages/' + m.id + '/remind', { method: 'POST', body: { date: at.slice(0, 10), time: at.slice(11, 16) } }).then(function () {
+        MP.toast('یادآوری ' + J.format(at.slice(0, 10), false) + ' ساعت ' + MP.timeFa(at.slice(11, 16)) + ' ثبت شد', { icon: 'alarm' });
+        if (MP.loadReminders) MP.loadReminders();
+      }).catch(MP.soft);
+    });
   }
   function seenList(m) {
     var body = MP.dialog.open('دیده‌شده توسط', MP.skeleton(2));
@@ -1936,7 +2108,7 @@
     var n = Object.keys(selected).length;
     if (!n) { endSelect(); return; }
     $('#sel-count').textContent = fa(n) + ' پیام';
-    $('#sel-delete').hidden = !Object.keys(selected).every(function (k) { return selected[k].mine || S.manager; });
+    $('#sel-delete').hidden = false;
   }
   function endSelect() {
     selecting = false; selected = {}; layout.classList.remove('selecting'); $('#chat-select').hidden = true;
@@ -1946,10 +2118,7 @@
   $('#sel-close').onclick = endSelect;
   $('#sel-copy').onclick = function () { var l = selList(); copyText(l.map(function (m) { return (isGroup(chan()) ? m.author + ': ' : '') + (m.body || snippet(m)); }).join('\n')); endSelect(); };
   $('#sel-forward').onclick = function () { forwardPick(selList()); };
-  $('#sel-delete').onclick = function () {
-    var l = selList();
-    MP.confirm('حذف ' + fa(l.length) + ' پیام', 'پیام‌های انتخاب‌شده از گفت‌وگو برداشته و آرشیو می‌شوند.', 'حذف').then(function (ok) { if (ok) { l.forEach(function (m) { archiveMsg(m, true); }); endSelect(); } });
-  };
+  $('#sel-delete').onclick = function () { askDelete2(selList()); };
 
   /* ------------------------------------------------------------ Find in this chat */
 
