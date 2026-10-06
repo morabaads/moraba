@@ -8,13 +8,14 @@ import android.net.Uri;
 final class App {
     private App() {}
 
-    static final String VERSION = "2.0";
+    static final String VERSION = "2.1";
 
     private static SharedPreferences prefs(Context c) {
         return c.getApplicationContext().getSharedPreferences("moraba_app", Context.MODE_PRIVATE);
     }
 
-    static String site(Context c) { return prefs(c).getString("site", ""); }
+    /** A build made with SITE=… skips the first-run question and opens that site straight away. */
+    static String site(Context c) { return prefs(c).getString("site", normalize(Config.SITE)); }
 
     static void setSite(Context c, String site) {
         if (!site.equals(site(c))) prefs(c).edit().putString("site", site).remove("entry").remove("last_staff").remove("last_client").apply();
