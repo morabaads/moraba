@@ -168,9 +168,11 @@
     });
   };
   /** Any size: the file goes up in 1.5 MB pieces (under every host's upload limit), each retried a few times. */
-  MP.uploadChunked = function (path, file, fields, onProgress) {
+  MP.uploadChunked = function (path, file, fields, onProgress, opts) {
+    opts = opts || {};
     var SIZE = 1572864, total = Math.max(1, Math.ceil(file.size / SIZE));
-    var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + 'up';
+    // opts.id + opts.start: continue an upload that stopped (the page was closed half way).
+    var id = opts.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + 'up';
     function piece(i, tries) {
       return new Promise(function (resolve, reject) {
         var fd = new FormData();
@@ -203,7 +205,7 @@
         return from(next);
       });
     }
-    return from(0);
+    return from(Math.min(total - 1, Math.max(0, opts.start || 0)));
   };
   MP.fail = function (err) { MP.toast(err && err.message ? err.message : 'خطایی رخ داد.', { error: true }); throw err; };
   MP.soft = function (err) { MP.toast(err && err.message ? err.message : 'خطایی رخ داد.', { error: true }); };

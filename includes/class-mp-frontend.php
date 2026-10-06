@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );

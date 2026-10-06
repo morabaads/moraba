@@ -1749,6 +1749,17 @@ class MP_Rest {
 			return $can;
 		}
 		$file = (int) $r['file_id'] ? MP_Files::claim( (int) $r['file_id'], 'message', $ch->id ) : 0;
+		// A studio sticker or a saved GIF: the library's file, no upload.
+		if ( (int) $r['sticker_id'] ) {
+			$stk = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'stickers' ) . ' WHERE id = %d', (int) $r['sticker_id'] ) );
+			if ( ! $stk ) {
+				return self::err( 'این استیکر دیگر وجود ندارد.', 404 );
+			}
+			$file = (int) $stk->file_id;
+			$x    = is_array( $r['x'] ) ? $r['x'] : array();
+			$x[ 'gif' === $stk->kind ? 'gif' : 'sticker' ] = 1;
+			$r->set_param( 'x', $x );
+		}
 		$row  = array( 'channel_id' => $ch->id, 'user_id' => $uid, 'body' => $body, 'file_id' => $file, 'created_at' => MP_Util::now() );
 		$row  = MP_Chat::send_fields( $r, $ch, $row );
 		if ( is_wp_error( $row ) ) {

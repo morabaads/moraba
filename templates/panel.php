@@ -349,6 +349,9 @@ $mp_nav = array(
 							<span class="rec-dot" aria-hidden="true"></span><span class="rec-time" id="rec-time">۰:۰۰</span>
 							<span class="rec-wave" id="rec-wave" aria-hidden="true"></span>
 							<span class="rec-live" id="rec-live"></span>
+							<span class="rec-slide" aria-hidden="true">برای لغو بکشید ‹</span>
+							<span class="rec-lock" aria-hidden="true"><?php echo $mp_i( 'lock' ); // phpcs:ignore ?><?php echo $mp_i( 'arrow-up' ); // phpcs:ignore ?></span>
+							<button type="button" class="icon-btn" id="rec-stop" aria-label="توقف و گوش دادن"><?php echo $mp_i( 'pause' ); // phpcs:ignore ?></button>
 							<button type="button" class="icon-btn accent lg" id="rec-send" aria-label="ارسال پیام صوتی"><?php echo $mp_i( 'send' ); // phpcs:ignore ?></button>
 						</div>
 					</form>

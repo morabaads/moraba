@@ -88,19 +88,132 @@
   var URL_RE = /https?:\/\/[^\s<>"']+/g;
   /** Message text: links clickable, «@نام» highlighted. Built as nodes, never as HTML. */
   function richText(body) {
-    var p = el('p', { class: 'b-text', dir: 'auto' }), re = /(https?:\/\/[^\s<>"']+)|(@[^\s@،,.!؟?:]+(?:\s[^\s@،,.!؟?:]+)?)/g, last = 0, m;
-    var names = {}; S.users.forEach(function (u) { names[u.name] = 1; names[u.name.split(' ')[0]] = 1; });
-    while ((m = re.exec(body))) {
-      if (m.index > last) p.append(body.slice(last, m.index));
-      if (m[1]) { var url = m[1].replace(/[.,،)!؟?]+$/, ''); p.append(el('a', { href: url, target: '_blank', rel: 'noopener', dir: 'ltr', text: url })); last = m.index + url.length; re.lastIndex = last; continue; }
-      var tag = m[2], full = tag.slice(1), first = full.split(' ')[0];
-      if (names[full]) { p.append(el('span', { class: 'b-mention', text: tag })); last = m.index + tag.length; }
-      else if (names[first]) { p.append(el('span', { class: 'b-mention', text: '@' + first })); last = m.index + first.length + 1; re.lastIndex = last; }
-      else { p.append(tag); last = m.index + tag.length; }
-    }
-    if (last < body.length) p.append(body.slice(last));
+    var p = el('p', { class: 'b-text', dir: 'auto' });
+    MP.chatKit.format(body, p, {
+      onTag: function (tag) { openFind(tag); },
+      onTask: function (id) { MP.openTask(id); },
+      onProject: function (id) { S.projectId = id; MP.showView('projects'); }
+    });
     if (MP.onlyEmoji(body)) p.classList.add('b-jumbo', 'j' + MP.onlyEmoji(body));
     return MP.emojify(p);
+  }
+
+  /* ------------------------------------------------------------ Special messages: poll, place, contact, card, sticker, video */
+
+  function pollEl(m) {
+    var p = Object.assign({ counts: m.x.poll.o.map(function () { return 0; }), mine: [], voters: 0, who: [] }, m.x.poll), total = p.counts.reduce(function (a, b) { return a + b; }, 0), voted = p.mine && p.mine.length, show = voted || p.closed;
+    var picked = {};
+    var box = el('div', { class: 'b-poll' + (show ? ' shown' : '') },
+      el('b', { class: 'bp-q', text: p.q, dir: 'auto' }),
+      el('small', { class: 'bp-kind', text: (p.anon ? 'نظرسنجی ناشناس' : 'نظرسنجی') + (p.multi ? ' · چند گزینه‌ای' : '') + (p.closed ? ' · بسته شده' : '') }));
+    p.o.forEach(function (o, i) {
+      var n = p.counts[i] || 0, pct = total ? Math.round(n / total * 100) : 0, mine = p.mine.indexOf(i) >= 0;
+      var row = el('button', { type: 'button', class: 'bp-opt' + (mine ? ' mine' : ''), disabled: !!p.closed && !show,
+        onclick: function (e) {
+          e.stopPropagation();
+          if (show && !p.closed && !p.anon && p.who && p.who[i] && p.who[i].length) { MP.toast(p.who[i].join('، '), { duration: 5000 }); return; }
+          if (p.closed || typeof m.id !== 'number') return;
+          if (show) return;
+          if (p.multi) { picked[i] = !picked[i]; row.classList.toggle('picked', !!picked[i]); go.hidden = !Object.keys(picked).some(function (k) { return picked[k]; }); return; }
+          vote(m, [i]);
+        } },
+        el('span', { class: 'bp-mark', html: show ? (mine ? icon('check') : '') : '' }),
+        el('span', { class: 'bp-text', text: o, dir: 'auto' }),
+        show ? el('span', { class: 'bp-pct', text: fa(pct) + '٪' }) : null,
+        show ? el('i', { class: 'bp-bar', style: { width: pct + '%' } }) : null);
+      box.append(row);
+    });
+    var go = el('button', { type: 'button', class: 'btn btn-sm btn-primary bp-go', hidden: true, text: 'ثبت رأی', onclick: function (e) { e.stopPropagation(); vote(m, Object.keys(picked).filter(function (k) { return picked[k]; }).map(Number)); } });
+    if (p.multi && !show) box.append(go);
+    var foot = el('div', { class: 'bp-foot' }, el('small', { text: p.voters ? fa(p.voters) + ' نفر رأی داده‌اند' : 'هنوز رأیی نیامده' }));
+    if (voted && !p.closed) foot.append(el('button', { type: 'button', class: 'bp-link', text: 'پس گرفتن رأی', onclick: function (e) { e.stopPropagation(); vote(m, []); } }));
+    if (p.can_close && !p.closed) foot.append(el('button', { type: 'button', class: 'bp-link', text: 'بستن نظرسنجی', onclick: function (e) { e.stopPropagation(); MP.confirm('بستن نظرسنجی', 'بعد از بستن، کسی نمی‌تواند رأی بدهد و نتیجه برای همه می‌ماند.', 'ببند').then(function (ok) { if (ok) MP.api('messages/' + m.id + '/poll-close', { method: 'POST' }).then(update).catch(MP.soft); }); } }));
+    box.append(foot);
+    return box;
+  }
+  function vote(m, opts) {
+    MP.api('messages/' + m.id + '/vote', { method: 'POST', body: { opts: opts } }).then(function (n) { update(n); MP.haptic(8); }).catch(MP.soft);
+  }
+  function locEl(m) {
+    var l = m.x.loc;
+    var card = el('button', { type: 'button', class: 'b-loc', onclick: function (e) {
+      e.stopPropagation();
+      MP.dialog.open('باز کردن موقعیت در…', el('div', { class: 'menu' }, MP.chatKit.mapLinks(l.lat, l.lng).map(function (x) { return el('a', { href: x[1], target: '_blank', rel: 'noopener', onclick: function () { MP.dialog.close(); } }, MP.iconEl('pin'), el('span', { text: x[0] })); }),
+        el('button', { type: 'button', onclick: function () { MP.dialog.close(); copyText(l.lat + ',' + l.lng); } }, MP.iconEl('copy'), el('span', { text: 'کپی مختصات' }))));
+    } }, MP.chatKit.mapCard(l), el('span', { class: 'bl-cap' }, MP.iconEl('pin'), el('span', { text: l.label || 'موقعیت مکانی' })));
+    return card;
+  }
+  function contactEl(m) {
+    var c = m.x.contact, u = c.uid ? MP.user(c.uid) : null;
+    return el('div', { class: 'b-contact' },
+      el('span', { class: 'bc-top' }, u ? MP.avatar(u, 'sm') : el('span', { class: 'initials sm', text: (c.name || '؟').slice(0, 1) }), el('span', { class: 'bc-copy' }, el('b', { text: c.name }), c.phone ? el('small', { dir: 'ltr', text: J.faDigits(c.phone) }) : null)),
+      el('span', { class: 'bc-acts' },
+        c.phone ? el('a', { href: 'tel:' + c.phone, class: 'bc-btn', onclick: function (e) { e.stopPropagation(); }, text: 'تماس' }) : null,
+        c.uid && c.uid !== S.me.id ? el('button', { type: 'button', class: 'bc-btn', text: 'پیام', onclick: function (e) { e.stopPropagation(); MP.startDirect(c.uid); } }) : null,
+        c.phone ? el('button', { type: 'button', class: 'bc-btn', text: 'ذخیره', onclick: function (e) { e.stopPropagation(); MP.chatKit.vcard(c); } }) : null));
+  }
+  var CARD_ST = { todo: 'انجام نشده', doing: 'در حال انجام', done: 'انجام شد', waiting: 'در انتظار' };
+  /** A task or project inside the chat; its state stays fresh (cards on screen are refreshed together). */
+  function cardEl(m) {
+    var c = m.x.card;
+    var node = el('button', { type: 'button', class: 'b-card t-' + c.t + (c.gone ? ' gone' : '') + (c.status === 'done' ? ' done' : ''), dataset: { card: c.t + ':' + c.id }, onclick: function (e) {
+      e.stopPropagation();
+      if (c.gone) { MP.toast('این مورد حذف شده یا به آن دسترسی ندارید.'); return; }
+      if (c.t === 'task') MP.openTask(c.id); else { S.projectId = c.id; MP.showView('projects'); }
+    } });
+    fillCard(node, c);
+    return node;
+  }
+  function fillCard(node, c) {
+    var head = el('span', { class: 'bk-head' }, MP.iconEl(c.t === 'task' ? 'tasks' : 'folder'), el('small', { text: c.t === 'task' ? 'تسک' : 'پروژه' }));
+    if (c.gone) { node.replaceChildren(head, el('b', { text: c.title || 'حذف شده' }), el('small', { class: 'bk-meta', text: 'در دسترس نیست' })); return; }
+    var meta = c.t === 'task'
+      ? [el('span', { class: 'bk-st st-' + c.status, text: CARD_ST[c.status] || c.status }), c.user ? el('span', { text: c.user }) : null, c.date ? el('span', { text: J.format(c.date, false) + (c.time ? ' ' + MP.timeFa(c.time) : '') }) : null]
+      : [el('span', { class: 'bk-st', text: fa(c.done) + ' از ' + fa(c.tasks) + ' تسک' }), c.end ? el('span', { text: 'تا ' + J.format(c.end, false) }) : null];
+    var bar = c.t === 'project' && c.tasks ? el('span', { class: 'bk-bar' }, el('i', { style: { width: Math.round(c.done / c.tasks * 100) + '%' } })) : null;
+    node.replaceChildren(head, el('b', { text: c.title, dir: 'auto' }), el('span', { class: 'bk-meta' }, meta), bar);
+  }
+  /** Every few seconds while the chat is open: the cards' newest state (status changes show without reloading). */
+  var cardTimer = setInterval(function () {
+    if (document.hidden || !current) return;
+    var nodes = $$('[data-card]', box); if (!nodes.length) return;
+    var t = [], p = [];
+    nodes.forEach(function (n) { var a = n.dataset.card.split(':'); (a[0] === 'task' ? t : p).push(a[1]); });
+    MP.api('chat-cards', { query: { tasks: t.join(','), projects: p.join(',') }, noCache: true }).then(function (d) {
+      nodes.forEach(function (n) {
+        var a = n.dataset.card.split(':'), c = (a[0] === 'task' ? d.tasks : d.projects)[a[1]];
+        if (c) { c.t = a[0]; c.id = +a[1]; n.classList.toggle('done', c.status === 'done'); n.classList.toggle('gone', !!c.gone); fillCard(n, c); }
+      });
+    }).catch(function () {});
+  }, 20000);
+  function stickerEl(m) {
+    var img = el('img', { class: 'b-stk', src: m.file.url, alt: m.x && m.x.gif ? 'GIF' : 'استیکر', loading: 'lazy' });
+    return el('span', { class: 'b-stk-wrap' + (m.x && m.x.gif ? ' gif' : '') }, img);
+  }
+  /** Telegram's round video: plays silently in a circle; a tap plays it with sound from the start. */
+  function roundEl(m) {
+    var v = el('video', { class: 'b-round', src: m.file.url, muted: true, loop: true, playsinline: true, preload: 'metadata', poster: m.x && m.x.thumb_url ? m.x.thumb_url : '' });
+    v.muted = true;
+    var dur = el('span', { class: 'rd-dur', text: clock(m.x && m.x.dur) });
+    var wrap = el('button', { type: 'button', class: 'b-round-wrap', 'aria-label': 'پخش پیام ویدیویی', onclick: function (e) {
+      e.stopPropagation();
+      if (v.muted) { if (playing && playing !== v) playing.pause(); playing = v; v.muted = false; v.loop = false; v.currentTime = 0; v.play().catch(function () {}); wrap.classList.add('on'); }
+      else if (v.paused) v.play().catch(function () {}); else v.pause();
+    } }, v, dur, el('span', { class: 'rd-snd', html: icon('speaker') }));
+    v.addEventListener('timeupdate', function () { if (!v.muted) { dur.textContent = clock(v.currentTime); wrap.style.setProperty('--p', v.duration ? v.currentTime / v.duration : 0); } });
+    v.addEventListener('ended', function () { v.muted = true; v.loop = true; wrap.classList.remove('on'); wrap.style.removeProperty('--p'); dur.textContent = clock(m.x && m.x.dur); v.play().catch(function () {}); });
+    // Silent preview only while on screen.
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (en) { en.forEach(function (x) { if (v.muted) { if (x.isIntersecting) v.play().catch(function () {}); else v.pause(); } }); }).observe(v);
+    return wrap;
+  }
+  /** A video: its first frame, duration and a play button; plays full screen. */
+  function videoEl(m, list) {
+    var x = m.x || {}, ratio = x.w && x.h ? Math.max(.6, Math.min(1.8, x.w / x.h)) : 16 / 9;
+    var cell = el('button', { type: 'button', class: 'b-vid', style: { aspectRatio: String(ratio) }, 'aria-label': 'پخش ویدیو', onclick: function (e) { e.stopPropagation(); if (!selecting) gallery(m.id); } },
+      x.thumb_url ? el('img', { src: x.thumb_url, alt: '', loading: 'lazy' }) : el('video', { src: m.file.url + '#t=0.5', muted: true, preload: 'metadata', playsinline: true }),
+      el('span', { class: 'bv-play', html: icon('play') }),
+      el('span', { class: 'bv-dur', text: x.dur ? clock(x.dur) : MP.fileSize(m.file.size) }));
+    return cell;
   }
 
   /* ------------------------------------------------------------ Chat list */
@@ -317,6 +430,7 @@
     var ls = c.type === 'direct' ? lastSeen(Math.max(seenOf(c.other), c.last_seen || 0)) : '';
     sub.classList.toggle('online', ls === 'آنلاین' && navigator.onLine);
     sub.textContent = !navigator.onLine ? 'در انتظار اتصال…' : c.type === 'direct' ? ls : c.settings && c.settings.mode === 'channel' ? 'کانال · ' + fa(c.members) + ' عضو' : c.type === 'saved' ? 'فقط خودتان می‌بینید' : c.type === 'client' ? 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : fa(c.members) + ' عضو';
+    schedBar();
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
       tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
@@ -560,7 +674,7 @@
       firstId = firstId ? Math.min(firstId, m.id) : m.id;
     }
     // Photos sent together share one row (an album), as long as they arrive next to each other.
-    var key = m.album && !m.deleted && kindOf(m) === 'photo' ? m.album + ':' + (m.user_id || m.author) : '';
+    var key = m.album && !m.deleted && (kindOf(m) === 'photo' || kindOf(m) === 'video') ? m.album + ':' + (m.user_id || m.author) : '';
     if (key && albumRows[key] && albumRows[key].row.isConnected) {
       var a = albumRows[key];
       a.ids.push(m.id); a.ids.sort(function (x, y) { return (typeof x === 'number' ? x : 1e15) - (typeof y === 'number' ? y : 1e15); });
@@ -640,15 +754,26 @@
       return r;
     }
     if (m.fwd_from) b.append(el('span', { class: 'b-fwd' }, MP.iconEl('forward'), 'فوروارد از ', el('b', { text: m.fwd_from })));
-    if (m.reply) b.append(quote(m.reply));
-    var kind = kindOf(m), caption = list.map(function (x) { return x.body; }).filter(Boolean)[0] || '';
-    if (list.length > 1 || kind === 'photo') {
+    if (m.reply) b.append(quote(m.reply, m.x && m.x.quote, m.x && m.x.pt));
+    var kind = kindOf(m), caps = list.map(function (x) { return x.body; }).filter(Boolean), caption = caps[0] || '';
+    if (kind === 'sticker' || kind === 'gif') { b.append(stickerEl(m)); b.classList.add('b-sticker', 'media-only'); }
+    else if (kind === 'round') { b.append(roundEl(m)); b.classList.add('b-sticker', 'media-only'); }
+    else if (kind === 'poll') b.append(pollEl(m));
+    else if (kind === 'loc') b.append(locEl(m));
+    else if (kind === 'contact') b.append(contactEl(m));
+    else if (kind === 'card') b.append(cardEl(m));
+    else if (list.length > 1 || kind === 'photo' || kind === 'video' && list.length > 1) {
       b.append(album(list));
       if (!caption) b.classList.add('media-only');
     } else if (kind === 'voice') b.append(voiceBubble(m));
-    else if (kind === 'video') b.append(el('video', { class: 'b-video', src: m.file.url, controls: true, preload: 'metadata', playsinline: true }));
+    else if (kind === 'video') { b.append(videoEl(m)); if (!caption) b.classList.add('media-only'); b.classList.add('has-album'); }
     else if (kind === 'file') b.append(fileCard(m));
-    if (caption) b.append(richText(caption));
+    // An album whose photos have their own captions shows them all (each opens its photo in the viewer).
+    if (caps.length > 1 && list.length > 1) {
+      var capBox = el('div', { class: 'b-caps' });
+      list.forEach(function (x, i) { if (x.body) capBox.append(el('button', { type: 'button', class: 'b-cap', onclick: function (e) { e.stopPropagation(); gallery(x.id); } }, el('i', { text: fa(i + 1) }), richText(x.body))); });
+      b.append(capBox);
+    } else if (caption && kind !== 'poll') b.append(richText(caption));
     if (caption && !m.file && !m.reply && !m.fwd_from && MP.onlyEmoji(caption)) b.classList.add('jumbo');
     var url = caption && !m.file ? (caption.match(URL_RE) || [])[0] : '';
     if (url) b.append(linkCard(url.replace(/[.,،)!؟?]+$/, '')));
@@ -684,24 +809,31 @@
     node.classList.toggle('got', !n && !!got);
     node.title = n ? 'خوانده شد' + (n > 1 ? ' توسط ' + fa(n) + ' نفر' : '') : got ? 'رسید (هنوز خوانده نشده)' : 'ارسال شد';
   }
-  function quote(q) {
-    return el('button', { type: 'button', class: 'b-quote', onclick: function (e) { e.stopPropagation(); jumpTo(q.id); } },
-      q.kind === 'photo' ? el('span', { class: 'bq-ico', html: icon('image') }) : q.kind === 'voice' ? el('span', { class: 'bq-ico', html: icon('mic') }) : null,
-      el('span', { class: 'bq-copy' }, el('b', { text: q.mine ? 'شما' : q.author }), el('small', { text: q.text || '…' })));
+  /** The quoted message (or only the part that was selected), and «a note on the design» with its point. */
+  function quote(q, part, pt) {
+    return el('button', { type: 'button', class: 'b-quote' + (part ? ' part' : '') + (pt ? ' pt' : ''), onclick: function (e) { e.stopPropagation(); jumpTo(q.id, pt); } },
+      pt ? el('span', { class: 'bq-ico bq-pt', html: icon('pin') }) : q.kind === 'photo' ? el('span', { class: 'bq-ico', html: icon('image') }) : q.kind === 'voice' ? el('span', { class: 'bq-ico', html: icon('mic') }) : null,
+      el('span', { class: 'bq-copy' }, el('b', { text: (q.mine ? 'شما' : q.author) + (pt ? ' · نظر روی طرح' : '') }), el('small', { text: part ? '«' + part + '»' : q.text || '…' })));
   }
   /** Photos: one fills the bubble; several sit in a Telegram-like mosaic. */
   function album(list) {
     var n = list.length, grid = el('div', { class: 'b-album n' + Math.min(n, 6) });
     list.forEach(function (x, i) {
-      var cell = el('button', { type: 'button', class: 'b-ph', 'aria-label': 'دیدن عکس', onclick: function (e) { e.stopPropagation(); if (!selecting) gallery(x.id); } },
-        el('img', { src: x.file.url, alt: x.file.name || '', loading: 'lazy', decoding: 'async' }));
+      var vid = kindOf(x) === 'video', f = x.file, xx = x.x || {};
+      // Progressive: the tiny blurred copy at once, then the screen-sized one (the original opens in the viewer).
+      var src = vid ? (xx.thumb_url || '') : (n > 1 && f.mid ? f.mid : f.mid || f.url);
+      var cell = el('button', { type: 'button', class: 'b-ph' + (vid ? ' is-vid' : ''), 'aria-label': vid ? 'پخش ویدیو' : 'دیدن عکس', style: f.thumb ? { backgroundImage: 'url(' + f.thumb + ')' } : null, onclick: function (e) { e.stopPropagation(); if (!selecting) gallery(x.id, cell); } },
+        src ? el('img', { src: src, alt: f.name || '', loading: 'lazy', decoding: 'async', onload: function () { cell.classList.add('ld'); } }) : el('video', { src: f.url + '#t=0.5', muted: true, preload: 'metadata', playsinline: true }),
+        vid ? el('span', { class: 'bv-play', html: icon('play') }) : null,
+        vid && xx.dur ? el('span', { class: 'bv-dur', text: clock(xx.dur) }) : null);
+      if (f.w && f.h && n === 1) cell.style.aspectRatio = Math.max(.6, Math.min(1.9, f.w / f.h));
       if (x.pending && x !== list[0]) cell.classList.add('ph-wait');
       if (n > 1 && x.body && i > 0) cell.title = x.body;
       // Six or more: three a row; a short last row stretches to the full width (no empty gap).
       if (n >= 6 && i >= n - n % 3) { cell.style.gridColumn = 'span ' + 6 / (n % 3); cell.style.aspectRatio = n % 3 === 1 ? '2 / 1' : '3 / 2'; }
       grid.append(cell);
       var img = cell.firstChild;
-      if (n === 1) img.addEventListener('load', function () { var w = img.naturalWidth, h = img.naturalHeight; if (w && h) cell.style.aspectRatio = Math.max(.6, Math.min(1.9, w / h)); });
+      if (n === 1 && !f.w && img.tagName === 'IMG') img.addEventListener('load', function () { var w = img.naturalWidth, h = img.naturalHeight; if (w && h) cell.style.aspectRatio = Math.max(.6, Math.min(1.9, w / h)); });
     });
     return grid;
   }
@@ -907,77 +1039,160 @@
     }).catch(function (err) { stopSpeaking(); MP.soft(err); });
   }
 
-  // Recorder: MediaRecorder (webm/opus or mp4/aac on iPhone); desktop Chrome also captures the text live.
-  var rec = null;
+  /*
+   * Recorder, like Telegram: hold the microphone to record and let go to send; slide up to lock (then stop to
+   * listen before sending), slide sideways to cancel. A quick tap switches between voice and round video.
+   * MediaRecorder (webm/opus, or mp4/aac on iPhone); desktop Chrome also captures the text live.
+   */
+  var rec = null, recMode = 'voice', recPreview = null;
+  try { recMode = localStorage.getItem('mp_rec_mode') === 'video' ? 'video' : 'voice'; } catch (e) { /* private mode */ }
   function pickMime() {
     if (!window.MediaRecorder) return null;
     var list = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/aac'];
     for (var i = 0; i < list.length; i++) if (!MediaRecorder.isTypeSupported || MediaRecorder.isTypeSupported(list[i])) return list[i];
     return '';
   }
-  function startRecording() {
+  function micIcon() { var b = $('#composer-mic'); b.innerHTML = icon(recMode === 'video' ? 'video' : 'mic'); b.setAttribute('aria-label', recMode === 'video' ? 'پیام ویدیویی' : 'پیام صوتی (نگه دارید)'); b.title = recMode === 'video' ? 'پیام ویدیویی — بزنید؛ برای ویس دوبار بزنید' : 'برای ضبط نگه دارید؛ برای پیام ویدیویی یک بار بزنید'; }
+  function startRecording(hold) {
     if (!current || rec) return;
     var mime = pickMime();
     if (mime === null || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { MP.toast('ضبط صدا در این مرورگر پشتیبانی نمی‌شود.', { error: true }); return; }
+    rec = { pending: true, hold: !!hold, locked: !hold, chunks: [], transcript: '', stopListen: null, cancelled: false };
+    var me = rec;
+    $('#composer').classList.add('recording'); $('#composer').classList.toggle('rec-hold', !!hold); $('#composer').classList.remove('rec-locked', 'rec-preview');
+    $('#rec-bar').hidden = false; $('#rec-live').textContent = ''; $('#rec-time').textContent = clock(0);
     navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(function (stream) {
-      var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), chunks = [], started = Date.now();
-      rec = { mr: mr, stream: stream, chunks: chunks, cancelled: false, transcript: '', stopListen: null };
-      mr.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+      if (rec !== me || me.cancelled) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      var mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined), started = Date.now();
+      me.mr = mr; me.stream = stream; me.started = started; me.pending = false;
+      mr.ondataavailable = function (e) { if (e.data && e.data.size) me.chunks.push(e.data); };
       mr.start(250);
-      $('#composer').classList.add('recording'); $('#rec-bar').hidden = false; $('#rec-live').textContent = '';
       MP.haptic && MP.haptic(15);
       // Level meter from the live stream.
       try {
         var ac = new (window.AudioContext || window.webkitAudioContext)(), an = ac.createAnalyser(), data = new Uint8Array(32);
-        ac.createMediaStreamSource(stream).connect(an); an.fftSize = 64; rec.ac = ac;
+        ac.createMediaStreamSource(stream).connect(an); an.fftSize = 64; me.ac = ac;
         var wave = $('#rec-wave'); wave.replaceChildren(); for (var i = 0; i < 18; i++) wave.append(el('i'));
         (function tick() {
-          if (!rec || rec.mr !== mr) return;
+          if (rec !== me || !me.mr || me.mr.state !== 'recording') return;
           an.getByteFrequencyData(data);
           Array.prototype.forEach.call(wave.children, function (b, k) { b.style.height = (15 + (data[k + 2] || 0) / 255 * 85) + '%'; });
           requestAnimationFrame(tick);
         })();
       } catch (e) { /* meter is optional */ }
       sendActivity('recording');
-      rec.timer = setInterval(function () {
+      me.timer = setInterval(function () {
         var s = (Date.now() - started) / 1000; $('#rec-time').textContent = clock(s); sendActivity('recording');
         if (s >= 300) finishRecording(true); // 5-minute cap
       }, 250);
       // Live text only where recognition and recording can share the mic (desktop).
       var mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       if (MP.speechSupported && !mobile) {
-        rec.stopListen = MP.listen({ continuous: true, onText: function (t) { rec && (rec.transcript = t); $('#rec-live').textContent = t; }, onError: function () {}, onEnd: function (t) { if (rec && t) rec.transcript = t; } });
+        me.stopListen = MP.listen({ continuous: true, onText: function (t) { me.transcript = t; $('#rec-live').textContent = t; }, onError: function () {}, onEnd: function (t) { if (t) me.transcript = t; } });
       }
-    }).catch(function () { MP.toast('اجازه دسترسی به میکروفون داده نشد.', { error: true }); });
+    }).catch(function () { if (rec === me) { rec = null; resetRecUi(); } MP.toast('اجازه دسترسی به میکروفون داده نشد.', { error: true }); });
   }
-  function finishRecording(send) {
+  function resetRecUi() { $('#composer').classList.remove('recording', 'rec-hold', 'rec-locked', 'rec-preview', 'rec-cancel-arm'); $('#rec-bar').hidden = true; var p = $('#rec-preview'); if (p) p.remove(); }
+  /** mode: true = send now, false = cancel, 'preview' = stop and listen first. */
+  function finishRecording(mode) {
     if (!rec) return;
-    var r = rec; rec = null;
+    var r = rec;
+    if (r.pending) { r.cancelled = true; rec = null; resetRecUi(); return; }
+    rec = null;
     clearInterval(r.timer); sendActivity('idle');
     if (r.stopListen) r.stopListen();
-    $('#composer').classList.remove('recording'); $('#rec-bar').hidden = true;
+    var dur = (Date.now() - r.started) / 1000;
+    if (mode !== 'preview') resetRecUi();
     r.mr.onstop = function () {
       r.stream.getTracks().forEach(function (t) { t.stop(); });
       if (r.ac) r.ac.close();
-      if (!send) return;
+      if (!mode) return;
       var type = (r.mr.mimeType || 'audio/webm').split(';')[0], ext = /mp4|aac/.test(type) ? 'm4a' : /ogg/.test(type) ? 'ogg' : 'webm';
       var blob = new Blob(r.chunks, { type: type });
-      if (blob.size < 1500) { MP.toast('پیام صوتی خیلی کوتاه بود.'); return; }
+      if (blob.size < 1500 || dur < 0.5) { resetRecUi(); MP.toast('پیام صوتی خیلی کوتاه بود؛ برای ضبط، دکمه را نگه دارید.'); return; }
       var file = new File([blob], 'voice-' + Date.now() + '.' + ext, { type: type });
-      // Shown at once; uploading happens behind the bubble. Give live recognition a moment for its last words.
-      var rp = replyTo; clearCtx(false);
-      sendNow({ file: file, transcript: function () { return r.transcript || ''; }, reply: rp });
+      if (mode === 'preview') { previewVoice(file, r, dur); return; }
+      sendVoice(file, r, dur);
     };
     r.mr.stop();
     MP.haptic && MP.haptic(10);
   }
-  $('#composer-mic').onclick = startRecording;
+  function sendVoice(file, r, dur) {
+    // Shown at once; uploading happens behind the bubble. The real waveform goes with it.
+    var rp = replyTo; clearCtx(false);
+    MP.chatKit.waveform(file).then(function (w) {
+      sendNow({ file: file, transcript: function () { return r.transcript || ''; }, reply: rp, x: w ? { wave: w.wave, dur: Math.round((w.dur || dur) * 10) / 10 } : { dur: Math.round(dur * 10) / 10 } });
+    });
+  }
+  /** Locked recording stopped: play it back, then send or delete. */
+  function previewVoice(file, r, dur) {
+    var comp = $('#composer');
+    comp.classList.remove('rec-hold', 'rec-locked'); comp.classList.add('recording', 'rec-preview');
+    var audio = new Audio(URL.createObjectURL(file)), playBtn = el('button', { type: 'button', class: 'icon-btn v-play', 'aria-label': 'پخش', html: icon('play') });
+    var bars = el('div', { class: 'v-wave' }), t = el('span', { class: 'rec-time', text: clock(dur) });
+    MP.chatKit.waveform(file).then(function (w) {
+      var wave = w ? w.wave : null;
+      for (var i = 0; i < 40; i++) bars.append(el('i', { style: { height: (wave ? 18 + wave[Math.floor(i * wave.length / 40)] / 31 * 82 : 40) + '%' } }));
+    });
+    audio.ontimeupdate = function () { var n = Math.round((audio.currentTime / (audio.duration || dur)) * bars.children.length); Array.prototype.forEach.call(bars.children, function (b, k) { b.classList.toggle('on', k < n); }); t.textContent = clock(audio.currentTime); };
+    audio.onended = function () { playBtn.innerHTML = icon('play'); };
+    playBtn.onclick = function () { if (audio.paused) { audio.play(); playBtn.innerHTML = icon('pause'); } else { audio.pause(); playBtn.innerHTML = icon('play'); } };
+    var box2 = el('div', { class: 'rec-preview', id: 'rec-preview' },
+      el('button', { type: 'button', class: 'icon-btn danger', 'aria-label': 'حذف', html: icon('trash'), onclick: function () { audio.pause(); resetRecUi(); MP.toast('ویس حذف شد'); } }),
+      playBtn, bars, t,
+      el('button', { type: 'button', class: 'icon-btn accent lg', 'aria-label': 'ارسال ویس', html: icon('send'), onclick: function () { audio.pause(); resetRecUi(); sendVoice(file, r, dur); } }));
+    $('#rec-bar').hidden = true;
+    comp.append(box2);
+  }
+  (function () {
+    var mic = $('#composer-mic'), st = null;
+    micIcon();
+    mic.addEventListener('pointerdown', function (e) {
+      if (e.button || !current) return;
+      e.preventDefault();
+      st = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, started: false };
+      try { mic.setPointerCapture(e.pointerId); } catch (er) { /* synthetic */ }
+      if (recMode === 'voice') st.timer = setTimeout(function () { if (st) { st.started = true; startRecording(true); } }, 180);
+    });
+    mic.addEventListener('pointermove', function (e) {
+      if (!st || !st.started || !rec || rec.locked) return;
+      var dx = e.clientX - st.x, dy = e.clientY - st.y;
+      $('#composer').style.setProperty('--rec-dy', Math.min(0, dy) + 'px');
+      if (dy < -70) { rec.locked = true; $('#composer').classList.remove('rec-hold'); $('#composer').classList.add('rec-locked'); MP.haptic(15); return; }
+      var arm = Math.abs(dx) > 90;
+      $('#composer').classList.toggle('rec-cancel-arm', arm);
+      if (Math.abs(dx) > 140) { st = null; finishRecording(false); MP.toast('ضبط لغو شد'); }
+    });
+    function up() {
+      if (!st) return;
+      var s = st; st = null; clearTimeout(s.timer);
+      $('#composer').style.removeProperty('--rec-dy');
+      if (!s.started) {
+        // A quick tap: voice ↔ round video (as in Telegram); in video mode the tap records a video.
+        if (recMode === 'video' && Date.now() - s.t < 400) { recordRound(); return; }
+        recMode = recMode === 'voice' ? 'video' : 'voice';
+        try { localStorage.setItem('mp_rec_mode', recMode); } catch (er) { /* private mode */ }
+        micIcon(); MP.haptic(8);
+        MP.toast(recMode === 'video' ? 'حالت پیام ویدیویی؛ برای ضبط بزنید. برای ویس دوباره روی دکمه بزنید.' : 'حالت ویس؛ برای ضبط دکمه را نگه دارید.', { icon: recMode === 'video' ? 'video' : 'mic' });
+        return;
+      }
+      if (rec && !rec.locked) {
+        if ($('#composer').classList.contains('rec-cancel-arm')) { finishRecording(false); MP.toast('ضبط لغو شد'); }
+        else finishRecording(true);
+      }
+    }
+    mic.addEventListener('pointerup', up);
+    mic.addEventListener('pointercancel', up);
+    mic.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  })();
   $('#rec-send').onclick = function () { finishRecording(true); };
+  $('#rec-stop').onclick = function () { finishRecording('preview'); };
   $('#rec-cancel').onclick = function () { finishRecording(false); MP.toast('ضبط لغو شد'); };
+
 
   /* ------------------------------------------------------------ Composer: text, emoji, mentions, draft, reply/edit bar */
 
-  var replyTo = null, editing = null;
+  var replyTo = null, editing = null, replyPart = '';
   if (MP.isMobile()) text.placeholder = 'پیام…';
   function autoGrow() { text.style.height = 'auto'; text.style.height = Math.min(160, text.scrollHeight) + 'px'; }
   function composerState() { $('#composer').classList.toggle('has-text', !!text.value.trim() || !!editing); }
@@ -1007,7 +1222,7 @@
   }
   function clearCtx(keepText) {
     var wasEdit = !!editing;
-    replyTo = null; editing = null; $('#compose-ctx').hidden = true;
+    replyTo = null; editing = null; replyPart = ''; $('#compose-ctx').hidden = true;
     if (wasEdit && keepText !== false) { text.value = draftOf(current); autoGrow(); }
     composerState();
   }
@@ -1028,13 +1243,21 @@
     ['❤️', 'نمادها', '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❤️‍🔥 ❤️‍🩹 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 ☮️ ✝️ ☪️ 🕉️ ☸️ ✡️ 🔯 🕎 ☯️ ☦️ 🛐 ⛎ ♈ ♉ ♊ ♋ ♌ ♍ ♎ ♏ ♐ ♑ ♒ ♓ 🆔 ⚛️ 🉑 ☢️ ☣️ 📴 📳 🆚 💮 🉐 ㊙️ ㊗️ 🅰️ 🅱️ 🆎 🆑 🅾️ 🆘 ❌ ⭕ 🛑 ⛔ 📛 🚫 💯 💢 ♨️ 🚷 🚯 🚳 🚱 🔞 📵 🚭 ❗ ❕ ❓ ❔ ‼️ ⁉️ 🔅 🔆 〽️ ⚠️ 🚸 🔱 ⚜️ 🔰 ♻️ ✅ 🈯 💹 ❇️ ✳️ ❎ 🌐 💠 Ⓜ️ 🌀 💤 🏧 🚾 ♿ 🅿️ 🛗 🈳 🈂️ 🛂 🛃 🛄 🛅 🚹 🚺 🚼 ⚧️ 🚻 🚮 🎦 📶 🈁 🔣 ℹ️ 🔤 🔡 🔠 🆖 🆗 🆙 🆒 🆕 🆓 0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟 🔢 #️⃣ *️⃣ ⏏️ ▶️ ⏸️ ⏯️ ⏹️ ⏺️ ⏭️ ⏮️ ⏩ ⏪ ⏫ ⏬ ◀️ 🔼 🔽 ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ ↙️ ↖️ ↕️ ↔️ ↪️ ↩️ ⤴️ ⤵️ 🔀 🔁 🔂 🔄 🔃 🎵 🎶 ➕ ➖ ➗ ✖️ 🟰 ♾️ 💲 💱 ™️ ©️ ®️ 〰️ ➰ ➿ 🔚 🔙 🔛 🔝 🔜 ✔️ ☑️ 🔘 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ 🟤 🔺 🔻 🔸 🔹 🔶 🔷 🔳 🔲 ▪️ ▫️ ◾ ◽ ◼️ ◻️ 🟥 🟧 🟨 🟩 🟦 🟪 ⬛ ⬜ 🟫 🔈 🔇 🔉 🔊 🔔 🔕 📣 📢 💬 💭 🗯️ ♠️ ♣️ ♥️ ♦️ 🃏 🎴 🀄 🕐 🕑 🕒 🕓 🕔 🕕 🕖 🕗 🕘 🕙 🕚 🕛'],
     ['🏁', 'پرچم‌ها', '🏳️ 🏴 🏁 🚩 🏳️‍🌈 🇮🇷 🇦🇫 🇹🇯 🇮🇶 🇹🇷 🇦🇪 🇸🇦 🇶🇦 🇰🇼 🇴🇲 🇧🇭 🇦🇿 🇦🇲 🇬🇪 🇵🇰 🇮🇳 🇨🇳 🇯🇵 🇰🇷 🇷🇺 🇺🇦 🇩🇪 🇫🇷 🇬🇧 🇮🇹 🇪🇸 🇳🇱 🇧🇪 🇸🇪 🇳🇴 🇩🇰 🇫🇮 🇨🇭 🇦🇹 🇵🇱 🇬🇷 🇵🇹 🇮🇪 🇺🇸 🇨🇦 🇲🇽 🇧🇷 🇦🇷 🇦🇺 🇳🇿 🇿🇦 🇪🇬 🇲🇦 🇳🇬 🇰🇪 🇮🇩 🇲🇾 🇹🇭 🇻🇳 🇵🇭 🇸🇬 🇪🇺 🇺🇳']
   ];
-  var pop = $('#emoji-pop'), emoTab = 1;
+  var pop = $('#emoji-pop'), emoTab = 1, panelKind = 'emoji';
+  function closeEmoji() { pop.hidden = true; }
   function recentEmoji() { try { return JSON.parse(localStorage.getItem('mp_emoji_recent') || '[]'); } catch (e) { return []; } }
   function drawEmoji() {
+    if (panelKind !== 'emoji') { pop.replaceChildren(kindsBar(), stickerPane(panelKind)); return; }
     var list = emoTab === 0 ? recentEmoji() : EMOJI[emoTab][2].split(' ');
     var grid = el('div', { class: 'ep-grid' }, list.length ? list.map(function (e) { return el('button', { type: 'button', 'aria-label': e, onclick: function () { pickEmoji(e); } }, MP.emojiImg(e)); }) : el('p', { class: 'ep-none', text: 'هنوز ایموجی‌ای نفرستاده‌اید' }));
     var tabs = el('div', { class: 'ep-tabs' }, EMOJI.map(function (c, i) { return el('button', { type: 'button', class: i === emoTab ? 'on' : '', title: c[1], 'aria-label': c[1], onclick: function () { emoTab = i; drawEmoji(); } }, MP.emojiImg(c[0])); }));
-    pop.replaceChildren(el('div', { class: 'ep-title', text: EMOJI[emoTab][1] }), grid, tabs);
+    pop.replaceChildren(kindsBar(), el('div', { class: 'ep-title', text: EMOJI[emoTab][1] }), grid, tabs);
+  }
+  /** Emoji · stickers · GIFs, like Telegram's panel. */
+  function kindsBar() {
+    return el('div', { class: 'ep-kinds seg', role: 'tablist' }, [['emoji', 'ایموجی'], ['sticker', 'استیکر'], ['gif', 'GIF']].map(function (k) {
+      return el('button', { type: 'button', 'aria-selected': String(panelKind === k[0]), text: k[1], onclick: function () { panelKind = k[0]; drawEmoji(); } });
+    }));
   }
   function pickEmoji(e) {
     var r = recentEmoji().filter(function (x) { return x !== e; }); r.unshift(e);
@@ -1086,14 +1309,18 @@
   var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit' };
   var seq = 0, queue = Promise.resolve();
   function nowStamp() { var d = new Date(); return S.today + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
-  /** o: {body, file, transcript, reply, album, asFile, channel} */
+  /** o: {body, file, transcript, reply, album, asFile, channel, x, silent, sendAt, stickerId, thumb, quote} */
   function sendNow(o) {
     var channel = o.channel || current, f = o.file;
+    if (o.topic === undefined) o.topic = channel === current ? topic : 0;
+    if (o.quote) o.x = Object.assign({}, o.x || {}, { quote: o.quote });
     var m = { id: 'tmp' + (++seq), mine: true, pending: true, body: o.body || '', author: S.me.name, user_id: S.me.id, created_at: nowStamp(), seen_by: 0,
       reply: o.reply ? { id: o.reply.id, author: o.reply.author, text: snippet(o.reply), kind: kindOf(o.reply), mine: o.reply.mine } : null,
-      album: o.album || '', as_file: !!o.asFile, reactions: [],
+      album: o.album || '', as_file: !!o.asFile, reactions: [], x: o.x ? Object.assign({}, o.x) : null, silent: !!o.silent,
       file: f ? { url: URL.createObjectURL(f), name: f.name, mime: f.type || 'application/octet-stream', size: f.size, image: /^image\//.test(f.type) } : null };
+    if (o.sticker) { m.file = { url: o.sticker.url, name: 'sticker', mime: o.sticker.mime, size: 0, image: true }; }
     m.o = o; m.channel = channel;
+    if (o.sendAt) { post(m); return m; } // «send later»: no bubble; it appears when it is sent
     if (channel === current) {
       var e = $('.empty', box); if (e) e.remove();
       place(m, true); decorate();
@@ -1115,25 +1342,36 @@
   }
   function post(m) {
     var o = m.o, f = o.file, channel = m.channel;
-    var up = f && !o.fileId ? slot(function () { return MP.uploadChunked('chat-upload', f, { context_id: channel }, function (p) { var r = rowsById[m.id]; if (r && r._bar) $('i', r._bar).style.width = p * 100 + '%'; }); }) : Promise.resolve(o.fileId ? { id: o.fileId } : null);
+    var up = f && !o.fileId ? slot(function () { return uploadResumable(m, f, channel, function (p) { var r = rowsById[m.id]; if (r && r._bar) $('i', r._bar).style.width = p * 100 + '%'; }); }) : Promise.resolve(o.fileId ? { id: o.fileId } : null);
+    // A video's first frame goes up too, so the bubble shows it before anything plays.
+    if (o.thumb && !o.thumbId) up = up.then(function (file) { return MP.upload('files', o.thumb, { context: 'message', context_id: channel }).then(function (t) { o.thumbId = t.id; return file; }, function () { return file; }); });
     // Posts go one after another so messages keep their order: each waits for the one sent before it.
     var before = queue;
     var done = up.then(function (file) {
       if (file) o.fileId = file.id;
       return before.then(function () {
-        return MP.api('channels/' + channel + '/messages', { method: 'POST', body: { body: m.body, file_id: file ? file.id : 0, transcript: typeof o.transcript === 'function' ? o.transcript() : '', reply_to: o.reply ? o.reply.id : 0, album: o.album || '', as_file: o.asFile ? 1 : 0 } });
+        var x = Object.assign({}, o.x || {});
+        if (o.thumbId) x.thumb = o.thumbId;
+        return MP.api('channels/' + channel + '/messages', { method: 'POST', body: { body: m.body, file_id: file ? file.id : 0, transcript: typeof o.transcript === 'function' ? o.transcript() : '', reply_to: o.reply ? o.reply.id : 0, album: o.album || '', as_file: o.asFile ? 1 : 0, x: x, silent: o.silent ? 1 : 0, send_at: o.sendAt || '', topic_id: o.topic || 0, sticker_id: o.sticker ? o.sticker.id : 0 } });
       });
     });
     queue = done.catch(function () {});
     done.then(function (real) {
-      dropOutbox(m);
-      if (m.file) setTimeout(function () { URL.revokeObjectURL(m.file.url); }, 60000);
+      dropOutbox(m); dropUpload(m);
+      if (real && real.scheduled) {
+        MP.toast('در ' + J.format(real.scheduled.send_at.slice(0, 10), false) + ' ساعت ' + MP.timeFa(real.scheduled.send_at.slice(11, 16)) + ' فرستاده می‌شود', { icon: 'clock', action: 'پیام‌های زمان‌دار', onAction: scheduledList });
+        var ch = chan(channel); if (ch) { ch.sched = (ch.sched || 0) + 1; if (channel === current) schedBar(); }
+        return;
+      }
+      if (m.file && !o.sticker) setTimeout(function () { URL.revokeObjectURL(m.file.url); }, 60000);
       if (channel !== current) return MP.loadChannels();
       swapReal(m, real);
       MP.loadChannels();
     }).catch(function (err) {
       var offline = !navigator.onLine || /اینترنت/.test(err.message || '');
       m.pending = false; m.failed = true; m.offline = offline;
+      if (err && err.code === 'mp_slow') { removeRow(m.id); MP.toast(err.message, { icon: 'clock' }); if (!f && channel === current && !text.value) { text.value = m.body; autoGrow(); composerState(); } return; }
+      if (o.sendAt) { MP.soft(err); return; }
       if (offline && !f) keepOutbox(m);
       if (channel === current) update(m);
       if (!offline) MP.soft(err);
@@ -1171,6 +1409,69 @@
   }
   setTimeout(flushOutbox, 4000);
 
+  /*
+   * Files bigger than 1 MB stay on the device (IndexedDB) until they are sent: if the page is closed half way,
+   * the upload continues from where it stopped the next time the panel opens.
+   */
+  function uploads() { return MP.kv.get('uploads').then(function (l) { return l || {}; }); }
+  function uploadResumable(m, f, channel, onProg) {
+    var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 12) + 'up', o = m.o;
+    o.upId = id;
+    if (f.size > 1048576) uploads().then(function (l) {
+      l[id] = { id: id, channel: channel, file: f, body: m.body, album: o.album || '', asFile: !!o.asFile, reply: o.reply ? o.reply.id : 0, x: o.x || null, silent: !!o.silent, topic: o.topic || 0, at: Date.now() };
+      return MP.kv.set('uploads', l);
+    });
+    if (channel === current) sendActivity('uploading');
+    return MP.uploadChunked('chat-upload', f, { context_id: channel }, onProg, { id: id });
+  }
+  function dropUpload(m) { var id = m.o && m.o.upId; if (id) uploads().then(function (l) { if (l[id]) { delete l[id]; MP.kv.set('uploads', l); } }); }
+  function resumeUploads() {
+    uploads().then(function (l) {
+      var list = Object.keys(l).map(function (k) { return l[k]; }).filter(function (u) { return u && u.file && Date.now() - u.at < 7 * 864e5; });
+      if (!list.length) return;
+      MP.toast('ادامه ارسال ' + fa(list.length) + ' فایل نیمه‌کاره…', { icon: 'clip' });
+      list.reduce(function (p, u) {
+        return p.then(function () {
+          return MP.api('chat-upload/status', { query: { upload: u.id }, noCache: true }).then(function (st) {
+            return MP.uploadChunked('chat-upload', u.file, { context_id: u.channel }, null, { id: u.id, start: st.next || 0 });
+          }).then(function (file) {
+            return MP.api('channels/' + u.channel + '/messages', { method: 'POST', body: { body: u.body, file_id: file.id, reply_to: u.reply, album: u.album, as_file: u.asFile ? 1 : 0, x: u.x || {}, silent: u.silent ? 1 : 0, topic_id: u.topic } });
+          }).then(function () {
+            return uploads().then(function (l2) { delete l2[u.id]; return MP.kv.set('uploads', l2); });
+          }).catch(function (err) { if (err && err.status && err.status < 500) return uploads().then(function (l2) { delete l2[u.id]; return MP.kv.set('uploads', l2); }); });
+        });
+      }, Promise.resolve()).then(function () { MP.loadChannels(); if (current) pull(); });
+    });
+  }
+  setTimeout(resumeUploads, 3000);
+
+  /* ------------------------------------------------------------ Scheduled messages */
+
+  function schedBar() {
+    var c = chan(), bar = $('#chat-sched');
+    if (!bar) { bar = el('button', { type: 'button', id: 'chat-sched', class: 'chat-sched', onclick: scheduledList }); $('#composer').before(bar); }
+    var n = c ? c.sched || 0 : 0;
+    bar.hidden = !n;
+    bar.replaceChildren(MP.iconEl('clock'), el('span', { text: fa(n) + ' پیام زمان‌دار در صف ارسال' }));
+  }
+  function scheduledList() {
+    var id = current, body = MP.dialog.open('پیام‌های زمان‌دار', MP.skeleton(2));
+    function load() {
+      MP.api('channels/' + id + '/scheduled', { noCache: true }).then(function (l) {
+        var c = chan(id); if (c) { c.sched = l.length; if (id === current) schedBar(); }
+        if (!l.length) { body.replaceChildren(el('p', { class: 'muted', text: 'پیام زمان‌داری در صف نیست.' })); return; }
+        body.replaceChildren(el('div', { class: 'tio-history' }, l.map(function (x) {
+          return el('article', { class: 'tpl-card' }, el('span', { class: 'cs-ico', html: icon('clock') }),
+            el('div', { class: 'tpl-copy' }, el('strong', { text: x.text || (x.file ? x.file.name : '…'), dir: 'auto' }), el('small', { text: J.format(x.send_at.slice(0, 10), false) + ' ساعت ' + MP.timeFa(x.send_at.slice(11, 16)) + (x.silent ? ' · بی‌صدا' : '') })),
+            el('div', { class: 'tpl-actions' },
+              el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('send') + 'همین حالا', onclick: function () { MP.api('scheduled/' + x.id + '/now', { method: 'POST' }).then(function () { MP.toast('فرستاده شد'); load(); if (id === current) pull(); }).catch(MP.soft); } }),
+              el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'حذف', html: icon('trash'), onclick: function () { MP.api('scheduled/' + x.id, { method: 'DELETE' }).then(load).catch(MP.soft); } })));
+        })));
+      }).catch(MP.soft);
+    }
+    load();
+  }
+
   $('#composer').onsubmit = function (e) {
     e.preventDefault();
     var body = text.value.trim();
@@ -1185,11 +1486,40 @@
       return;
     }
     if (!body) return;
-    text.value = ''; autoGrow(); sendActivity('idle'); saveDraft(current, ''); mPop.hidden = true; pop.hidden = true;
-    var r = replyTo; clearCtx(false); composerState();
-    sendNow({ body: body, reply: r });
-    if (MP.isMobile()) text.focus();
+    sendText(body, {});
   };
+  /** Sends the composer's text (opts: silent, sendAt). */
+  function sendText(body, opts) {
+    text.value = ''; autoGrow(); sendActivity('idle'); saveDraft(current, ''); mPop.hidden = true; pop.hidden = true;
+    var r = replyTo, part = replyPart; clearCtx(false); composerState();
+    sendNow({ body: body, reply: r, quote: part, silent: opts.silent, sendAt: opts.sendAt });
+    if (MP.isMobile()) text.focus();
+  }
+  /* Hold (or right-click) the send button: «send without sound» and «send later», like Telegram. */
+  (function () {
+    var btn = $('#composer .composer-send'), timer = 0, fired = false;
+    function menu() {
+      var body = text.value.trim();
+      if (!body || editing) return;
+      fired = true; MP.haptic(15);
+      if (openMenu) openMenu();
+      var m = el('div', { class: 'ctx-menu send-menu in', role: 'menu' },
+        el('button', { type: 'button', role: 'menuitem', onclick: function () { close(); sendText(text.value.trim(), { silent: true }); } }, MP.iconEl('bell-off'), el('span', { text: 'ارسال بی‌صدا' })),
+        el('button', { type: 'button', role: 'menuitem', onclick: function () { close(); MP.chatKit.pickTime('ارسال پیام در زمان مشخص').then(function (at) { if (at && text.value.trim()) sendText(text.value.trim(), { sendAt: at }); }); } }, MP.iconEl('clock'), el('span', { text: 'ارسال در زمان مشخص' })));
+      var shade = el('div', { class: 'ctx-shade', onclick: close });
+      document.body.append(shade, m);
+      var r = btn.getBoundingClientRect();
+      m.style.top = Math.max(8, r.top - m.offsetHeight - 8) + 'px';
+      m.style.left = Math.max(8, Math.min(innerWidth - m.offsetWidth - 8, r.left)) + 'px';
+      function close() { if (openMenu !== close) return; openMenu = null; shade.remove(); m.remove(); }
+      openMenu = close;
+    }
+    btn.addEventListener('pointerdown', function (e) { if (e.button) return; fired = false; timer = setTimeout(menu, 450); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { btn.addEventListener(ev, function () { clearTimeout(timer); }); });
+    btn.addEventListener('click', function (e) { if (fired) { e.preventDefault(); e.stopImmediatePropagation(); fired = false; } }, true);
+    btn.addEventListener('contextmenu', function (e) { e.preventDefault(); clearTimeout(timer); menu(); });
+  })();
+  MP.chatKit.formatBar(text, $('#composer'));
   $('#composer .composer-send').addEventListener('pointerdown', function (e) { if (MP.isMobile()) e.preventDefault(); }); // keep the keyboard open
 
   /* ------------------------------------------------------------ Attach: photos (album) or files, like Telegram */
@@ -1199,6 +1529,84 @@
   ['composer-file', 'composer-media', 'composer-camera', 'composer-doc'].forEach(function (id) {
     $('#' + id).onchange = function (e) { var files = Array.prototype.slice.call(e.target.files || []); e.target.value = ''; closeAttach(); sendSheet(files, pickMode); pickMode = ''; };
   });
+
+  /** Round video: recorded in a circle and sent as soon as «ارسال» is pressed. */
+  function recordRound() {
+    if (!current) return;
+    var ch = current, r = replyTo; clearCtx(false);
+    MP.chatKit.recordRound(function () { sendActivity('video'); }).then(function (v) {
+      sendActivity('idle');
+      if (v) sendNow({ file: v.file, thumb: v.thumb, x: { round: 1, dur: Math.round(v.dur * 10) / 10 }, reply: r, channel: ch });
+    });
+  }
+
+  /* Stickers and GIFs: the studio's packs (supervisors add them) and the shared GIFs (anyone can save one). */
+  var stickerData = null;
+  function loadStickers() { return MP.api('stickers').then(function (d) { stickerData = d; return d; }); }
+  function sendSticker(s2) { closeEmoji(); sendNow({ body: '', sticker: s2, x: s2.kind === 'gif' ? { gif: 1 } : { sticker: 1 } }); }
+  function openStickers() { if (pop.hidden) { $('#composer-emoji').click(); } panelKind = 'sticker'; drawEmoji(); }
+  function stickerPane(kind) {
+    var wrap = el('div', { class: 'ep-grid ep-stk' }, el('p', { class: 'ep-none', text: 'در حال بارگذاری…' }));
+    (stickerData ? Promise.resolve(stickerData) : loadStickers()).then(function (d) {
+      var items = kind === 'gif' ? d.gifs : [];
+      if (kind !== 'gif') d.packs.forEach(function (p) { items = items.concat(p.items); });
+      wrap.replaceChildren.apply(wrap, items.map(function (x) {
+        return el('button', { type: 'button', class: 'ep-st', title: x.pack || 'GIF', onclick: function () { sendSticker(x); } }, el('img', { src: x.url, alt: x.emoji || '', loading: 'lazy' }));
+      }));
+      if (!items.length) wrap.append(el('p', { class: 'ep-none', text: kind === 'gif' ? 'هنوز GIF ذخیره نشده؛ روی هر GIF در گفت‌وگو نگه دارید و «ذخیره در GIFها» را بزنید، یا از دکمه زیر یکی بارگذاری کنید.' : d.can_manage ? 'هنوز استیکری نیست؛ از دکمه زیر بسته استیکر استودیو را بسازید.' : 'هنوز استیکری نیست؛ ناظر می‌تواند بسته استیکر استودیو را بسازد.' }));
+      if (kind === 'gif' || d.can_manage) wrap.append(el('button', { type: 'button', class: 'ep-add', html: icon('plus') + (kind === 'gif' ? 'بارگذاری GIF' : 'مدیریت استیکرها'), onclick: function () { kind === 'gif' ? uploadGif() : stickerManager(); } }));
+    }).catch(function () { wrap.replaceChildren(el('p', { class: 'ep-none', text: 'استیکرها باز نشد.' })); });
+    return wrap;
+  }
+  function uploadGif() {
+    var inp = el('input', { type: 'file', accept: 'image/gif' });
+    inp.onchange = function () {
+      var f = inp.files[0]; if (!f) return;
+      MP.upload('stickers', f, { kind: 'gif' }).then(function (d) { stickerData = d; MP.toast('GIF ذخیره شد'); drawEmoji(); }).catch(MP.soft);
+    };
+    inp.click();
+  }
+  function stickerManager() {
+    var body = MP.dialog.open('استیکرهای استودیو', MP.skeleton(2), { wide: true });
+    function draw(d) {
+      stickerData = d;
+      var pack = el('input', { class: 'input', maxlength: 60, placeholder: 'نام بسته، مثلاً «مربع»', value: d.packs[0] ? d.packs[0].name : 'مربع' });
+      var emoji = el('input', { class: 'input', maxlength: 4, placeholder: 'ایموجی هم‌معنی (اختیاری)' });
+      var inp = el('input', { type: 'file', accept: 'image/png,image/webp,image/gif', multiple: true, hidden: true });
+      inp.onchange = function () {
+        var files = Array.prototype.slice.call(inp.files);
+        files.reduce(function (p, f) { return p.then(function () { return MP.upload('stickers', f, { kind: 'sticker', pack: pack.value || 'مربع', emoji: emoji.value }); }); }, Promise.resolve())
+          .then(function () { MP.toast(fa(files.length) + ' استیکر اضافه شد'); return loadStickers(); }).then(draw).catch(MP.soft);
+      };
+      body.replaceChildren(
+        el('p', { class: 'hint', text: 'تصویر PNG یا WebP با پس‌زمینه شفاف (حدود ۵۱۲×۵۱۲) بهترین نتیجه را دارد. استیکرها برای همه همکاران و مشتریان نمایش داده می‌شوند.' }),
+        el('div', { class: 'form-row' }, MP.field('بسته', pack), MP.field('ایموجی', emoji)), inp,
+        el('button', { type: 'button', class: 'btn btn-primary', html: icon('plus') + 'افزودن استیکر', onclick: function () { inp.click(); } }),
+        el('div', { class: 'stk-admin' }, d.packs.map(function (p) {
+          return el('section', null, el('h4', { text: p.name + ' (' + fa(p.items.length) + ')' }), el('div', { class: 'stk-grid' }, p.items.map(function (x) {
+            return el('span', { class: 'stk-item' }, el('img', { src: x.url, alt: '' }), el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'حذف', html: icon('close'), onclick: function () { MP.api('stickers/' + x.id, { method: 'DELETE' }).then(draw).catch(MP.soft); } }));
+          })));
+        })));
+    }
+    loadStickers().then(draw).catch(MP.soft);
+  }
+  /** «#»-card: a task or project from the panel, shown live inside the chat. */
+  function pickCard() {
+    var q = el('input', { type: 'search', class: 'input', placeholder: 'جستجوی تسک یا پروژه…' }), list = el('div', { class: 'menu ct-list' });
+    function draw() {
+      var nq = MP.norm(q.value), c = chan();
+      var tasks = S.tasks.filter(function (t) { return !nq || MP.norm(t.title).indexOf(nq) >= 0; }).sort(function (a, b) { return (c && b.project_id === c.project_id) - (c && a.project_id === c.project_id) || (b.id - a.id); }).slice(0, 12);
+      var projects = S.projects.filter(function (p) { return !nq || MP.norm(p.name).indexOf(nq) >= 0; }).slice(0, 6);
+      list.replaceChildren.apply(list, projects.map(function (p) {
+        return el('button', { type: 'button', onclick: function () { MP.dialog.close(); sendNow({ body: '', x: { card: { t: 'project', id: p.id, title: p.name } } }); } }, MP.iconEl('folder'), el('span', null, el('strong', { text: p.name }), el('small', { class: 'muted', text: 'پروژه' })));
+      }).concat(tasks.map(function (t) {
+        return el('button', { type: 'button', onclick: function () { MP.dialog.close(); sendNow({ body: '', x: { card: { t: 'task', id: t.id, title: t.title } } }); } }, MP.iconEl('tasks'), el('span', null, el('strong', { text: t.title }), el('small', { class: 'muted', text: (MP.STATUS[t.status] || '') + (t.project_id && MP.project(t.project_id) ? ' · ' + MP.project(t.project_id).name : '') })));
+      })));
+      if (!list.children.length) list.append(el('p', { class: 'hint', text: 'چیزی پیدا نشد.' }));
+    }
+    q.oninput = draw; draw();
+    MP.dialog.open('کارت تسک یا پروژه', el('div', { class: 'form' }, el('p', { class: 'hint', text: 'کارت در گفت‌وگو می‌ماند و وضعیتش همیشه به‌روز است. در متن پیام هم می‌توانید # بزنید و تسک را انتخاب کنید.' }), q, list));
+  }
 
   /* ------------------------------------------------------------ Attach sheet (Telegram's paperclip) */
 
@@ -1216,6 +1624,7 @@
     var row = function (ic, color, title, sub, fn) {
       return el('button', { type: 'button', class: 'as-row', onclick: fn }, el('span', { class: 'as-ico ' + color, html: icon(ic) }), el('span', { class: 'as-copy' }, el('b', { text: title }), el('small', { text: sub })));
     };
+    var grid = function (ic, color, title, fn) { return el('button', { type: 'button', class: 'as-g', onclick: fn }, el('span', { class: 'as-ico ' + color, html: icon(ic) }), el('small', { text: title })); };
     var recent = el('div', { class: 'as-recent' }, el('div', { class: 'as-sec', text: 'فایل‌های اخیر این گفت‌وگو' }), el('div', { class: 'as-list' }, MP.skeleton(1)));
     var tab = function (ic, label, fn, on) { return el('button', { type: 'button', class: 'as-tab' + (on ? ' on' : ''), onclick: fn }, MP.iconEl(ic), el('span', { text: label })); };
     attach.replaceChildren(
@@ -1227,6 +1636,13 @@
             row('image', 'green', 'گالری', 'عکس و ویدیو، فشرده و سریع؛ چند عکس با هم آلبوم می‌شوند', function () { pick('composer-media', 'photo'); }),
             row('file', 'blue', 'فایل از حافظه', 'PDF، ورد، اکسل، فایل طراحی و هر فایلی، بدون فشرده‌سازی', function () { pick('composer-doc', 'file'); }),
             row('download', 'orange', 'گالری بدون فشرده‌سازی', 'عکس با کیفیت اصلی، به‌صورت فایل', function () { pick('composer-media', 'file'); })),
+          el('div', { class: 'as-grid' },
+            grid('list', 'violet', 'نظرسنجی', function () { closeAttach(); MP.chatKit.pollForm().then(function (p) { if (p) sendNow({ body: '', x: { poll: p } }); }); }),
+            grid('pin', 'green', 'موقعیت', function () { closeAttach(); MP.chatKit.pickPlace().then(function (l) { if (l) sendNow({ body: '', x: { loc: l } }); }); }),
+            grid('user', 'blue', 'مخاطب', function () { closeAttach(); MP.chatKit.pickContact().then(function (c2) { if (c2) sendNow({ body: '', x: { contact: c2 } }); }); }),
+            grid('video', 'red', 'پیام ویدیویی', function () { closeAttach(); recordRound(); }),
+            grid('smile', 'orange', 'استیکر و GIF', function () { closeAttach(); openStickers(); }),
+            grid('tasks', 'teal', 'تسک یا پروژه', function () { closeAttach(); pickCard(); })),
           recent),
         el('div', { class: 'as-tabs' },
           tab('image', 'گالری', function () { pick('composer-media', 'photo'); }, true),
@@ -1265,10 +1681,15 @@
     pane.addEventListener('drop', function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; pane.classList.remove('chat-drop'); sendSheet(Array.prototype.slice.call(e.dataTransfer.files)); });
   })();
   function isPic(f) { return /^image\/(jpeg|png|webp|gif|bmp|heic|heif)$/i.test(f.type) || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name); }
-  /** Before sending: thumbnails, «عکس» (compressed, grouped in an album) or «فایل» (original), and a caption. */
+  function isVid(f) { return /^video\/(mp4|webm|quicktime|3gpp|x-m4v)$/i.test(f.type) || /\.(mp4|mov|webm|m4v|3gp)$/i.test(f.name); }
+  function isMedia(f) { return isPic(f) || isVid(f); }
+  /**
+   * Before sending: thumbnails (each photo can be edited and get its own caption), «عکس» (compressed, grouped
+   * in an album; videos play in the chat) or «فایل» (original), and a caption.
+   */
   function sendSheet(files, want) {
     if (!current || !files.length) return;
-    var list = files.slice(), pics = list.filter(isPic).length, mode = pics && want !== 'file' ? 'photo' : 'file', group = true;
+    var list = files.slice(), pics = list.filter(isMedia).length, mode = pics && want !== 'file' ? 'photo' : 'file', group = true;
     var grid = el('div', { class: 'ss-grid' }), cap = el('textarea', { class: 'ss-cap', rows: 1, placeholder: 'توضیح (اختیاری)…', maxlength: 4000, dir: 'auto' });
     if (text.value.trim() && !editing) { cap.value = text.value.trim(); }
     var seg = el('div', { class: 'seg ss-seg', role: 'tablist' });
@@ -1276,46 +1697,64 @@
     var title = el('span');
     function draw() {
       grid.replaceChildren.apply(grid, list.map(function (f, i) {
-        var pic = isPic(f) && mode === 'photo';
-        var cell = el('div', { class: 'ss-item' + (pic ? ' pic' : ' doc') }, pic ? el('img', { src: f._url || (f._url = URL.createObjectURL(f)), alt: '' }) : el('span', { class: 'ss-doc' }, el('b', { text: (f.name.split('.').pop() || '').slice(0, 4).toUpperCase() }), el('small', { text: f.name, dir: 'auto' }), el('small', { text: MP.fileSize(f.size) })),
-          el('button', { type: 'button', class: 'ss-x', 'aria-label': 'حذف', text: '×', onclick: function () { list.splice(i, 1); if (!list.length) MP.dialog.close(); else { pics = list.filter(isPic).length; if (!pics) mode = 'file'; draw(); } } }));
+        var media = isMedia(f) && mode === 'photo', vid = isVid(f);
+        var preview = !media ? el('span', { class: 'ss-doc' }, el('b', { text: (f.name.split('.').pop() || '').slice(0, 4).toUpperCase() }), el('small', { text: f.name, dir: 'auto' }), el('small', { text: MP.fileSize(f.size) }))
+          : vid ? el('video', { src: f._url || (f._url = URL.createObjectURL(f)), muted: true, playsinline: true, preload: 'metadata' }) : el('img', { src: f._url || (f._url = URL.createObjectURL(f)), alt: '' });
+        var cell = el('div', { class: 'ss-item' + (media ? ' pic' : ' doc') }, preview,
+          vid && media ? el('span', { class: 'bv-play', html: icon('play') }) : null,
+          el('button', { type: 'button', class: 'ss-x', 'aria-label': 'حذف', text: '×', onclick: function () { list.splice(i, 1); if (!list.length) MP.dialog.close(); else { pics = list.filter(isMedia).length; if (!pics) mode = 'file'; draw(); } } }),
+          media && !vid && !/gif/i.test(f.type) ? el('button', { type: 'button', class: 'ss-edit', 'aria-label': 'ویرایش عکس', title: 'برش، چرخش، کشیدن و نوشتن', html: icon('edit'), onclick: function () {
+            MP.chatKit.editPhoto(f).then(function (nf) { if (!nf) return; if (f._url) URL.revokeObjectURL(f._url); nf._cap = f._cap; list[i] = nf; draw(); });
+          } }) : null);
+        // A caption for each photo of an album (shown under the album and with that photo in the viewer).
+        if (media && list.filter(isMedia).length > 1) cell.append(el('input', { class: 'ss-pcap', placeholder: 'توضیح این مورد', maxlength: 1000, dir: 'auto', value: f._cap || '', oninput: function (e) { f._cap = e.target.value; } }));
         return cell;
       }));
       seg.hidden = !pics;
       seg.replaceChildren(
-        el('button', { type: 'button', 'aria-selected': String(mode === 'photo'), text: 'ارسال به‌صورت عکس', onclick: function () { mode = 'photo'; draw(); } }),
+        el('button', { type: 'button', 'aria-selected': String(mode === 'photo'), text: 'ارسال به‌صورت عکس و ویدیو', onclick: function () { mode = 'photo'; draw(); } }),
         el('button', { type: 'button', 'aria-selected': String(mode === 'file'), text: 'ارسال به‌صورت فایل', onclick: function () { mode = 'file'; draw(); } }));
       groupBox.hidden = !(mode === 'photo' && pics > 1);
-      title.textContent = mode === 'photo' && pics === list.length ? (list.length > 1 ? fa(list.length) + ' عکس' : 'یک عکس') : (list.length > 1 ? fa(list.length) + ' فایل' : 'یک فایل');
+      var nv = list.filter(isVid).length;
+      title.textContent = mode === 'photo' && pics === list.length ? (nv === list.length ? (nv > 1 ? fa(nv) + ' ویدیو' : 'یک ویدیو') : list.length > 1 ? fa(list.length) + ' عکس و ویدیو' : 'یک عکس') : (list.length > 1 ? fa(list.length) + ' فایل' : 'یک فایل');
     }
     draw();
     var hint = el('p', { class: 'ss-hint' });
     var go = el('button', { type: 'submit', class: 'btn btn-primary', html: icon('send') + 'ارسال' });
-    var f = el('form', { class: 'ss' }, el('div', { class: 'ss-top' }, title, seg), grid, groupBox, hint, el('div', { class: 'ss-foot' }, cap, go));
-    hint.textContent = 'عکس: کم‌حجم و زود می‌رسد، داخل گفت‌وگو نمایش داده می‌شود. فایل: همان فایل اصلی با کیفیت کامل.';
-    f.onsubmit = function (e) {
-      e.preventDefault();
+    var later = el('button', { type: 'button', class: 'icon-btn', title: 'ارسال در زمان مشخص', 'aria-label': 'ارسال در زمان مشخص', html: icon('clock') });
+    var f = el('form', { class: 'ss' }, el('div', { class: 'ss-top' }, title, seg), grid, groupBox, hint, el('div', { class: 'ss-foot' }, cap, later, go));
+    hint.textContent = 'عکس: کم‌حجم و زود می‌رسد، داخل گفت‌وگو نمایش داده می‌شود (روی مداد بزنید تا برش بزنید، بچرخانید یا رویش بنویسید). فایل: همان فایل اصلی با کیفیت کامل.';
+    // «Send later» for the whole set: the time is picked, then everything goes into the queue.
+    later.onclick = function () { MP.chatKit.pickTime('ارسال در زمان مشخص').then(function (at) { if (at) doSend(at); }); };
+    f.onsubmit = function (e) { e.preventDefault(); doSend(''); };
+    function doSend(at) {
       var channel = current, caption = cap.value.trim(), r = replyTo;
       if (caption && caption === text.value.trim()) { text.value = ''; autoGrow(); saveDraft(channel, ''); composerState(); }
       clearCtx(false);
       MP.dialog.close();
-      var photos = mode === 'photo' ? list.filter(isPic) : [], others = list.filter(function (x) { return photos.indexOf(x) < 0; });
-      // Albums hold up to ten photos, as in Telegram; more photos make more albums.
+      var media = mode === 'photo' ? list.filter(isMedia) : [], others = list.filter(function (x) { return media.indexOf(x) < 0; });
+      // Albums hold up to ten items, as in Telegram; more make more albums.
       var albums = [], stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      photos.forEach(function (x, i) { albums.push(photos.length > 1 && group ? 'a' + stamp + Math.floor(i / 10) : ''); });
+      media.forEach(function (x, i) { albums.push(media.length > 1 && group ? 'a' + stamp + Math.floor(i / 10) : ''); });
       // Caption: under the (first) album or on the last file, as in Telegram.
-      var capOnPhotos = photos.length && (group || photos.length === 1) && !others.length;
+      var capOnPhotos = media.length && (group || media.length === 1) && !others.length;
       // Photos are shrunk one by one (dozens of big photos at once would run a phone out of memory), each sent as soon as it is ready.
       var chain = Promise.resolve();
-      photos.forEach(function (x, i) {
-        chain = chain.then(function () { return shrink(x); }).then(function (small) {
-          sendNow({ file: small, album: albums[i], body: capOnPhotos && i === 0 ? caption : '', reply: i === 0 ? r : null, channel: channel });
+      media.forEach(function (x, i) {
+        var own = (x._cap || '').trim(), body = own || (capOnPhotos && i === 0 ? caption : '');
+        chain = chain.then(function () {
+          if (isVid(x)) return MP.chatKit.videoPoster(x).then(function (pv) {
+            sendNow({ file: x, album: albums[i], body: body, reply: i === 0 ? r : null, channel: channel, thumb: pv && pv.thumb, x: pv ? { dur: Math.round(pv.dur * 10) / 10, w: pv.w, h: pv.h } : null, sendAt: at });
+          });
+          return shrink(x).then(function (small) {
+            sendNow({ file: small, album: albums[i], body: body, reply: i === 0 ? r : null, channel: channel, x: /gif/i.test(x.type) && media.length === 1 ? { gif: 1 } : null, sendAt: at });
+          });
         });
       });
       chain.then(function () {
-        others.forEach(function (x, i) { sendNow({ file: x, asFile: true, body: !capOnPhotos && i === others.length - 1 ? caption : '', reply: !photos.length && i === 0 ? r : null, channel: channel }); });
+        others.forEach(function (x, i) { sendNow({ file: x, asFile: true, body: !capOnPhotos && i === others.length - 1 ? caption : '', reply: !media.length && i === 0 ? r : null, channel: channel, sendAt: at }); });
       });
-    };
+    }
     MP.dialog.open('ارسال', f, { focus: false });
     cap.focus();
   }
@@ -1543,11 +1982,11 @@
 
   /* ------------------------------------------------------------ Gallery (all photos of the chat, swipe between them) */
 
-  function gallery(startId) {
-    var photos = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return kindOf(m) === 'photo' && !m.deleted && m.file; }).sort(function (a, b) { return (typeof a.id === 'number' ? a.id : 1e15) - (typeof b.id === 'number' ? b.id : 1e15); });
+  function gallery(startId, fromEl) {
+    var photos = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return (kindOf(m) === 'photo' || kindOf(m) === 'video') && !m.deleted && m.file; }).sort(function (a, b) { return (typeof a.id === 'number' ? a.id : 1e15) - (typeof b.id === 'number' ? b.id : 1e15); });
     var i = Math.max(0, photos.map(function (m) { return m.id; }).indexOf(startId));
     if (!photos.length) return;
-    var img = el('img', { alt: '' }), cap = el('div', { class: 'gv-cap' }), count = el('span', { class: 'gv-n' });
+    var img = el('img', { alt: '' }), cap = el('div', { class: 'gv-cap' }), count = el('span', { class: 'gv-n' }), vid = null;
     var dl = el('a', { class: 'icon-btn gv-btn', 'aria-label': 'دانلود', html: icon('download'), target: '_blank', rel: 'noopener' });
     var v = el('div', { class: 'gv', role: 'dialog', 'aria-label': 'عکس‌ها' },
       el('div', { class: 'gv-top' }, el('button', { type: 'button', class: 'icon-btn gv-btn', 'aria-label': 'بستن', html: icon('close'), onclick: close }), count, el('span', { class: 'gv-sp' }),
@@ -1557,7 +1996,17 @@
       el('div', { class: 'gv-stage' }, img), cap);
     var z = MP.zoomable(img, $('.gv-stage', v));
     function show() {
-      var m = photos[i]; z.reset(); img.src = m.file.url;
+      var m = photos[i]; z.reset();
+      if (vid) { vid.pause(); vid.remove(); vid = null; }
+      if (kindOf(m) === 'video') {
+        img.hidden = true;
+        vid = el('video', { class: 'gv-video', src: m.file.url, controls: true, autoplay: true, playsinline: true, poster: m.x && m.x.thumb_url ? m.x.thumb_url : '' });
+        $('.gv-stage', v).append(vid);
+      } else {
+        img.hidden = false;
+        // The screen-sized copy is already cached: show it, then swap in the original.
+        if (m.file.mid) { img.src = m.file.mid; var full = new Image(); full.onload = function () { if (photos[i] === m) img.src = m.file.url; }; full.src = m.file.url; } else img.src = m.file.url;
+      }
       count.textContent = fa(i + 1) + ' از ' + fa(photos.length);
       cap.replaceChildren(el('b', { text: m.mine ? 'شما' : m.author }), el('small', { text: MP.relTime(m.created_at) }));
       if (m.body) cap.append(el('p', { text: m.body, dir: 'auto' }));
@@ -1571,9 +2020,14 @@
     v.addEventListener('pointerdown', function (e) { sx = z.zoomed() || e.target.closest('button, a') ? null : { x: e.clientX, y: e.clientY }; });
     v.addEventListener('pointerup', function (e) { if (!sx) return; var dx = e.clientX - sx.x, dy = e.clientY - sx.y; sx = null; if (z.touched()) return; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1); else if (dy > 120) close(); });
     var layer = MP.pushLayer(function () { layer = null; close(); });
-    function close() { document.removeEventListener('keydown', key); v.remove(); if (layer) { var l = layer; layer = null; MP.popLayer(l); } }
+    function close() { if (vid) vid.pause(); document.removeEventListener('keydown', key); v.classList.add('out'); setTimeout(function () { v.remove(); }, 160); if (layer) { var l = layer; layer = null; MP.popLayer(l); } }
     document.addEventListener('keydown', key);
     document.body.append(v); show();
+    // Opens from the photo's own place (Telegram's zoom-in).
+    if (fromEl && fromEl.getBoundingClientRect && v.animate && !document.documentElement.classList.contains('reduced-motion')) {
+      var r = fromEl.getBoundingClientRect(), sx = r.width / innerWidth, sy = r.height / innerHeight;
+      img.animate([{ transform: 'translate(' + (r.left + r.width / 2 - innerWidth / 2) + 'px,' + (r.top + r.height / 2 - innerHeight / 2) + 'px) scale(' + Math.max(sx, sy) + ')', opacity: .6 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
   }
 
   /* ------------------------------------------------------------ Chat info: members, media, files, links, voice */
