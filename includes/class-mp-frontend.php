@@ -370,7 +370,7 @@ JS;
 		header( 'Service-Worker-Allowed: /' );
 		header( 'Cache-Control: no-cache' );
 		$assets = array();
-		foreach ( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'js/pwa.js', 'js/pins.js', 'js/viewer.js', 'js/client.js' ) as $a ) {
+		foreach ( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'js/pwa.js', 'js/pins.js', 'js/viewer.js', 'js/emoji-map.js', 'js/client-chat.js', 'js/client.js' ) as $a ) {
 			$assets[] = MP_URL . 'assets/' . $a . ( 0 === strpos( $a, 'fonts/' ) ? '' : '?ver=' . MP_VERSION );
 		}
 		echo 'const CACHE=' . wp_json_encode( 'mpc-' . MP_VERSION ) . ',ASSETS=' . wp_json_encode( $assets ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ',WAPI=' . wp_json_encode( rest_url( 'moraba-panel/v1/widget' ) ) . ";\n"; // phpcs:ignore

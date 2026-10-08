@@ -80,11 +80,23 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 					<span class="cp-client-logo sm" id="cp-chat-client"></span>
 				</header>
 				<div id="chat-messages" class="chat-messages cp-messages"></div>
-				<form id="client-form" class="cp-composer">
+				<button type="button" class="chat-down" id="cp-down" hidden aria-label="رفتن به آخرین پیام"><svg class="icon" aria-hidden="true"><use href="#down"></use></svg></button>
+				<form id="client-form" class="composer cp-composer2">
 					<input name="name" class="cp-name" placeholder="نام شما" maxlength="80" autocomplete="name" hidden>
-					<div class="cp-compose-row">
-						<textarea name="message" rows="1" placeholder="پیام خود را بنویسید…" required maxlength="2000"></textarea>
-						<button class="cp-send" type="submit" aria-label="ارسال"><svg class="icon" aria-hidden="true"><use href="#send"></use></svg></button>
+					<div class="compose-ctx" id="cp-ctx" hidden><span class="cc-ico" id="cp-cc-ico"></span><span class="cc-copy"><b id="cp-cc-title"></b><small id="cp-cc-text"></small></span><button type="button" class="icon-btn sm" id="cp-cc-x" aria-label="لغو"><svg class="icon" aria-hidden="true"><use href="#close"></use></svg></button></div>
+					<div class="emoji-pop" id="cp-emoji-pop" hidden></div>
+					<div class="composer-row">
+						<button type="button" class="icon-btn composer-clip" id="cp-clip" title="پیوست عکس یا فایل" aria-label="پیوست عکس یا فایل"><svg class="icon" aria-hidden="true"><use href="#clip"></use></svg></button>
+						<input type="file" id="cp-file" class="visually-hidden" multiple tabindex="-1" aria-hidden="true">
+						<div class="composer-input"><textarea name="message" rows="1" placeholder="پیام…" maxlength="4000" aria-label="متن پیام"></textarea><button type="button" class="composer-emoji" id="cp-emoji" aria-label="ایموجی"><svg class="icon" aria-hidden="true"><use href="#smile"></use></svg></button></div>
+						<button type="button" class="icon-btn lg composer-mic" id="cp-mic" aria-label="ضبط پیام صوتی" title="پیام صوتی"><svg class="icon" aria-hidden="true"><use href="#mic"></use></svg></button>
+						<button type="submit" class="icon-btn accent lg composer-send" aria-label="ارسال"><svg class="icon" aria-hidden="true"><use href="#send"></use></svg></button>
+					</div>
+					<div class="rec-bar" id="cp-rec-bar" hidden>
+						<button type="button" class="icon-btn danger" id="cp-rec-cancel" aria-label="لغو ضبط"><svg class="icon" aria-hidden="true"><use href="#trash"></use></svg></button>
+						<span class="rec-dot" aria-hidden="true"></span><span class="rec-time" id="cp-rec-time">۰:۰۰</span>
+						<span class="rec-wave" id="cp-rec-wave" aria-hidden="true"></span>
+						<button type="button" class="icon-btn accent lg" id="cp-rec-send" aria-label="ارسال پیام صوتی"><svg class="icon" aria-hidden="true"><use href="#send"></use></svg></button>
 					</div>
 				</form>
 			</div>
@@ -97,6 +109,8 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <script>window.MP_CLIENT = <?php echo wp_json_encode( array( 'url' => esc_url_raw( rest_url( MP_Rest::NS . '/client/' . $token ) ) ) ); ?>;</script>
 <script src="<?php echo MP_Frontend::asset( 'js/pins.js' ); // phpcs:ignore ?>"></script>
 <script src="<?php echo MP_Frontend::asset( 'js/viewer.js' ); // phpcs:ignore ?>"></script>
+<script src="<?php echo MP_Frontend::asset( 'js/emoji-map.js' ); // phpcs:ignore ?>"></script>
+<script src="<?php echo MP_Frontend::asset( 'js/client-chat.js' ); // phpcs:ignore ?>"></script>
 <script src="<?php echo MP_Frontend::asset( 'js/client.js' ); // phpcs:ignore ?>"></script>
 <?php echo MP_Frontend::client_pwa_script( $token, $mp_ch && $mp_ch->client_name ? $mp_ch->client_name : $mp_t ); // phpcs:ignore ?>
 </body>

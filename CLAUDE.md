@@ -1,11 +1,11 @@
 # Moraba Panel (WordPress plugin `moraba-panel`)
 
 Persian (RTL) staff panel «مربع آفیس» + client portal for a design studio. PHP 7.4+, vanilla JS, no build step.
-Active branch: `claude/kind-wright-cxk6d0`. Reply to the owner in Persian; say plainly what was and wasn't tested.
+Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; say plainly what was and wasn't tested.
 
 ## Release routine (every change)
 1. Bump the version in `moraba-panel.php` (header `Version:` and `MP_VERSION`); bump `MP_DB_VERSION` when tables/columns change (`dbDelta` in `includes/class-mp-install.php` runs on upgrade).
-2. Commit, push `git push -u origin claude/kind-wright-cxk6d0`.
+2. Commit, push `git push -u origin claude/awesome-hopper-84p492`.
 3. Zip for the owner: `git archive HEAD` into a folder named `moraba-panel/`, then zip that folder (the owner installs it through WordPress).
 
 ## Layout
@@ -13,19 +13,20 @@ Active branch: `claude/kind-wright-cxk6d0`. Reply to the owner in Persian; say p
 - `includes/` — one class per area:
   - `class-mp-rest.php` tasks, projects, channels/messages, reminders; `class-mp-rest-work.php` files, attendance, leaves.
   - `class-mp-chat.php` Telegram-style chat extras (polls, topics, roles, invite links, scheduled, stickers, edit history, «delete for me», cards, AI summary/translate); `class-mp-live.php` the live connection (`GET live`: SSE, `?mode=poll` held-request fallback; a version file + newest message id, `MP_Live::bump()` after any chat change).
-  - `class-mp-client.php` client groups/portal auth, `class-mp-portal.php` portal data (designs, pins, invoices…).
+  - `class-mp-client.php` client groups/portal auth (+ per-group «اجازه‌های مشتری»: `client_tasks` in `channels.settings`, `POST client/{token}/tasks`), `class-mp-portal.php` portal data (designs, pins, invoices…).
+  - `class-mp-client-chat.php` the portal chat (files of any format in pieces, reply, edit/delete own, reactions, reads, typing); a client person gets a stand-in user id (`PSEUDO + contact id`, or `GUEST + hash` of the browser key header `X-MP-Client-Key`) for reactions/reads/typing; own messages carry `extra.cc`/`extra.ck`.
   - `class-mp-invoices.php` invoices + Zibal/ZarinPal, `class-mp-contracts.php` contracts (templates, two-party signing, PDF).
   - `class-mp-meet.php` video meetings (rooms, waiting room, invites, recording, minutes, stats, reminders),
     `class-mp-relay.php` + root `relay.php` media relay (no STUN/TURN needed; relay.php runs without WordPress).
   - `class-mp-backup.php` export/import, granular reset (`RESET_ITEMS`), factory reset.
   - `class-mp-chat.php` Telegram-style chat on top of MP_Rest's channels/messages: reply, edit, reactions (`reactions` table), pinned message (`channels.pinned_msg`), forward, «saved messages» (channel type `saved`), mute (user meta `mp_mutes`), @mentions, search, media tabs, link preview, «seen by»; `list_messages` with `wait=1&sig=` holds up to ~6 s until the chat changes (needs a host that runs PHP requests in parallel; the test server needs `PHP_CLI_SERVER_WORKERS=6`).
   - `class-mp-chat.php` Telegram-style chat extras (edit, reactions, pin, forward, search, media, link preview) + `chat-upload`:
-    chat files go up in 1.5 MB pieces (`MP.uploadChunked`), so no host upload/size limit applies.
+    chat files go up in 1.5 MB pieces (`MP.uploadChunked`), so no host upload/size limit applies; any format is accepted (unknown types are stored on disk as `.bin`, `application/octet-stream`, always downloaded).
     Apple emoji ship as one sprite `assets/emoji/apple.webp` (48px tiles, 40 per row) indexed by `assets/js/emoji-map.js`.
   - `class-mp-widget.php` home-screen widgets API (`widget` GET summary / POST punch·done·undo, `widget/devices` pairing codes kept hashed in user meta `mp_widget_devices`).
   - `class-mp-install.php` schema, `class-mp-frontend.php` routes (`/panel`, `/c/{token}` portal, `/i/` invoice, `/k/` contract, `/m/` meeting).
 - `templates/` — `panel.php` (staff app shell + views), `client.php` (portal), `meet.php` (meeting room), `contract.php`, `login.php`, `sprite.svg` (icons; element ids must not clash with symbol ids).
-- `assets/js/` — `core.js` (MP.el, MP.api, MP.dialog, MP.field, MP.dateField (Jalali), MP.peoplePicker…), one file per view (`tasks.js`, `projects.js`, `messages.js`, `meetings.js`, …), `viewer.js` (`MPViewer`: full-screen photo viewer with a thumbnail strip, used by the chat gallery, `MP.lightbox` and the portal chat; loaded in panel + portal), `chat-kit.js` (chat formatting, photo editor, polls, place/contact, round video, «send later»; loaded before messages.js), `client.js` (portal), `meet.js` (meeting room: WebCodecs Opus/H.264/VP8 with μ-law/JPEG fallback, loopback echo cancellation, chat, design review, recording).
+- `assets/js/` — `core.js` (MP.el, MP.api, MP.dialog, MP.field, MP.dateField (Jalali), MP.peoplePicker…), one file per view (`tasks.js`, `projects.js`, `messages.js`, `meetings.js`, …), `viewer.js` (`MPViewer`: full-screen photo viewer with a thumbnail strip, used by the chat gallery, `MP.lightbox` and the portal chat; loaded in panel + portal), `chat-kit.js` (chat formatting, photo editor, polls, place/contact, round video, «send later»; loaded before messages.js), `client.js` (portal), `client-chat.js` (`MPClientChat`: the portal chat, same markup/CSS classes as the panel chat), `meet.js` (meeting room: WebCodecs Opus/H.264/VP8 with μ-law/JPEG fallback, loopback echo cancellation, chat, design review, recording).
 - `assets/css/app.css` (panel + portal, dark default), `assets/css/meet.css` (meeting room).
 - Widgets (profile menu → «ویجت‌ها روی صفحه اصلی», `assets/js/widgets.js`):
   - Android: `apps/android/` plain-Java app (no Gradle/AndroidX), four widgets (tasks card, attendance with live Chronometer, messages, next meeting).

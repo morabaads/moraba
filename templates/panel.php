@@ -228,7 +228,7 @@ $mp_nav = array(
 			<div class="toolbar">
 				<label class="search grow"><?php echo $mp_i( 'search' ); // phpcs:ignore ?><input type="search" id="mt-q" placeholder="جستجوی تسک، پروژه یا بخش…" aria-label="جستجو"></label>
 				<select class="select" id="mt-status" aria-label="وضعیت"><option value="open">باز</option><option value="all">همه وضعیت‌ها</option><option value="done">انجام شده</option><option value="archived">آرشیو</option></select>
-				<select class="select" id="mt-source" aria-label="منبع"><option value="all">همه منابع</option><option value="manager">تعیین‌شده توسط ناظر</option><option value="self">شخصی</option></select>
+				<select class="select" id="mt-source" aria-label="منبع"><option value="all">همه منابع</option><option value="manager">تعیین‌شده توسط ناظر</option><option value="self">شخصی</option><option value="client">از طرف مشتری</option></select>
 				<select class="select" id="mt-range" aria-label="موعد"><option value="all">همه موعدها</option><option value="overdue">عقب‌افتاده</option><option value="today">امروز</option><option value="week">این هفته</option><option value="month">این ماه</option></select>
 				<span class="toolbar-count" id="mt-count"></span>
 			</div>
@@ -339,7 +339,7 @@ $mp_nav = array(
 							<input type="file" id="composer-file" class="visually-hidden" multiple tabindex="-1" aria-hidden="true">
 							<input type="file" id="composer-media" class="visually-hidden" multiple accept="image/*,video/*" tabindex="-1" aria-hidden="true">
 							<input type="file" id="composer-camera" class="visually-hidden" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
-							<input type="file" id="composer-doc" class="visually-hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip,.rar,.7z,.psd,.ai,.eps,.svg,.cdr,.indd,.fig,.sketch,.xd,.mp3,.wav,.m4a,.mp4,.mov,.png,.jpg,.jpeg,.webp,.gif,application/*,text/*" tabindex="-1" aria-hidden="true">
+							<input type="file" id="composer-doc" class="visually-hidden" multiple tabindex="-1" aria-hidden="true">
 							<div class="composer-input"><textarea id="composer-text" rows="1" placeholder="پیام… (Enter ارسال، Shift+Enter خط جدید)" maxlength="4000" aria-label="متن پیام"></textarea><button type="button" class="composer-emoji" id="composer-emoji" aria-label="ایموجی"><?php echo $mp_i( 'smile' ); // phpcs:ignore ?></button></div>
 							<button type="button" class="icon-btn lg composer-mic" id="composer-mic" aria-label="ضبط پیام صوتی" title="پیام صوتی"><?php echo $mp_i( 'mic' ); // phpcs:ignore ?></button>
 							<button type="submit" class="icon-btn accent lg composer-send" aria-label="ارسال"><?php echo $mp_i( 'send' ); // phpcs:ignore ?></button>

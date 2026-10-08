@@ -225,7 +225,7 @@ class MP_Rest {
 		if ( MP_Util::is_manager() ) {
 			return true;
 		}
-		return (int) $task->user_id === self::uid() && 'self' === $task->source;
+		return (int) $task->user_id === self::uid() && in_array( $task->source, array( 'self', 'client' ), true );
 	}
 
 	public static function can_view_task( $task ) {
@@ -1810,11 +1810,11 @@ class MP_Rest {
 	/* ------------------------------------------------------------------ Client group (public, by token) */
 
 	/** At most 20 client posts (messages, design notes) per IP and group every 10 minutes. */
-	public static function client_rate_ok( $channel_id ) {
+	public static function client_rate_ok( $channel_id, $limit = 20 ) {
 		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-		$key = 'mp_client_rate_' . md5( $ip . $channel_id );
+		$key = 'mp_client_rate_' . md5( $ip . $channel_id . '|' . $limit );
 		$n   = (int) get_transient( $key );
-		if ( $n >= 20 ) {
+		if ( $n >= $limit ) {
 			return false;
 		}
 		set_transient( $key, $n + 1, 10 * MINUTE_IN_SECONDS );
@@ -1826,70 +1826,13 @@ class MP_Rest {
 		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND token = %s AND archived_at IS NULL", $token ) );
 	}
 
+	/** The portal chat lives in MP_Client_Chat. */
 	public static function client_messages( WP_REST_Request $r ) {
-		global $wpdb;
-		$ch = self::client_channel( $r['token'] );
-		if ( ! $ch ) {
-			return self::err( 'این گروه وجود ندارد یا حذف شده است.', 404 );
-		}
-		$gate = MP_Client::gate( $ch );
-		if ( $gate ) {
-			return $gate;
-		}
-		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM (SELECT * FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d AND id > %d AND deleted_at IS NULL ORDER BY id DESC LIMIT 200) x ORDER BY id', $ch->id, (int) $r['after'] ) );
-		$out  = array();
-		foreach ( $rows as $m ) {
-			$u     = $m->user_id ? get_userdata( $m->user_id ) : null;
-			$out[] = array(
-				'id'         => (int) $m->id,
-				'author'     => $u ? $u->display_name : ( ! empty( $m->kind ) ? 'مربع استودیو' : ( $m->guest_name ? $m->guest_name : $ch->client_name ) ),
-				'team'       => (bool) $m->user_id,
-				'body'       => $m->body,
-				'file'       => $m->file_id ? self::client_file( $m->file_id, $ch->token ) : null,
-				'created_at' => $m->created_at,
-				'x'          => MP_Chat::x_client( $m ),
-			) + MP_Client::msg_extra( $m );
-		}
-		return array( 'title' => $ch->title, 'client' => $ch->client_name, 'messages' => $out );
-	}
-
-	private static function client_file( $id, $token ) {
-		$p = MP_Files::payload( MP_Files::get( $id ) );
-		if ( $p ) {
-			$p['url'] = add_query_arg( 't', $token, $p['url'] );
-		}
-		return $p;
+		return MP_Client_Chat::messages( $r );
 	}
 
 	public static function client_send( WP_REST_Request $r ) {
-		global $wpdb;
-		$ch = self::client_channel( $r['token'] );
-		if ( ! $ch ) {
-			return self::err( 'این گروه وجود ندارد یا حذف شده است.', 404 );
-		}
-		$gate = MP_Client::gate( $ch );
-		if ( $gate ) {
-			return $gate;
-		}
-		if ( MP_Client::is_preview( $ch ) ) {
-			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
-		}
-		if ( ! self::client_rate_ok( $ch->id ) ) {
-			return self::err( 'تعداد پیام‌ها زیاد است؛ چند دقیقه بعد دوباره تلاش کنید.', 429 );
-		}
-		$body = MP_Util::long_text( $r['body'], 2000 );
-		if ( '' === trim( $body ) ) {
-			return self::err( 'متن پیام را بنویسید.' );
-		}
-		$name = MP_Client::author( $ch, $r['name'] );
-		$wpdb->insert(
-			self::t( 'messages' ),
-			array( 'channel_id' => $ch->id, 'user_id' => 0, 'guest_name' => $name, 'body' => $body, 'created_at' => MP_Util::now() )
-		);
-		foreach ( self::channel_members( $ch ) as $member ) {
-			MP_Notify::event( 'message_client', $member, array( 'GROUP' => $ch->title, 'PREVIEW' => wp_trim_words( $body, 12 ) ), 'messages', $ch->id );
-		}
-		return array( 'sent' => true );
+		return MP_Client_Chat::send( $r );
 	}
 
 	/* ------------------------------------------------------------------ Reminders */

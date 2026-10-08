@@ -110,6 +110,7 @@ class MP_Messages {
 			'message_direct'     => $n( 'team', 'پیام خصوصی جدید', 'طرف گفت‌وگو', 'message', 'پیام جدید از #ACTOR#', '#PREVIEW#', array( 'ACTOR', 'PREVIEW' ) ),
 			'message_mention'    => $n( 'team', 'منشن در گفت‌وگو (@نام)', 'فردی که صدا زده شده', 'message', '#ACTOR# در «#GROUP#» شما را صدا زد', '#PREVIEW#', array( 'ACTOR', 'GROUP', 'PREVIEW' ) ),
 			'message_reply'      => $n( 'team', 'پاسخ به پیام شما در گروه', 'نویسنده پیام', 'message', '#ACTOR# در «#GROUP#» به پیام شما پاسخ داد', '#PREVIEW#', array( 'ACTOR', 'GROUP', 'PREVIEW' ) ),
+			'task_client'        => $n( 'team', 'تسک جدید از طرف مشتری', 'اعضای گروه مشتری', 'task', '#CLIENT# در «#GROUP#» تسک اضافه کرد', '#TASK#', array( 'CLIENT', 'GROUP', 'TASK' ) ),
 			'message_client'     => $n( 'team', 'پیام جدید مشتری', 'اعضای گروه مشتری', 'message', 'پیام جدید مشتری در «#GROUP#»', '#PREVIEW#', array( 'GROUP', 'PREVIEW' ) ),
 			'meet_invite'        => $n( 'meetings', 'دعوت به جلسه', 'شرکت‌کنندگان', 'meeting', '#ACTOR# شما را به جلسه «#TITLE#» دعوت کرد', '#WHEN#', array( 'ACTOR', 'TITLE', 'WHEN' ), array( 'important' => 'مهم (اگر کارمند اعلان مهم را خاموش نکرده باشد)' ) ),
 			'meet_moved'         => $n( 'meetings', 'تغییر زمان جلسه', 'شرکت‌کنندگان', 'meeting', 'زمان جلسه «#TITLE#» تغییر کرد', '#WHEN#', array( 'TITLE', 'WHEN' ), array( 'important' => 'مهم (اگر کارمند اعلان مهم را خاموش نکرده باشد)' ) ),

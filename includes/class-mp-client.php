@@ -38,6 +38,7 @@ class MP_Client {
 			array( "$tok/login/request", 'POST', 'login_request', '__return_true' ),
 			array( "$tok/login/verify", 'POST', 'login_verify', '__return_true' ),
 			array( "$tok/logout", 'POST', 'logout', '__return_true' ),
+			array( "$tok/tasks", 'POST', 'add_task', '__return_true' ),
 		);
 		foreach ( $routes as $r ) {
 			register_rest_route( MP_Rest::NS, '/' . $r[0], array( 'methods' => $r[1], 'callback' => array( __CLASS__, $r[2] ), 'permission_callback' => $r[3] ) );
@@ -220,7 +221,79 @@ class MP_Client {
 			'logged_in'     => (bool) $s,
 			'name'          => $s ? $s->name : '',
 			'sms'           => MP_Auth::otp_enabled(),
+			'can_add_task'  => self::can_add_task( $ch ),
 		);
+	}
+
+	/** The team let this group's client add tasks (and the group has a project to add them to). */
+	public static function can_add_task( $ch ) {
+		return $ch && $ch->project_id && MP_Chat::settings( $ch )['client_tasks'];
+	}
+
+	/**
+	 * POST client/{token}/tasks {title, description?, date?} — the client adds a task to the project, when the
+	 * team allowed it for this group. It goes to the group's maker (else the project's first member), shows
+	 * «از طرف مشتری», and the group's colleagues get a notification and a line in the chat.
+	 */
+	public static function add_task( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch   = self::channel( $r['token'] );
+		$gate = self::gate( $ch );
+		if ( $gate ) {
+			return $gate;
+		}
+		if ( self::is_preview( $ch ) ) {
+			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
+		}
+		if ( ! self::can_add_task( $ch ) ) {
+			return self::err( 'افزودن کار برای این پرتال فعال نیست.', 403 );
+		}
+		if ( ! MP_Rest::client_rate_ok( $ch->id . 't', 20 ) ) {
+			return self::err( 'تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کنید.', 429 );
+		}
+		$title = MP_Util::text( $r['title'], 200 );
+		if ( '' === $title ) {
+			return self::err( 'عنوان کار را بنویسید.' );
+		}
+		$date = (string) $r['date'];
+		if ( ! preg_match( '/^\d{4}-\d\d-\d\d$/', $date ) || $date < MP_Util::today() ) {
+			$date = MP_Util::today();
+		}
+		$owner = MP_Util::is_panel_user( (int) $ch->created_by ) ? (int) $ch->created_by : 0;
+		if ( ! $owner ) {
+			foreach ( MP_Util::project_members( $ch->project_id ) as $m ) {
+				if ( MP_Util::is_panel_user( $m ) ) {
+					$owner = $m;
+					break;
+				}
+			}
+		}
+		if ( ! $owner ) {
+			return self::err( 'این پروژه مسئولی ندارد؛ با تیم تماس بگیرید.', 409 );
+		}
+		$who  = self::author( $ch, $r['name'] );
+		$desc = MP_Util::long_text( $r['description'], 2000 );
+		$wpdb->insert(
+			self::t( 'tasks' ),
+			array(
+				'user_id'     => $owner,
+				'title'       => $title,
+				'description' => trim( $desc . "\n\n— از طرف مشتری: " . $who ),
+				'task_date'   => $date,
+				'project_id'  => (int) $ch->project_id,
+				'source'      => 'client',
+				'created_at'  => MP_Util::now(),
+				'updated_at'  => MP_Util::now(),
+			)
+		);
+		$id = (int) $wpdb->insert_id;
+		MP_Audit::log( 'create', 'task', $id, '«' . $title . '» از طرف مشتری ' . $who . ' در پرتال «' . $ch->title . '»' );
+		foreach ( MP_Rest::channel_members( $ch ) as $member ) {
+			MP_Notify::event( 'task_client', $member, array( 'CLIENT' => $who, 'GROUP' => $ch->title, 'TASK' => $title ), 'calendar', $id );
+		}
+		self::system( $ch->id, 0, $who . ' کار «' . $title . '» را اضافه کرد', array( 't' => 'task', 'id' => $id ) );
+		MP_Live::bump();
+		return array( 'id' => $id, 'title' => $title, 'date' => $date );
 	}
 
 	private static function otp_key( $ch, $mobile ) {
@@ -341,6 +414,7 @@ class MP_Client {
 			'staff'         => self::staff_payload( $ch ),
 			'can_staff'     => MP_Util::is_manager() || (int) $ch->created_by === get_current_user_id(),
 			'manager'       => MP_Util::is_manager(),
+			'client_tasks'  => MP_Chat::settings( $ch )['client_tasks'],
 		);
 	}
 
@@ -651,6 +725,13 @@ class MP_Client {
 			if ( $pid && $ch->client_id ) {
 				self::customer_id( '', (int) $ch->client_id, $pid );
 			}
+		}
+		if ( null !== $r['client_tasks'] ) {
+			$s = ! empty( $ch->settings ) ? json_decode( $ch->settings, true ) : array();
+			$s = is_array( $s ) ? $s : array();
+			$s['client_tasks'] = $r['client_tasks'] && 'false' !== $r['client_tasks'] ? 1 : 0;
+			$f['settings']     = wp_json_encode( $s, JSON_UNESCAPED_UNICODE );
+			MP_Audit::log( 'update', 'channel', $ch->id, ( $s['client_tasks'] ? 'اجازه افزودن کار به مشتری' : 'برداشتن اجازه افزودن کار از مشتری' ) . ' در «' . $ch->title . '»' );
 		}
 		if ( null !== $r['title'] && '' !== trim( (string) $r['title'] ) ) {
 			$f['title'] = MP_Util::text( $r['title'], 160 );

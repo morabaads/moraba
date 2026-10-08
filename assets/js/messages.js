@@ -1647,7 +1647,7 @@
 
   /* ------------------------------------------------------------ Sending (optimistic, ordered, with an offline queue) */
 
-  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit' };
+  var SYS_ICON = { task: 'tasks', design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit' };
   var seq = 0, queue = Promise.resolve();
   function nowStamp() { var d = new Date(); return S.today + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
   /** o: {body, file, transcript, reply, album, asFile, channel, x, silent, sendAt, stickerId, thumb, quote} */
@@ -2858,6 +2858,18 @@
               MP.field('پروژه', proj), MP.field('نام مشتری', client), MP.field('نام گروه', title),
               el('button', { type: 'button', class: 'btn btn-secondary btn-sm cs-save', text: 'ذخیره نام‌ها', onclick: function () { save({ title: title.value, client_name: client.value }, 'ذخیره شد'); } })),
             staffCard(d),
+            el('section', { class: 'cs-card' },
+              el('header', null, el('span', { class: 'cs-ico', html: icon('tasks') }), el('div', null, el('h3', { text: 'اجازه‌های مشتری' }), el('small', { text: 'برای همین پرتال؛ هر وقت خواستید عوضش کنید.' }))),
+              (function () {
+                var tk = el('input', { type: 'checkbox', checked: !!d.client_tasks, disabled: d.project_id ? null : '' });
+                tk.onchange = function () {
+                  MP.api('channels/' + c.id + '/client', { method: 'POST', body: { client_tasks: tk.checked } })
+                    .then(function (n) { MP.toast(n.client_tasks ? 'مشتری از این به بعد می‌تواند کار اضافه کند' : 'اجازه افزودن کار برداشته شد'); draw(n); })
+                    .catch(function (err) { tk.checked = !tk.checked; MP.soft(err); });
+                };
+                return el('div', null, el('label', { class: 'check' }, tk, el('span', { text: 'مشتری بتواند در پرتال کار (تسک) اضافه کند' })),
+                  el('p', { class: 'hint', text: d.project_id ? 'کارهای مشتری در همین پروژه، به نام سازنده گروه و با برچسب «از طرف مشتری» ساخته می‌شوند و اعضای گروه اعلان می‌گیرند.' : 'اول گروه را به یک پروژه وصل کنید.' }));
+              })()),
             el('section', { class: 'cs-card' },
               el('header', null, el('span', { class: 'cs-ico', html: icon('lock') }), el('div', null, el('h3', { text: 'امنیت ورود' }))),
               d.sms ? el('p', { class: 'cs-note', text: 'ورود همیشه با شماره موبایل و کد یک‌بارمصرف است؛ فقط شماره‌های ثبت‌شده وارد می‌شوند و ۳۰ روز وارد می‌مانند.' })

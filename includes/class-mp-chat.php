@@ -204,8 +204,8 @@ class MP_Chat {
 			++$groups[ $x->emoji ]['count'];
 			$groups[ $x->emoji ]['mine'] = $groups[ $x->emoji ]['mine'] || (int) $x->user_id === (int) $uid;
 			if ( count( $groups[ $x->emoji ]['names'] ) < 5 ) {
-				$u                              = get_userdata( $x->user_id );
-				$groups[ $x->emoji ]['names'][] = $u ? $u->display_name : '';
+				$u                              = MP_Client_Chat::is_pseudo( $x->user_id ) ? null : get_userdata( $x->user_id );
+				$groups[ $x->emoji ]['names'][] = $u ? $u->display_name : ( MP_Client_Chat::is_pseudo( $x->user_id ) ? MP_Client_Chat::pseudo_name( $x->user_id ) : '' );
 			}
 		}
 		$reply = null;
@@ -624,6 +624,10 @@ class MP_Chat {
 		$out = array();
 		foreach ( MP_Rest::channel_reads( $ch->id ) as $who => $last ) {
 			if ( $last >= (int) $m->id && (int) $who !== (int) $m->user_id ) {
+				if ( MP_Client_Chat::is_pseudo( $who ) ) {
+					$out[] = array( 'id' => 0, 'name' => MP_Client_Chat::pseudo_name( $who ), 'avatar' => '' );
+					continue;
+				}
 				$u = get_userdata( $who );
 				if ( $u ) {
 					$out[] = array( 'id' => (int) $who, 'name' => $u->display_name, 'avatar' => MP_Util::avatar_url( $who ) );
@@ -847,11 +851,19 @@ class MP_Chat {
 	 * checks the whole file's type and stores it like any other message file.
 	 */
 	public static function chunk( WP_REST_Request $r ) {
-		global $wpdb;
 		$cid = (int) $r['context_id'];
 		if ( ! MP_Rest::can_read_channel( $cid ) ) {
 			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
 		}
+		return self::chunk_into( $r, $cid, (string) self::uid(), self::uid() );
+	}
+
+	/**
+	 * One piece of a chat file for channel $cid; $who keeps one sender's pieces apart from another's,
+	 * $owner is the file's user_id (0 for a client in the portal).
+	 */
+	public static function chunk_into( WP_REST_Request $r, $cid, $who, $owner ) {
+		global $wpdb;
 		$up    = preg_replace( '/[^a-z0-9]/i', '', (string) $r['upload'] );
 		$i     = (int) $r['index'];
 		$total = (int) $r['total'];
@@ -863,7 +875,7 @@ class MP_Chat {
 		}
 		$dir = MP_Files::dir() . '/chunks';
 		wp_mkdir_p( $dir );
-		$part = $dir . '/' . self::uid() . '-' . substr( $up, 0, 40 ) . '.part';
+		$part = $dir . '/' . preg_replace( '/[^a-z0-9]/i', '', $who ) . '-' . substr( $up, 0, 40 ) . '.part';
 		$next = $part . '.next';
 		if ( 0 === $i ) {
 			// Old unfinished uploads (a day) are cleared now and then.
@@ -900,8 +912,9 @@ class MP_Chat {
 			$check = wp_check_filetype_and_ext( $part, $name, MP_Files::TYPES + self::MORE_TYPES );
 		}
 		if ( empty( $check['ext'] ) || empty( $check['type'] ) ) {
-			@unlink( $part ); // phpcs:ignore
-			return self::err( 'این نوع فایل مجاز نیست. عکس، ویدیو، PDF، ورد، اکسل، پاورپوینت، فایل طراحی (PSD/AI) یا فایل فشرده بفرستید.' );
+			// Any other format is welcome too; it is kept on disk as .bin (never runnable on the host) and
+			// always downloads under its own name.
+			$check = array( 'ext' => 'bin', 'type' => 'application/octet-stream' );
 		}
 		$sub = gmdate( 'Y/m' );
 		wp_mkdir_p( MP_Files::dir() . '/' . $sub );
@@ -914,7 +927,7 @@ class MP_Chat {
 		$wpdb->insert(
 			MP_Install::table( 'files' ),
 			array(
-				'user_id'    => self::uid(),
+				'user_id'    => (int) $owner,
 				'context'    => 'message',
 				'context_id' => $cid,
 				'name'       => $name,
@@ -1137,6 +1150,8 @@ class MP_Chat {
 			'topics' => ! empty( $s['topics'] ) && in_array( $ch->type, array( 'group', 'project', 'client' ), true ),
 			'invite' => isset( $s['invite'] ) ? (string) $s['invite'] : '',
 			'desc'   => isset( $s['desc'] ) ? (string) $s['desc'] : '',
+			// Client groups: may the client add tasks to the project from the portal?
+			'client_tasks' => ! empty( $s['client_tasks'] ) && 'client' === $ch->type,
 		);
 	}
 

@@ -88,8 +88,8 @@ class MP_Live {
 			}
 			foreach ( $people as $u => $a ) {
 				if ( (int) $u !== (int) $uid && time() - $a[1] <= 6 ) {
-					$usr               = get_userdata( $u );
-					$out[ (int) $c ][] = array( 'user_id' => (int) $u, 'name' => $usr ? $usr->display_name : '', 'state' => $a[0] );
+					$usr               = MP_Client_Chat::is_pseudo( $u ) ? null : get_userdata( $u );
+					$out[ (int) $c ][] = array( 'user_id' => (int) $u, 'name' => $usr ? $usr->display_name : ( MP_Client_Chat::is_pseudo( $u ) ? MP_Client_Chat::pseudo_name( $u ) : '' ), 'state' => $a[0] );
 				}
 			}
 		}

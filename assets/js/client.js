@@ -241,7 +241,7 @@
         return h('li', { class: m.status + (now ? ' now' : '') }, [h('span', { class: 'dot', html: m.status === 'done' ? icon('check') : '' }), h('div', null, [h('strong', { text: m.title }), h('small', { text: jal(m.start, false) + ' تا ' + jal(m.end, false) + ' · ' + (m.status === 'done' ? 'انجام شد' : now ? 'در حال انجام' : PST[m.status] || '') })])]);
       }))]));
     }
-    if (tasks.length) pane.append(taskBoard(tasks, t));
+    if (tasks.length || canAddTask()) pane.append(taskBoard(tasks, t));
     var secs = p.sections.filter(function (s) { return s.total; });
     if (secs.length) pane.append(h('article', { class: 'cp-card' }, [h('h3', { class: 'cp-h', html: icon('grid') + '<span>پیشرفت بخش‌ها</span>' })].concat(secs.map(function (s) {
       var pc = Math.round(s.done / s.total * 100);
@@ -292,6 +292,36 @@
     ]);
   }
 
+  /* The team may let this client add tasks (group settings → «اجازه‌های مشتری»). */
+  function canAddTask() { return !!(me && me.can_add_task && !me.preview); }
+  function addTask() {
+    var title = h('input', { name: 'title', maxlength: '200', required: '', placeholder: 'مثلاً نسخه انگلیسی کارت ویزیت' });
+    var desc = h('textarea', { name: 'description', maxlength: '2000', placeholder: 'جزئیات، توضیح یا لینک (اختیاری)' });
+    var t = today(), opts = [];
+    for (var i = 0; i < 60; i++) {
+      var d = new Date(Date.parse(t + 'T12:00:00') + i * 864e5), iso = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      opts.push(h('option', { value: iso, text: (i === 0 ? 'امروز · ' : i === 1 ? 'فردا · ' : '') + jal(iso) }));
+    }
+    var date = h('select', { name: 'date' }, opts);
+    var shade, f = h('form', { class: 'cp-taskform' }, [
+      h('label', null, [document.createTextNode('عنوان کار'), title]),
+      h('label', null, [document.createTextNode('توضیحات'), desc]),
+      h('label', null, [document.createTextNode('تا چه روزی؟'), date]),
+      h('div', { class: 'cp-sheet-actions' }, [
+        h('button', { type: 'button', class: 'btn btn-ghost', text: 'انصراف', onclick: function () { shade.remove(); } }),
+        h('button', { type: 'submit', class: 'btn btn-primary', html: icon('plus') + 'ثبت کار' })])]);
+    f.onsubmit = function (e) {
+      e.preventDefault();
+      var b = f.querySelector('[type=submit]'); b.disabled = true;
+      api('/tasks', { title: title.value, description: desc.value, date: date.value, name: myName() })
+        .then(function () { shade.remove(); toast('کار ثبت شد؛ تیم مربع باخبر شد.'); refresh(); loadChat(false); })
+        .catch(function (err) { b.disabled = false; toast(err.message || 'ثبت نشد'); });
+    };
+    shade = h('div', { class: 'cp-sheet-shade', onclick: function (e) { if (e.target === shade) shade.remove(); } }, [
+      h('div', { class: 'cp-sheet', role: 'dialog', 'aria-modal': 'true' }, [h('h3', { text: 'افزودن کار به پروژه' }), h('p', { text: 'کار به برنامه پروژه اضافه می‌شود و تیم مربع همان لحظه خبردار می‌شود.' }), f])]);
+    document.body.append(shade);
+    setTimeout(function () { title.focus(); }, 50);
+  }
   /* The project's tasks by schedule: status of each, filters, and the checklist on tap. */
   var taskFilter = 'all', taskMore = false;
   var TST = { todo: 'انجام نشده', doing: 'در حال انجام', done: 'انجام شد', late: 'عقب افتاده' };
@@ -317,7 +347,7 @@
         var row = h('li', { class: 'cp-task ' + st });
         var head = h('button', { type: 'button', class: 'cp-task-head', 'aria-expanded': 'false', disabled: x.items.length ? null : '' }, [
           h('span', { class: 'cp-tdot', html: st === 'done' ? icon('check') : '' }),
-          h('span', { class: 'cp-tcopy' }, [h('strong', { text: x.title }), h('small', { text: [TST[st], x.time ? 'ساعت ' + fa(x.time) : '', x.section].filter(Boolean).join(' · ') })]),
+          h('span', { class: 'cp-tcopy' }, [h('strong', null, [document.createTextNode(x.title), x.client ? h('span', { class: 'chip brand cp-by', text: 'درخواست شما' }) : null]), h('small', { text: [TST[st], x.time ? 'ساعت ' + fa(x.time) : '', x.section].filter(Boolean).join(' · ') })]),
           x.items.length ? h('span', { class: 'cp-tcheck', text: fa(done) + '/' + fa(x.items.length) }) : null,
           x.items.length ? h('span', { class: 'cp-tchev', html: icon('down') }) : null
         ]);
@@ -335,7 +365,8 @@
         rows.append(row);
       });
       card.replaceChildren(
-        h('div', { class: 'cp-tasks-head' }, [h('h3', { class: 'cp-h', html: icon('tasks') + '<span>برنامه کارهای پروژه</span>' }), h('small', { text: fa(counts.done) + ' از ' + fa(counts.all) + ' کار انجام شده' + (counts.late ? ' · ' + fa(counts.late) + ' عقب افتاده' : '') })]),
+        h('div', { class: 'cp-tasks-head' }, [h('h3', { class: 'cp-h', html: icon('tasks') + '<span>برنامه کارهای پروژه</span>' }), h('small', { text: fa(counts.done) + ' از ' + fa(counts.all) + ' کار انجام شده' + (counts.late ? ' · ' + fa(counts.late) + ' عقب افتاده' : '') }),
+          canAddTask() ? h('button', { type: 'button', class: 'btn btn-primary btn-sm cp-sec-add', html: icon('plus') + 'افزودن کار', onclick: addTask }) : null]),
         filters,
         shown.length ? rows : h('p', { class: 'cp-tempty', text: 'کاری در این دسته نیست.' }),
         list.length > shown.length ? h('button', { type: 'button', class: 'btn btn-ghost btn-sm cp-tmore', text: 'نمایش ' + fa(list.length - shown.length) + ' کار دیگر', onclick: function () { taskMore = true; draw(); } }) : null
@@ -438,11 +469,10 @@
     })) : empty('video', 'جلسه‌ای تنظیم نشده', null));
   }
 
-  /* ------------------------------------------------------------ chat */
-  var box = $('chat-messages'), form = $('client-form'), lastDay = '', sending = Promise.resolve(), chatBusy = null;
+  /* ------------------------------------------------------------ chat (assets/js/client-chat.js) */
+  var form = $('client-form');
   function myName() { return me && me.name ? me.name : (form.elements.name.value.trim() || ''); }
-  function hm(s) { return fa(String(s || '').slice(11, 16)); }
-  var SYS_ICON = { design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit', meeting: 'video' };
+  var SYS_ICON = { task: 'tasks', design: 'eye', file: 'download', invoice: 'file', join: 'user', contract: 'edit', meeting: 'video' };
   function sysCard(m) {
     var t = m.meta && m.meta.t, act = null;
     if (t === 'meeting') act = h('button', { type: 'button', class: 'sys-link', text: 'جلسات', onclick: function () { go('meetings'); } });
@@ -454,89 +484,22 @@
     } });
     return h('div', { class: 'sys-msg' }, [h('span', { class: 'sys-ico', html: icon(SYS_ICON[t] || 'bell') }), h('p', { text: m.body }), act, h('time', { text: hm(m.created_at) })]);
   }
-  function loadChat(scroll) {
-    // One request at a time; a caller during a running one waits for it and then asks again.
-    if (chatBusy) return chatBusy.then(function () { return loadChat(scroll); });
-    chatBusy = fetchChat(scroll).then(function () { chatBusy = null; }, function () { chatBusy = null; });
-    return chatBusy;
-  }
-  /** The team's formatting (**bold**, __italic__, ~~strike~~, `code`, ||spoiler||, [text](link)) as nodes, never HTML. */
-  function fmt(t) {
-    var p = h('p'), re = /\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|~~([\s\S]+?)~~|`([^`\n]+)`|\|\|([\s\S]+?)\|\||\[([^\]\n]+)\]\(([^)\s]+)\)/g, last = 0, m;
-    while ((m = re.exec(t))) {
-      if (m.index > last) p.append(t.slice(last, m.index));
-      if (m[1]) p.append(h('strong', { text: m[1] })); else if (m[2]) p.append(h('em', { text: m[2] })); else if (m[3]) p.append(h('del', { text: m[3] }));
-      else if (m[4]) p.append(h('code', { text: m[4] })); else if (m[5]) p.append(h('span', { class: 'cp-spoiler', text: m[5], onclick: function () { this.classList.add('open'); } }));
-      else if (/^https?:\/\//.test(m[7])) p.append(h('a', { href: m[7], target: '_blank', rel: 'noopener', text: m[6] })); else p.append(m[6].replace(/^#/, ''));
-      last = m.index + m[0].length;
+  var chat = window.MPClientChat({
+    base: base, h: h, icon: icon, fa: fa, jal: jal, today: today, toast: toast, sysCard: sysCard,
+    myName: myName, isLogged: function () { return !!(me && me.logged_in); }, preview: function () { return !!(me && me.preview); },
+    team: function () { return (me && me.team) || 'تیم مربع'; },
+    empty: function () { return empty('chat', 'اولین پیام را بفرستید', 'تیم مربع همین‌جا پاسخ می‌دهد؛ عکس، ویس و هر نوع فایلی هم می‌توانید بفرستید.'); },
+    onStale: function () { refresh(); },
+    typing: function (list) {
+      var sub = $('cp-chat-sub');
+      if (!sub.dataset.base) sub.dataset.base = sub.textContent;
+      var t = list[0];
+      sub.textContent = t ? (t.name ? t.name.split(' ')[0] + ' ' : '') + (t.state === 'recording' ? 'در حال ضبط صدا…' : t.state === 'uploading' ? 'در حال فرستادن فایل…' : 'در حال نوشتن…') : sub.dataset.base;
+      sub.classList.toggle('cp-typing', !!t);
     }
-    if (last < t.length) p.append(t.slice(last));
-    return p;
-  }
-  function fetchChat(scroll) {
-    return api('?after=' + lastId).then(function (d) {
-      var near = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
-      if (!lastId && !d.messages.length && !box.querySelector('.bubble-row')) box.replaceChildren(empty('chat', 'اولین پیام را بفرستید', 'تیم مربع همین‌جا پاسخ می‌دهد.'));
-      // Polls and sends can overlap: a message already shown is never added again.
-      var first = !lastId, stale = false;
-      d.messages.filter(function (m) { return m.id > lastId; }).forEach(function (m) {
-        var tmp = box.querySelector('.bubble-row.b-pending'); if (tmp && !m.team) tmp.remove();
-        if (!lastId) box.replaceChildren();
-        lastId = Math.max(lastId, m.id);
-        var e = box.querySelector('.cp-empty'); if (e) e.remove();
-        var day = m.created_at.slice(0, 10);
-        if (day !== lastDay) { lastDay = day; box.append(h('div', { class: 'day-sep', text: day === today() ? 'امروز' : jal(day) })); }
-        if (m.kind === 'system') { if (!first && m.meta && m.meta.t !== 'join') stale = true; box.append(sysCard(m)); return; }
-        var mine = !m.team;
-        var b = h('div', { class: 'bubble' }, [h('span', { class: 'b-author', text: m.author + (m.team ? ' · ' + ((me && me.team) || 'تیم مربع') : '') })]);
-        var x = m.x || {};
-        if (x.poll) {
-          var tot = x.poll.counts.reduce(function (p, q) { return p + q; }, 0);
-          b.append(h('div', { class: 'cp-poll' }, [h('b', { text: '📊 ' + x.poll.q })].concat(x.poll.o.map(function (o, i) { var pct = tot ? Math.round(x.poll.counts[i] / tot * 100) : 0; return h('div', { class: 'cp-poll-o' }, [h('span', { text: o }), h('small', { text: fa(pct) + '٪' }), h('i', { style: 'width:' + pct + '%' })]); }))));
-        } else if (x.loc) b.append(h('a', { class: 'file-chip', href: 'https://www.google.com/maps?q=' + x.loc.lat + ',' + x.loc.lng, target: '_blank', rel: 'noopener', text: '📍 ' + (x.loc.label || 'موقعیت مکانی') }));
-        else if (x.contact) b.append(h('a', { class: 'file-chip', href: 'tel:' + x.contact.phone, text: '👤 ' + x.contact.name + ' · ' + fa(x.contact.phone) }));
-        else if (x.card) b.append(h('p', { class: 'cp-card', text: (x.card.t === 'task' ? '✅ ' : '📁 ') + x.card.title }));
-        if ((x.sticker || x.gif) && m.file) b.append(h('img', { class: 'b-img cp-stk', src: m.file.url, alt: '' }));
-        else if (m.file && /^video\//.test(m.file.mime || '')) b.append(h('video', { controls: '', preload: 'metadata', playsinline: '', src: m.file.url, class: 'b-img' + (x.round ? ' cp-round' : '') }));
-        else if (m.file && /^audio\//.test(m.file.mime || '')) b.append(h('audio', { controls: '', preload: 'metadata', src: m.file.url, class: 'b-audio' }));
-        else if (m.file && m.file.image) {
-          // Opens in the viewer with the chat's other photos as thumbnails underneath.
-          var ph = h('a', { class: 'cp-ph', href: m.file.url, target: '_blank', rel: 'noopener', 'data-mid': m.file.mid || '', 'data-thumb': m.file.thumb || '', 'data-name': m.file.name || '' }, [h('img', { class: 'b-img', src: m.file.mid || m.file.url, alt: m.file.name })]);
-          ph.addEventListener('click', function (e) {
-            if (!window.MPViewer) return;
-            e.preventDefault();
-            var all = Array.prototype.slice.call(box.querySelectorAll('a.cp-ph'));
-            MPViewer.open(all.map(function (a) { return { url: a.getAttribute('href'), mid: a.dataset.mid, thumb: a.dataset.thumb, name: a.dataset.name }; }), all.indexOf(this));
-          });
-          b.append(ph);
-        }
-        else if (m.file) b.append(h('a', { class: 'file-chip', href: m.file.url, target: '_blank', rel: 'noopener', html: icon('clip') + '<span></span>' }));
-        if (m.file && !m.file.image && !/^audio\//.test(m.file.mime || '')) b.querySelector('.file-chip span').textContent = m.file.name;
-        if (x.quote) b.append(h('p', { class: 'cp-quote', text: '«' + x.quote + '»' }));
-        if (m.body) b.append(fmt(m.body));
-        b.append(h('span', { class: 'b-meta', text: hm(m.created_at) }));
-        box.append(h('div', { class: 'bubble-row ' + (mine ? 'me' : 'other') + (lastId && !scroll ? ' b-new' : '') }, [b]));
-      });
-      if (scroll || (d.messages.length && near)) box.scrollTop = box.scrollHeight;
-      if (stale) refresh(); // a new design, file or invoice: the other tabs and badges update too
-    }).catch(function (e) { if (e.code === 'mp_login_required') location.reload(); });
-  }
-  form.onsubmit = function (e) {
-    e.preventDefault();
-    var ta = form.elements.message, body = ta.value.trim();
-    if (!body) return;
-    if (!me.logged_in) { var n = form.elements.name.value.trim(); try { localStorage.setItem('mp-client-name', n); } catch (err) { /* private */ } }
-    ta.value = ''; ta.style.height = '';
-    // Shown at once; swapped for the saved message when the server answers.
-    var e0 = box.querySelector('.cp-empty'); if (e0) e0.remove();
-    var row = h('div', { class: 'bubble-row me b-pending' }, [h('div', { class: 'bubble' }, [h('p', { text: body }), h('span', { class: 'b-meta', text: 'در حال ارسال…' })])]);
-    box.append(row); box.scrollTop = box.scrollHeight;
-    sending = sending.then(function () { return api('', { body: body, name: myName() }); }).then(function () { row.remove(); return loadChat(true); })
-      .catch(function (err) { row.remove(); ta.value = body; toast(err.message || 'ارسال نشد'); });
-  };
+  });
+  function loadChat(scroll) { return chat.load(scroll); }
   $('cp-chat-back').onclick = function () { go(prevTab === 'chat' ? 'progress' : prevTab); };
-  form.elements.message.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
-  form.elements.message.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(140, this.scrollHeight) + 'px'; });
 
   function refresh() {
     return api('/portal').then(function (d) { data = d; if (d.project) { progress(); if (!reviewing) designs(); files(); invoices(); contracts(); } meetings(); tabs(); }).catch(function () {});
@@ -554,7 +517,7 @@
       logoInto($('cp-client-logo'), m.logo, m.client || m.title);
       logoInto($('cp-client-logo-m'), m.logo, m.client || m.title);
       logoInto($('cp-chat-client'), m.logo, m.client || m.title);
-      $('cp-chat-sub').textContent = m.title + ' · پاسخ همین‌جا می‌آید';
+      $('cp-chat-sub').textContent = m.title + ' · پاسخ همین‌جا می‌آید'; $('cp-chat-sub').dataset.base = $('cp-chat-sub').textContent;
       var hr = new Date().getHours(), first = m.logged_in ? String(m.name).split(' ')[0] : '';
       $('cp-hello').textContent = (hr < 12 ? 'صبح بخیر' : hr < 17 ? 'روز بخیر' : 'عصر بخیر') + (first ? '، ' + first : '');
       $('cp-hello-sub').textContent = (m.client || '') + (m.client && m.title ? ' · ' : '') + m.title;
@@ -564,8 +527,7 @@
         $('cp-preview').hidden = false; document.body.classList.add('cp-previewing');
         $('cp-preview-who').textContent = 'نمای مشتری: ' + (m.name || 'مشتری');
         $('cp-preview-end').onclick = function () { logout(); };
-        form.querySelector('textarea').placeholder = 'در حالت نمای مشتری پیام فرستاده نمی‌شود';
-        form.querySelector('textarea').disabled = true; form.querySelector('.cp-send').disabled = true;
+        chat.preview();
       }
       if (m.logged_in) { $('cp-logout').hidden = false; $('cp-me-avatar').hidden = false; $('cp-me-avatar').textContent = initials(m.name); $('cp-client-logo-m').hidden = true; }
       else { form.elements.name.hidden = false; try { form.elements.name.value = localStorage.getItem('mp-client-name') || ''; } catch (e) { /* private */ } }
@@ -582,8 +544,8 @@
         }
         go(tab);
         clearInterval(chatTimer);
-        chatTimer = setInterval(function () { if (!document.hidden) loadChat(false); }, 5000);
-        loadChat(true);
+        chatTimer = setInterval(function () { if (!document.hidden) loadChat(false); }, 4000);
+        chat.start();
       });
     }).catch(function (e) {
       document.body.replaceChildren(h('main', { class: 'cp-login' }, [h('div', { class: 'cp-login-card' }, [h('img', { src: document.querySelector('.cp-studio-logo') ? document.querySelector('.cp-studio-logo').src : '', class: 'cp-studio-logo', alt: '' }), h('h1', { text: 'این لینک در دسترس نیست' }), h('p', { text: e.message || 'لینک را دوباره از تیم مربع بگیرید.' })])]));

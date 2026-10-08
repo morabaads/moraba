@@ -299,7 +299,7 @@ class MP_Portal {
 		}
 		// Every task of the project the client may see (not «مخفی از مشتری»), by schedule, with its checklist.
 		// Only what helps the client follow the work: title, date, status, section, checklist — no notes or names.
-		$tasks = $wpdb->get_results( $wpdb->prepare( 'SELECT t.id, t.title, t.task_date, t.task_time, t.status, s.title AS section FROM ' . self::t( 'tasks' ) . ' t LEFT JOIN ' . self::t( 'sections' ) . ' s ON s.id = t.section_id WHERE t.project_id = %d AND t.archived_at IS NULL AND t.client_hidden = 0 ORDER BY t.task_date, t.task_time = \'\', t.task_time, t.id LIMIT 400', $pid ) );
+		$tasks = $wpdb->get_results( $wpdb->prepare( 'SELECT t.id, t.title, t.task_date, t.task_time, t.status, t.source, s.title AS section FROM ' . self::t( 'tasks' ) . ' t LEFT JOIN ' . self::t( 'sections' ) . ' s ON s.id = t.section_id WHERE t.project_id = %d AND t.archived_at IS NULL AND t.client_hidden = 0 ORDER BY t.task_date, t.task_time = \'\', t.task_time, t.id LIMIT 400', $pid ) );
 		$items = array();
 		if ( $tasks ) {
 			$in = implode( ',', array_map( 'intval', wp_list_pluck( $tasks, 'id' ) ) );
@@ -316,6 +316,7 @@ class MP_Portal {
 				'time'    => (string) $t->task_time,
 				'status'  => $t->status,
 				'section' => (string) $t->section,
+				'client'  => 'client' === $t->source,
 				'items'   => isset( $items[ (int) $t->id ] ) ? $items[ (int) $t->id ] : array(),
 			);
 		}

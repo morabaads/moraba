@@ -109,6 +109,7 @@
         el('span', { class: 'row-title' }, t.source === 'manager' ? el('span', { class: 'lock-ico', title: 'تعیین‌شده توسط ناظر', html: icon('lock') }) : null,
           el('span', { text: t.title }), t.priority === 'high' ? el('span', { class: 'chip danger', text: 'فوری' }) : null,
           t.client_hidden && t.project_id ? el('span', { class: 'chip', title: 'در پرتال مشتری نمایش داده نمی‌شود', text: 'مخفی از مشتری' }) : null,
+          t.source === 'client' ? el('span', { class: 'chip brand', title: 'مشتری این کار را از پرتال اضافه کرده', text: 'از طرف مشتری' }) : null,
           t.source === 'manager' && !t.seen_at && t.user_id === S.me.id ? el('span', { class: 'chip lock', text: 'جدید' }) : null),
         meta.length ? el('span', { class: 'row-meta' }, meta) : null));
     return MP.swipeable(row, {
@@ -453,6 +454,7 @@
       p ? el('span', { class: 'chip brand', html: icon('folder') }, p.name + (sec ? ' · ' + sec.title : '')) : null,
       !mine ? el('span', { class: 'chip', html: icon('user') }, MP.user(t.user_id).name) : null,
       t.recurrence !== 'none' ? el('span', { class: 'chip info', html: icon('repeat') }, MP.RECUR[t.recurrence]) : null,
+      t.source === 'client' ? el('span', { class: 'chip brand', html: icon('user') }, 'از طرف مشتری (پرتال)') : null,
       t.source === 'manager' ? el('span', { class: 'chip ' + (t.seen_at ? 'ok' : 'warn'), text: t.seen_at ? 'دیده شد ' + MP.relTime(t.seen_at) : 'هنوز دیده نشده' }) : null,
       t.done_at ? el('span', { class: 'chip ok', text: 'انجام: ' + MP.relTime(t.done_at) }) : null);
     wrap.append(chips);
