@@ -40,7 +40,7 @@
     b.setAttribute('role', 'dialog');
     b.setAttribute('aria-label', 'نصب اپلیکیشن');
     b.innerHTML = '<button type="button" class="ios-install-close" aria-label="بستن"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>' +
-      '<div class="ios-install-head"><img src="' + cfg.icon + '" alt=""><div><strong>' + (head ? head[0] : cfg.app ? 'پرتال پروژه را نصب کنید' : 'پنل مربع را نصب کنید') + '</strong><small>' + (head ? head[1] : cfg.app ? 'مثل یک اپ از صفحه اصلی باز می‌شود؛ پیشرفت، طرح‌ها و گفت‌وگو همیشه دم دست' : 'مثل یک اپ از صفحه اصلی باز می‌شود، تمام‌صفحه و با اعلان') + '</small></div></div>' + inner;
+      '<div class="ios-install-head"><img src="' + cfg.icon + '" alt=""><div><strong>' + (head ? head[0] : cfg.app ? 'پرتال پروژه را نصب کنید' : cfg.chat ? 'مربع چت را نصب کنید' : 'پنل مربع را نصب کنید') + '</strong><small>' + (head ? head[1] : cfg.app ? 'مثل یک اپ از صفحه اصلی باز می‌شود؛ پیشرفت، طرح‌ها و گفت‌وگو همیشه دم دست' : cfg.chat ? 'پیام‌رسان تیم، جدا از پنل؛ با آیکون و اعلان خودش' : 'مثل یک اپ از صفحه اصلی باز می‌شود، تمام‌صفحه و با اعلان') + '</small></div></div>' + inner;
     b.querySelector('.ios-install-close').onclick = function () { dismiss(); b.classList.add('out'); setTimeout(function () { b.remove(); }, 250); };
     document.body.appendChild(b);
     document.body.classList.add('has-ios-install');
@@ -59,7 +59,7 @@
     banner('<ol class="ios-install-steps">' +
       '<li><span class="ios-ico">' + SHARE + '</span><span>دکمه <b>اشتراک‌گذاری</b> ' + (ipad || otherBrowser ? 'بالای صفحه' : 'پایین صفحه') + ' را بزنید</span></li>' +
       '<li><span class="ios-ico">' + ADD + '</span><span>گزینه <b dir="ltr">Add to Home Screen</b> را انتخاب کنید (اگر نبود، فهرست را بالا بکشید)</span></li>' +
-      '<li><span class="ios-ico ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Add</b> را بزنید و ' + (cfg.app ? 'پرتال را از آیکون آن' : 'پنل را از آیکون «مربع»') + ' باز کنید' + (cfg.login && !cfg.app ? ' و همان‌جا وارد شوید' : '') + '</span></li>' +
+      '<li><span class="ios-ico ok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span><b>Add</b> را بزنید و ' + (cfg.app ? 'پرتال را از آیکون آن' : cfg.chat ? 'چت را از آیکون «مربع چت»' : 'پنل را از آیکون «مربع»') + ' باز کنید' + (cfg.login && !cfg.app ? ' و همان‌جا وارد شوید' : '') + '</span></li>' +
       '</ol>', !otherBrowser);
   }
 
@@ -72,9 +72,17 @@
   }
 
   /** Android phones: the real app (panel and portal in one, with widgets and notifications). */
+  /** «مربع چت» on Windows: the small app (opens in its own window, Start menu entry) or the browser's own install. */
+  function showExe() {
+    var b = banner('<a class="ios-install-btn" href="' + cfg.exe + '" download="MorabaChat.exe">دانلود برای ویندوز</a>' + (pending ? '<button type="button" class="ios-install-btn ghost">نصب از مرورگر</button>' : ''), false,
+      ['مربع چت برای ویندوز', 'یک فایل کوچک؛ بعد از اجرا به منوی استارت و دسکتاپ اضافه می‌شود و چت را در پنجره جدا باز می‌کند']);
+    b.querySelector('a').addEventListener('click', function () { dismiss(); setTimeout(function () { b.remove(); }, 400); });
+    var g = b.querySelector('button.ghost');
+    if (g) g.onclick = function () { pending.prompt(); pending.userChoice.then(function () { b.remove(); }); };
+  }
   function showApk() {
-    var b = banner('<p class="ios-install-note">بعد از نصب، آدرس همین سایت را یک بار وارد کنید و با شماره موبایل وارد شوید؛ اپ خودش تشخیص می‌دهد کارمند هستید یا مشتری. اگر گوشی اجازه نصب نداد، «نصب از منابع ناشناس» را برای مرورگر روشن کنید.</p><a class="ios-install-btn" href="' + cfg.apk + '" download="moraba.apk">دانلود اپ (APK)</a>', false,
-      ['اپ اندروید مربع', cfg.app ? 'پرتال پروژه، گفت‌وگو با تیم و اعلان پیام‌ها' : 'پنل، گفت‌وگو، اعلان‌ها و ویجت‌های صفحه اصلی']);
+    var b = banner('<p class="ios-install-note">' + (cfg.chat ? 'بعد از نصب، با حساب کارمندی خود وارد شوید؛ اپ کنار اپ اصلی مربع نصب می‌شود.' : 'بعد از نصب، آدرس همین سایت را یک بار وارد کنید و با شماره موبایل وارد شوید؛ اپ خودش تشخیص می‌دهد کارمند هستید یا مشتری.') + ' اگر گوشی اجازه نصب نداد، «نصب از منابع ناشناس» را برای مرورگر روشن کنید.</p><a class="ios-install-btn" href="' + cfg.apk + '" download="' + (cfg.chat ? 'moraba-chat.apk' : 'moraba.apk') + '">دانلود اپ (APK)</a>', false,
+      cfg.chat ? ['مربع چت برای اندروید', 'گفت‌وگوهای تیم و مشتری‌ها با اعلان پیام‌ها'] : ['اپ اندروید مربع', cfg.app ? 'پرتال پروژه، گفت‌وگو با تیم و اعلان پیام‌ها' : 'پنل، گفت‌وگو، اعلان‌ها و ویجت‌های صفحه اصلی']);
     b.querySelector('a').addEventListener('click', function () { dismiss(); setTimeout(function () { b.remove(); }, 400); });
   }
   function start() {
@@ -82,6 +90,7 @@
     if (dismissed()) return;
     if (ios) setTimeout(showIOS, cfg.login ? 600 : 2500);
     else if (/Android/i.test(ua) && cfg.apk) setTimeout(showApk, cfg.login ? 600 : 2500);
+    else if (cfg.chat && cfg.exe && /Windows/i.test(ua)) setTimeout(showExe, cfg.login ? 600 : 2500);
     else if (pending) showAndroid(pending);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();

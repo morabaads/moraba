@@ -797,6 +797,8 @@
   var ORDER = ['dashboard', 'calendar', 'mytasks', 'projects', 'messages', 'meetings', 'clients', 'contracts', 'attendance', 'reminders', 'accounting', 'reports'];
   MP.view = function (name, def) { views[name] = def; };
   MP.showView = function (name, opts) {
+    // «مربع چت» shows only the chat; anything else opens in the panel.
+    if (C.chatApp && name !== 'messages') { window.open(C.panel + '#' + name, '_blank'); return; }
     if (!views[name]) name = 'dashboard';
     closePopover(); closeSearch();
     var changed = S.view !== name, from = ORDER.indexOf(S.view);
@@ -826,7 +828,7 @@
         } catch (e) { /* ignore */ }
       });
       window.scrollTo({ top: 0, behavior: 'auto' });
-      document.title = label + ' | MORABA';
+      document.title = C.chatApp ? 'مربع چت' : label + ' | MORABA';
     }
   };
   MP.visible = function (name) { return S.view === name; };
@@ -908,13 +910,29 @@
       return el('button', { type: 'button', onclick: function () { MP.dialog.close(); setTimeout(c[2], 200); } }, MP.iconEl(c[0]), el('span', { text: c[1] }));
     })), { focus: false });
   };
+  /** «مربع چت»: the staff chat as its own app — install from the browser, or the Android / Windows downloads. */
+  MP.chatAppDialog = function () {
+    var c = C.chat || {}, android = /Android/i.test(navigator.userAgent), win = /Windows/i.test(navigator.userAgent);
+    function tile(ic, title, sub, href, primary, dl) {
+      return el('a', { class: 'pt-tile' + (primary ? ' primary' : ''), href: href, target: dl ? null : '_blank', rel: 'noopener', download: dl || null },
+        el('span', { class: 'pt-tile-ico', html: icon(ic) }), el('strong', { text: title }), el('small', { text: sub }));
+    }
+    MP.dialog.open('مربع چت · اپ جدای پیام‌ها', el('div', { class: 'chat-app-box' },
+      el('div', { class: 'chat-app-hero' }, el('img', { src: C.assets + 'img/chat-192.png', alt: '' }),
+        el('div', null, el('strong', { text: 'مربع چت' }), el('small', { text: 'فقط گفت‌وگوها: تیم، خصوصی و مشتری‌ها؛ با آیکون و اعلان جدا، کنار همین پنل.' }))),
+      el('div', { class: 'pt-actions three' },
+        tile('chat', 'باز کردن و نصب از مرورگر', 'آیفون، اندروید، ویندوز و مک: صفحه باز می‌شود؛ «نصب» یا «Add to Home Screen» را بزنید', c.url, !android && !win),
+        tile('download', 'اپ اندروید (APK)', 'نصب مستقیم روی گوشی اندروید، با اعلان پیام‌ها', c.apk, android, 'moraba-chat.apk'),
+        tile('download', 'اپ ویندوز (EXE)', 'یک فایل؛ با دوبار کلیک باز می‌شود و به منوی استارت اضافه می‌شود', c.exe, win, 'MorabaChat.exe')),
+      el('p', { class: 'hint', text: 'آدرس مستقیم: ' + c.url })));
+  };
   /** Sign out inside the panel (no WordPress screens), then go to the site's home page. */
   function logout() {
     MP.confirm('خروج از حساب', 'می‌خواهید از پنل خارج شوید؟', 'خروج').then(function (ok) {
       if (!ok) return;
       document.body.classList.add('is-loading');
       MP.api('auth/logout', { method: 'POST' })
-        .then(function (r) { location.replace(r.redirect || '/'); })
+        .then(function (r) { location.replace(C.chatApp ? C.chat.url : r.redirect || '/'); })
         .catch(function () { location.href = S.boot.logoutUrl; });
     });
   }
@@ -1076,7 +1094,7 @@
   $$('[data-user-action]').forEach(function (b) {
     b.onclick = function () {
       closePopover();
-      ({ profile: function () { MP.openProfile(S.me.id); }, account: openAccount, appearance: openAppearance, logout: logout, install: MP.install, widgets: function () { MP.openWidgets(); } })[b.dataset.userAction]();
+      ({ profile: function () { MP.openProfile(S.me.id); }, account: openAccount, appearance: openAppearance, logout: logout, install: MP.install, widgets: function () { MP.openWidgets(); }, chatapp: function () { MP.chatAppDialog(); }, panel: function () { window.open(C.panel, '_blank'); } })[b.dataset.userAction]();
     };
   });
   MP.renderMe = function () {
@@ -1355,14 +1373,14 @@
       }).then(function (k) {
         if (!k.supported) throw new Error('سرور سایت از اعلان پوش پشتیبانی نمی‌کند (افزونه OpenSSL).');
         return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(k.key) }); });
-      }).then(function (sub) { return MP.api('push', { method: 'POST', body: { endpoint: sub.endpoint } }); })
+      }).then(function (sub) { return MP.api('push', { method: 'POST', body: { endpoint: sub.endpoint, app: C.chatApp ? 'chat' : '' } }); })
         .then(function () { MP.toast('اعلان‌ها روی این دستگاه روشن شد', { icon: 'bell' }); MP.haptic([10, 40, 10]); });
     },
     disable: function () {
       return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
         if (!sub) return null;
         var endpoint = sub.endpoint;
-        return sub.unsubscribe().then(function () { return MP.api('push', { method: 'DELETE', query: { endpoint: endpoint } }); });
+        return sub.unsubscribe().then(function () { return MP.api('push', { method: 'DELETE', query: { endpoint: endpoint, app: C.chatApp ? 'chat' : '' } }); });
       }).then(function () { MP.toast('اعلان‌های این دستگاه خاموش شد'); });
     }
   };

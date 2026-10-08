@@ -22,7 +22,7 @@
     else if (/^task-\d+$/.test(start)) { MP.showView('mytasks'); setTimeout(function () { MP.openTask(+start.slice(5)); }, 300); }
     else if (MP.chatRoute && MP.chatRoute(start)) { /* a chat, a message link or an invite */ }
     else if (start === 'punch') { MP.showView('attendance'); setTimeout(function () { var c = document.getElementById('punch-chip'); if (c) c.click(); }, 300); }
-    else MP.showView(start || 'dashboard');
+    else MP.showView(window.MP_CONFIG.chatApp ? 'messages' : start || 'dashboard');
     MP.renderPrompts();
     setInterval(function () { if (!document.hidden) MP.refreshCounts(); }, 30000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) MP.refreshCounts(); });
@@ -31,7 +31,7 @@
       if (/^task-\d+$/.test(v)) { MP.openTask(+v.slice(5)); return; }
       if (MP.chatRoute && MP.chatRoute(v)) return;
       if (v === 'widgets') { MP.openWidgets(); return; }
-      if (v && v !== S.view) MP.showView(v);
+      if (v && v !== S.view && !window.MP_CONFIG.chatApp) MP.showView(v);
     });
   }).catch(function (err) {
     document.body.classList.remove('is-loading');

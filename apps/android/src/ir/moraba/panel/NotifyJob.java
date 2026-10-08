@@ -53,8 +53,11 @@ public class NotifyJob extends JobService {
                 new Thread(new Runnable() {
                     @Override public void run() {
                         if (cookies != null && !cookies.isEmpty() && !MainActivity.foreground) {
-                            check(site + "/?mp_push_feed=1", cookies, "last_staff", 1);
-                            check(site + "/?mp_client_feed=1", cookies, "last_client", 2);
+                            if (Config.CHAT) check(site + "/?mp_push_feed=1&chat=1", cookies, "last_chat", 1);
+                            else {
+                                check(site + "/?mp_push_feed=1", cookies, "last_staff", 1);
+                                check(site + "/?mp_client_feed=1", cookies, "last_client", 2);
+                            }
                         }
                         schedule(NotifyJob.this, 3 * 60 * 1000L);
                         jobFinished(p, false);
@@ -89,7 +92,7 @@ public class NotifyJob extends JobService {
             App.setLast(this, key, Math.max(id, last));
             // The first look only sets the starting point: nothing old pops up after installing.
             if (last < 0 || id <= last) return;
-            show(o.optString("title", "مربع"), o.optString("body", ""), o.optString("url", ""), o.optString("tag", key + id), slot);
+            show(o.optString("title", App.name()), o.optString("body", ""), o.optString("url", ""), o.optString("tag", key + id), slot);
         } catch (Exception ignored) {
             // offline, signed out, or not this kind of account: nothing to show
         } finally {

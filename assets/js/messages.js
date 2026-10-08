@@ -3200,6 +3200,7 @@
     if ((m = /^chat-(\d+)(-reply)?$/.exec(h))) { MP.showView('messages', { channel: +m[1], reply: !!m[2] }); return true; }
     if ((m = /^msg-(\d+)$/.exec(h))) { MP.openMessage(+m[1]); return true; }
     if ((m = /^join-([A-Za-z0-9]{10,})$/.exec(h))) { joinGroup(m[1]); return true; }
+    if (h === 'saved') { MP.showView('messages'); openSaved(); return true; }
     return false;
   };
   MP.openMessage = function (id) {

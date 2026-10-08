@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 <meta name="theme-color" content="#0e0e10">
 <?php include MP_DIR . 'templates/pwa-head.php'; ?>
 <meta name="robots" content="noindex,nofollow">
-<title>MORABA | <?php echo empty( $mp_app ) ? 'ورود به پنل' : 'ورود'; ?></title>
+<title><?php echo ! empty( $mp_chat_app ) ? 'مربع چت | ورود' : 'MORABA | ' . ( empty( $mp_app ) ? 'ورود به پنل' : 'ورود' ); ?></title>
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
 </head>
@@ -32,12 +32,13 @@ if ( $mp_support && ! preg_match( '#^(https?://|mailto:|tel:)#', $mp_support ) )
 		<?php
 		$mp_otp  = MP_Auth::otp_enabled();
 		$mp_app  = ! empty( $mp_app );
-		$mp_back = $mp_app ? MP_App::url() : MP_Frontend::panel_url();
+		$mp_chat = ! empty( $mp_chat_app );
+		$mp_back = $mp_app ? MP_App::url() : ( $mp_chat ? MP_Frontend::chat_url() : MP_Frontend::panel_url() );
 		?>
-		<h1><?php echo $mp_app ? 'ورود به مربع' : 'ورود به پنل کارمندان'; ?></h1>
+		<h1><?php echo $mp_app ? 'ورود به مربع' : ( $mp_chat ? 'ورود به مربع چت' : 'ورود به پنل کارمندان' ); ?></h1>
 
 		<section id="login-mobile"<?php echo $mp_otp ? '' : ' hidden'; ?>>
-			<div id="otp" data-root="<?php echo esc_url( rest_url( 'moraba-panel/v1/' ) ); ?>"<?php echo $mp_app ? ' data-mode="app"' : ''; ?>>
+			<div id="otp" data-root="<?php echo esc_url( rest_url( 'moraba-panel/v1/' ) ); ?>"<?php echo $mp_app ? ' data-mode="app"' : ''; ?><?php echo $mp_chat ? ' data-back="' . esc_url( $mp_back ) . '"' : ''; ?>>
 				<form id="otp-mobile" class="otp-step" novalidate>
 					<p class="login-sub"><?php echo $mp_app ? 'کارمند استودیو باشید یا مشتری، فرقی ندارد: شماره موبایل خود را وارد کنید؛ بعد از ورود، پنل یا پرتال پروژه شما خودش باز می‌شود.' : 'شماره موبایل خود را وارد کنید تا کد ورود برایتان پیامک شود.'; ?></p>
 					<label class="login-label" for="otp-m">شماره موبایل</label>

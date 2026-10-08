@@ -4,6 +4,8 @@
 # set AAPT2, ANDROID_JAR (any API 34 android.jar with resources, e.g. Robolectric's android-all 14) and have
 # dalvik-exchange (dx), zipalign and apksigner on PATH.
 # SITE=https://example.ir ./build.sh — the address the app suggests on its first screen (optional).
+# APP=chat ./build.sh — «مربع چت» instead: the same code with Config.CHAT, AndroidManifest.chat.xml, package
+# ir.moraba.chat (installs beside the main app) → assets/app/moraba-chat.apk.
 # Output: assets/app/moraba.apk (shipped inside the plugin, downloaded from the panel and the portal).
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -13,14 +15,17 @@ JAR="${ANDROID_JAR:-$SDK/platforms/android-34/android.jar}"
 AAPT2="${AAPT2:-$BT/aapt2}"
 ZIPALIGN="$( [ -x "$BT/zipalign" ] && echo "$BT/zipalign" || echo zipalign )"
 APKSIGNER="$( [ -x "$BT/apksigner" ] && echo "$BT/apksigner" || echo apksigner )"
-OUT="../../assets/app/moraba.apk"
+CHAT=false; MANIFEST=AndroidManifest.xml; RENAME=(); OUT="../../assets/app/moraba.apk"
+if [ "${APP:-}" = chat ]; then
+  CHAT=true; MANIFEST=AndroidManifest.chat.xml; RENAME=(--rename-manifest-package ir.moraba.chat); OUT="../../assets/app/moraba-chat.apk"
+fi
 rm -rf build && mkdir -p build/gen/ir/moraba/panel build/classes build/dex
 
 # The site the first screen suggests (empty: the person types it once).
-printf 'package ir.moraba.panel;\n\n/** Made by build.sh. */\nfinal class Config {\n    private Config() {}\n    static final String SITE = "%s";\n}\n' "${SITE:-}" > build/gen/ir/moraba/panel/Config.java
+printf 'package ir.moraba.panel;\n\n/** Made by build.sh. */\nfinal class Config {\n    private Config() {}\n    static final String SITE = "%s";\n    static final boolean CHAT = %s;\n}\n' "${SITE:-}" "$CHAT" > build/gen/ir/moraba/panel/Config.java
 
 "$AAPT2" compile --dir res -o build/res.zip
-"$AAPT2" link -o build/app.unaligned.apk -I "$JAR" --manifest AndroidManifest.xml --java build/gen \
+"$AAPT2" link -o build/app.unaligned.apk -I "$JAR" --manifest "$MANIFEST" "${RENAME[@]}" --java build/gen \
   --min-sdk-version 24 --target-sdk-version 34 build/res.zip
 javac -nowarn -encoding UTF-8 --release 8 -classpath "$JAR" -d build/classes \
   $(find build/gen src -name '*.java') 2>&1 | grep -v 'bootstrap class path\|^1 warning\|source value 8\|target value 8\|To suppress warnings\|JAVA_TOOL_OPTIONS\|deprecat\|^Note:' || true

@@ -68,8 +68,9 @@ class MP_Push {
 		return $input . '.' . self::b64( self::der_to_raw( $der ) );
 	}
 
-	public static function devices( $user_id ) {
-		$subs = get_user_meta( $user_id, 'mp_push_subs', true );
+	/** Push endpoints of the panel app, or ($chat) of «مربع چت», which only hears about messages. */
+	public static function devices( $user_id, $chat = false ) {
+		$subs = get_user_meta( $user_id, $chat ? 'mp_push_chat' : 'mp_push_subs', true );
 		return is_array( $subs ) ? $subs : array();
 	}
 
@@ -77,24 +78,25 @@ class MP_Push {
 		return is_string( $url ) && strlen( $url ) < 1000 && 0 === strpos( $url, 'https://' ) && wp_http_validate_url( $url );
 	}
 
-	public static function subscribe( $user_id, $endpoint ) {
-		$subs = array_values( array_diff( self::devices( $user_id ), array( $endpoint ) ) );
+	public static function subscribe( $user_id, $endpoint, $chat = false ) {
+		$subs = array_values( array_diff( self::devices( $user_id, $chat ), array( $endpoint ) ) );
 		array_unshift( $subs, $endpoint );
-		update_user_meta( $user_id, 'mp_push_subs', array_slice( $subs, 0, self::MAX_DEVICES ) );
+		update_user_meta( $user_id, $chat ? 'mp_push_chat' : 'mp_push_subs', array_slice( $subs, 0, self::MAX_DEVICES ) );
 	}
 
-	public static function unsubscribe( $user_id, $endpoint ) {
-		update_user_meta( $user_id, 'mp_push_subs', array_values( array_diff( self::devices( $user_id ), array( $endpoint ) ) ) );
+	public static function unsubscribe( $user_id, $endpoint, $chat = false ) {
+		update_user_meta( $user_id, $chat ? 'mp_push_chat' : 'mp_push_subs', array_values( array_diff( self::devices( $user_id, $chat ), array( $endpoint ) ) ) );
 	}
 
 	/** Wake every device of the user. Non-blocking, so saving a task never waits for push services. */
-	public static function send( $user_id ) {
+	public static function send( $user_id, $message = false ) {
 		if ( ! self::supported() ) {
 			return 0;
 		}
 		list( , $pub ) = self::keys();
 		$n             = 0;
-		foreach ( self::devices( $user_id ) as $endpoint ) {
+		// «مربع چت» devices wake only for chat messages.
+		foreach ( array_merge( self::devices( $user_id ), $message ? self::devices( $user_id, true ) : array() ) as $endpoint ) {
 			wp_remote_post(
 				$endpoint,
 				array(
@@ -133,15 +135,18 @@ class MP_Push {
 			}
 			exit( '{"ok":true}' );
 		}
-		$n     = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0 ORDER BY id DESC LIMIT 1', $uid ) );
-		$count = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0', $uid ) );
+		// &chat=1: «مربع چت» (service worker and Android app) — only chat messages, opened in the chat app.
+		$only  = isset( $_GET['chat'] ) ? " AND target IN ('messages','chatmsg')" : ''; // phpcs:ignore WordPress.Security.NonceVerification
+		$n     = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0' . $only . ' ORDER BY id DESC LIMIT 1', $uid ) ); // phpcs:ignore
+		$count = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0' . $only, $uid ) ); // phpcs:ignore
 		$views = array( 'calendar' => 'calendar', 'task' => 'mytasks', 'messages' => 'messages', 'meeting' => 'dashboard', 'projects' => 'projects', 'reminders' => 'reminders', 'attendance' => 'attendance', 'reports' => 'reports' );
 		$chat = $n && 'messages' === $n->target && $n->ref_id;
-		$url  = MP_Frontend::panel_url() . '#' . ( isset( $views[ $n ? $n->target : '' ] ) ? $views[ $n->target ] : 'dashboard' );
+		$base = $only ? MP_Frontend::chat_url() : MP_Frontend::panel_url();
+		$url  = $base . '#' . ( isset( $views[ $n ? $n->target : '' ] ) ? $views[ $n->target ] : 'dashboard' );
 		if ( $chat ) {
-			$url = MP_Frontend::panel_url() . '#chat-' . (int) $n->ref_id;
+			$url = $base . '#chat-' . (int) $n->ref_id;
 		} elseif ( $n && 'chatmsg' === $n->target ) {
-			$url = MP_Frontend::panel_url() . '#msg-' . (int) $n->ref_id;
+			$url = $base . '#msg-' . (int) $n->ref_id;
 		}
 		echo wp_json_encode(
 			$n ? array(

@@ -605,13 +605,13 @@ class MP_Rest_Work {
 		if ( ! MP_Push::valid_endpoint( $r['endpoint'] ) ) {
 			return self::err( 'نشانی اعلان معتبر نیست.' );
 		}
-		MP_Push::subscribe( self::uid(), (string) $r['endpoint'] );
-		return array( 'devices' => count( MP_Push::devices( self::uid() ) ) );
+		MP_Push::subscribe( self::uid(), (string) $r['endpoint'], 'chat' === $r['app'] );
+		return array( 'devices' => count( MP_Push::devices( self::uid(), 'chat' === $r['app'] ) ) );
 	}
 
 	public static function push_unsubscribe( WP_REST_Request $r ) {
-		MP_Push::unsubscribe( self::uid(), (string) $r['endpoint'] );
-		return array( 'devices' => count( MP_Push::devices( self::uid() ) ) );
+		MP_Push::unsubscribe( self::uid(), (string) $r['endpoint'], 'chat' === $r['app'] );
+		return array( 'devices' => count( MP_Push::devices( self::uid(), 'chat' === $r['app'] ) ) );
 	}
 
 	/* ------------------------------------------------------------------ Change history */

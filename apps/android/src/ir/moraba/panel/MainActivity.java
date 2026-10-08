@@ -117,10 +117,10 @@ public class MainActivity extends Activity {
         if (web != null) web.saveState(out);
     }
 
-    /** moraba://open?site=https://… (from the site's download page): remember the site. */
+    /** moraba://open?site=https://… (morabachat:// for «مربع چت», from the site's download page): remember the site. */
     private boolean handleLink(Intent i) {
         Uri u = i == null ? null : i.getData();
-        if (u == null || !"moraba".equals(u.getScheme()) || !"open".equals(u.getHost())) return false;
+        if (u == null || !(Config.CHAT ? "morabachat" : "moraba").equals(u.getScheme()) || !"open".equals(u.getHost())) return false;
         String s = App.normalize(u.getQueryParameter("site"));
         if (s.isEmpty()) return false;
         App.setSite(this, s);
@@ -143,10 +143,10 @@ public class MainActivity extends Activity {
         box.setGravity(Gravity.CENTER_HORIZONTAL);
         box.setPadding(dp(24), dp(56), dp(24), dp(24));
         ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setImageResource(Config.CHAT ? R.mipmap.ic_chat : R.mipmap.ic_launcher);
         box.addView(logo, new LinearLayout.LayoutParams(dp(84), dp(84)));
-        box.addView(text("مربع", 26, R.color.ink, true, Gravity.CENTER));
-        box.addView(text("پنل کارمندان و پرتال مشتریان مربع استودیو", 14, R.color.muted, false, Gravity.CENTER));
+        box.addView(text(App.name(), 26, R.color.ink, true, Gravity.CENTER));
+        box.addView(text(Config.CHAT ? "پیام‌رسان تیم مربع استودیو" : "پنل کارمندان و پرتال مشتریان مربع استودیو", 14, R.color.muted, false, Gravity.CENTER));
         space(box, 28);
         box.addView(text("آدرس سایت استودیو", 14, R.color.ink, true, Gravity.START));
         final EditText site = new EditText(this);
@@ -217,6 +217,7 @@ public class MainActivity extends Activity {
             JSONObject o = new JSONObject(new String(buf, 0, len, "UTF-8"));
             if (!o.has("entry")) return "پنل مربع روی این سایت پیدا نشد.";
             App.setEntry(this, o.optString("entry"));
+            App.setChatEntry(this, o.optString("chat"));
             return null;
         } catch (java.net.UnknownHostException e) {
             return "سایت پیدا نشد؛ آدرس یا اینترنت را بررسی کنید.";
@@ -314,6 +315,10 @@ public class MainActivity extends Activity {
         @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError e) {
             if (r.isForMainFrame()) showOffline();
         }
+    }
+
+    private void outside(Uri u) {
+        try { startActivity(new Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE)); } catch (ActivityNotFoundException ignored) { /* no browser */ }
     }
 
     /** Our own pages stay in the app; the site's home (after signing out) leads back to the app's entry; the rest opens outside. */
@@ -414,6 +419,8 @@ public class MainActivity extends Activity {
                         String p = u.getPath() == null ? "" : u.getPath();
                         // Files (downloads, PDFs) go to the downloader / viewer; pages open here.
                         if (u.getQueryParameter("mp_file") != null) download(u.toString(), web.getSettings().getUserAgentString(), null, null);
+                        // «مربع چت»: the rest of the panel (tasks, calendar…) opens in the browser or the Moraba app.
+                        else if (Config.CHAT && !p.startsWith(Uri.parse(App.entry(MainActivity.this)).getPath()) && !p.contains("/m/")) outside(u);
                         else web.loadUrl(u.toString());
                     } else route(u);
                     t.destroy();

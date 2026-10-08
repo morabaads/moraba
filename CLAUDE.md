@@ -28,6 +28,16 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
 - `templates/` — `panel.php` (staff app shell + views), `client.php` (portal), `meet.php` (meeting room), `contract.php`, `login.php`, `sprite.svg` (icons; element ids must not clash with symbol ids).
 - `assets/js/` — `core.js` (MP.el, MP.api, MP.dialog, MP.field, MP.dateField (Jalali), MP.peoplePicker…), one file per view (`tasks.js`, `projects.js`, `messages.js`, `meetings.js`, …), `viewer.js` (`MPViewer`: full-screen photo viewer with a thumbnail strip, used by the chat gallery, `MP.lightbox` and the portal chat; loaded in panel + portal), `chat-kit.js` (chat formatting, photo editor, polls, place/contact, round video, «send later»; loaded before messages.js), `client.js` (portal), `client-chat.js` (`MPClientChat`: the portal chat, same markup/CSS classes as the panel chat), `meet.js` (meeting room: WebCodecs Opus/H.264/VP8 with μ-law/JPEG fallback, loopback echo cancellation, chat, design review, recording).
 - `assets/css/app.css` (panel + portal, dark default), `assets/css/meet.css` (meeting room).
+- «مربع چت» (the staff chat as its own app; profile menu → «مربع چت»):
+  - PWA at `/chat/` (option `mp_chat_slug`; `?mp_panel=chat` without pretty links): `templates/panel.php` with `$mp_chat_app`
+    (body `chat-app`, CSS hides everything but the messages view; `MP_CONFIG.chatApp` makes `MP.showView` open other views in the panel),
+    own manifest `?mp_manifest=chat`, service worker `?mp_sw=chat` (scope `/chat/`), icons `assets/img/chat-*.png`.
+    Push: chat subscriptions live in user meta `mp_push_chat` and wake only for message notifications; the feed takes `&chat=1`.
+  - Android: same sources built with `APP=chat apps/android/build.sh` (`Config.CHAT`, `AndroidManifest.chat.xml`, package renamed to
+    `ir.moraba.chat`, no widgets) → `assets/app/moraba-chat.apk`; bump its own `versionCode` in `AndroidManifest.chat.xml`.
+  - Windows: `apps/windows/` (C, mingw-w64, `build.sh`) → `assets/app/MorabaChat.exe`: copies itself to %LOCALAPPDATA%\MorabaChat, adds
+    Start menu/desktop shortcuts, opens the chat as an Edge `--app` window (own profile). The site's chat URL is written into the
+    file on download (`?mp_chat_exe=1` replaces a UTF-16 placeholder). Checked under Wine with a fake msedge.exe.
 - Widgets (profile menu → «ویجت‌ها روی صفحه اصلی», `assets/js/widgets.js`):
   - Android: `apps/android/` plain-Java app (no Gradle/AndroidX), four widgets (tasks card, attendance with live Chronometer, messages, next meeting).
     Build with `apps/android/build.sh` (needs SDK at `/opt/android`: platforms;android-34 + build-tools;35.0.0 — d8 34 crashes) → `assets/app/moraba.apk`.

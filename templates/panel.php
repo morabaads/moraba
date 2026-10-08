@@ -3,6 +3,7 @@ defined( 'ABSPATH' ) || exit;
 $mp_i   = function ( $name ) {
 	return '<svg class="icon" aria-hidden="true"><use href="#' . esc_attr( $name ) . '"></use></svg>';
 };
+$mp_chat_app = ! empty( $mp_chat_app );
 $mp_nav = array(
 	'dashboard'  => array( 'grid', 'میز کار', '' ),
 	'calendar'   => array( 'calendar', 'تقویم', '' ),
@@ -25,15 +26,15 @@ $mp_nav = array(
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#161616">
 <?php include MP_DIR . 'templates/pwa-head.php'; ?>
-<title>MORABA | پنل کاربری</title>
-<link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
+<title><?php echo $mp_chat_app ? 'مربع چت' : 'MORABA | پنل کاربری'; ?></title>
+<link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( $mp_chat_app ? 'img/chat-192.png' : 'img/symbol.png' ); // phpcs:ignore ?>">
 <link rel="preload" href="<?php echo esc_url( MP_URL . 'assets/fonts/dana.woff2' ); // same URL as app.css uses, so it's fetched once ?>" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
 <script>try{var p=JSON.parse(localStorage.getItem('mp-prefs')||'{}');if(p.dark!==false)document.documentElement.classList.add('dark');if(p.motion)document.documentElement.classList.add('reduced-motion');}catch(e){}</script>
 </head>
-<body class="is-loading">
+<body class="is-loading<?php echo $mp_chat_app ? ' chat-app' : ''; ?>">
 <?php include MP_DIR . 'templates/sprite.svg'; ?>
-<div class="splash" aria-hidden="true"><img src="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>" alt=""><span class="splash-bar"><i></i></span></div>
+<div class="splash" aria-hidden="true"><img src="<?php echo MP_Frontend::asset( $mp_chat_app ? 'img/chat-192.png' : 'img/symbol.png' ); // phpcs:ignore ?>" alt=""><span class="splash-bar"><i></i></span></div>
 <div class="offline-bar" id="offline-bar" role="status" hidden><?php echo $mp_i( 'alarm' ); // phpcs:ignore ?>اتصال اینترنت قطع است؛ تغییرات پس از اتصال ذخیره نمی‌شوند.</div>
 <div class="ptr" id="ptr" aria-hidden="true"><?php echo $mp_i( 'repeat' ); // phpcs:ignore ?></div>
 <a class="skip-link" href="#main">پرش به محتوا</a>
@@ -89,7 +90,12 @@ $mp_nav = array(
 							<button type="button" data-user-action="profile"><?php echo $mp_i( 'user' ); // phpcs:ignore ?>پروفایل من</button>
 							<button type="button" data-user-action="account"><?php echo $mp_i( 'edit' ); // phpcs:ignore ?>حساب کاربری و اعلان‌ها</button>
 							<button type="button" data-user-action="appearance"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?>ظاهر پنل</button>
+							<?php if ( $mp_chat_app ) : ?>
+							<button type="button" data-user-action="panel"><?php echo $mp_i( 'grid' ); // phpcs:ignore ?>باز کردن پنل مربع</button>
+							<?php else : ?>
 							<button type="button" data-user-action="widgets"><?php echo $mp_i( 'grid' ); // phpcs:ignore ?>ویجت‌ها روی صفحه اصلی</button>
+							<button type="button" data-user-action="chatapp"><?php echo $mp_i( 'chat' ); // phpcs:ignore ?>مربع چت (اپ جدای پیام‌ها)</button>
+							<?php endif; ?>
 							<button type="button" data-user-action="install" hidden><?php echo $mp_i( 'download' ); // phpcs:ignore ?>نصب روی گوشی</button>
 							<button type="button" data-user-action="logout" class="danger"><?php echo $mp_i( 'logout' ); // phpcs:ignore ?>خروج از حساب</button>
 						</div>
@@ -294,7 +300,7 @@ $mp_nav = array(
 		<!-- ================= Messages ================= -->
 		<section class="view" id="view-messages" data-view="messages" hidden aria-label="پیام‌ها">
 			<div class="page-head">
-				<div><h1>پیام‌ها</h1><p>گفت‌وگوی تیم، خصوصی و گروه‌های مشتری</p></div>
+				<div><h1><?php echo $mp_chat_app ? 'مربع چت' : 'پیام‌ها'; ?></h1><p>گفت‌وگوی تیم، خصوصی و گروه‌های مشتری</p></div>
 				<div class="page-actions">
 					<button type="button" class="btn btn-secondary manager-only" id="new-team-group">گروه تیم</button><button type="button" class="btn btn-secondary" id="new-client-group">گروه مشتری</button>
 					<button type="button" class="btn btn-primary" id="new-dm"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>پیام جدید</button>

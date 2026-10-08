@@ -62,7 +62,7 @@
     e.preventDefault(); if (fCode.querySelector('.login-btn').disabled) return;
     busy(fCode, true); say('');
     post('otp/verify', { mobile: mobile, code: latin(codeInput.value), remember: document.getElementById('otp-r').checked })
-      .then(function (r) { say('خوش آمدید…', true); location.href = r.redirect; })
+      .then(function (r) { say('خوش آمدید…', true); location.href = document.getElementById('otp').dataset.back || r.redirect; })
       .catch(function (err) {
         say(err.message); busy(fCode, false);
         var wrap = document.querySelector('.otp-boxes'); wrap.classList.remove('shake'); void wrap.offsetWidth; wrap.classList.add('shake');

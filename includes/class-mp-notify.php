@@ -42,7 +42,7 @@ class MP_Notify {
 				wp_mail( $u->user_email, '[' . get_bloginfo( 'name' ) . '] ' . $title, $title . "\n\n" . $detail . "\n\n" . MP_Frontend::panel_url() );
 			}
 		}
-		self::later( $user_id, $title, $detail, $important, $sms );
+		self::later( $user_id, $title, $detail, $important, $sms, in_array( $target, array( 'messages', 'chatmsg' ), true ) );
 	}
 
 	private static $later = array();
@@ -51,16 +51,16 @@ class MP_Notify {
 	 * Messenger/SMS/push calls can take seconds (or hang on a filtered host), so during a web
 	 * request they run after the response has been sent: sending a chat message stays instant.
 	 */
-	private static function later( $user_id, $title, $detail, $important, $sms = null ) {
+	private static function later( $user_id, $title, $detail, $important, $sms = null, $message = false ) {
 		if ( wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 			self::external( $user_id, $title, $detail, $important, $sms );
-			MP_Push::send( $user_id );
+			MP_Push::send( $user_id, $message );
 			return;
 		}
 		if ( ! self::$later ) {
 			add_action( 'shutdown', array( __CLASS__, 'flush_later' ), 1 );
 		}
-		self::$later[] = array( $user_id, $title, $detail, $important, $sms );
+		self::$later[] = array( $user_id, $title, $detail, $important, $sms, $message );
 	}
 
 	public static function flush_later() {
@@ -77,7 +77,7 @@ class MP_Notify {
 		ignore_user_abort( true );
 		foreach ( $jobs as $j ) {
 			self::external( $j[0], $j[1], $j[2], $j[3], $j[4] );
-			MP_Push::send( $j[0] );
+			MP_Push::send( $j[0], ! empty( $j[5] ) );
 		}
 	}
 

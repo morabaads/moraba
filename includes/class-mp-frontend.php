@@ -24,6 +24,8 @@ class MP_Frontend {
 
 	public static function add_rewrite() {
 		add_rewrite_rule( '^' . self::slug() . '/?$', 'index.php?mp_panel=1', 'top' );
+		// «مربع چت»: the staff chat on its own, as a separate app (PWA, Android, Windows).
+		add_rewrite_rule( '^' . self::chat_slug() . '/?$', 'index.php?mp_panel=chat', 'top' );
 		// Short public links for clients: /c/{token} (portal) and /i/{token} (invoice).
 		add_rewrite_rule( '^c/([A-Za-z0-9]{32})/?$', 'index.php?mp_client=$matches[1]', 'top' );
 		add_rewrite_rule( '^i/([A-Za-z0-9]{32})/?$', 'index.php?mp_invoice=$matches[1]', 'top' );
@@ -49,6 +51,60 @@ class MP_Frontend {
 		return $vars;
 	}
 
+	public static function chat_slug() {
+		$slug = sanitize_title( get_option( 'mp_chat_slug', 'chat' ) );
+		return $slug ? $slug : 'chat';
+	}
+
+	/** «مربع چت»: the staff chat as its own app. */
+	public static function chat_url() {
+		return get_option( 'permalink_structure' ) ? home_url( '/' . self::chat_slug() . '/' ) : add_query_arg( 'mp_panel', 'chat', home_url( '/' ) );
+	}
+
+	/** Is this request the chat app (its page, login, manifest or service worker)? */
+	public static function is_chat() {
+		return 'chat' === get_query_var( 'mp_panel' );
+	}
+
+	public static function chat_scope() {
+		$path = wp_parse_url( self::chat_url(), PHP_URL_PATH );
+		return trailingslashit( $path ? $path : '/' );
+	}
+
+	/** Windows and Android downloads of «مربع چت» (shipped inside the plugin). */
+	public static function chat_downloads() {
+		return array(
+			'apk' => MP_URL . 'assets/app/moraba-chat.apk?ver=' . MP_VERSION,
+			'exe' => add_query_arg( 'mp_chat_exe', MP_VERSION, home_url( '/' ) ),
+		);
+	}
+
+	/**
+	 * ?mp_chat_exe — the Windows app with this site's chat address written into it (the build carries a
+	 * UTF-16 placeholder of 300 characters; see apps/windows/moraba-chat.c), so one build serves every site.
+	 */
+	private static function chat_exe() {
+		$bytes = (string) file_get_contents( MP_DIR . 'assets/app/MorabaChat.exe' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		$mark  = mb_convert_encoding( '@@MORABA_CHAT_URL@@', 'UTF-16LE', 'UTF-8' );
+		$at    = strpos( $bytes, $mark );
+		if ( '' === $bytes || false === $at ) {
+			status_header( 404 );
+			exit( 'Not found' );
+		}
+		$url   = mb_convert_encoding( substr( self::chat_url(), 0, 290 ), 'UTF-16LE', 'UTF-8' );
+		$bytes = substr_replace( $bytes, str_pad( $url, 600, "\0" ), $at, 600 );
+		while ( ob_get_level() ) {
+			ob_end_clean();
+		}
+		nocache_headers();
+		header( 'Content-Type: application/vnd.microsoft.portable-executable' );
+		header( 'Content-Disposition: attachment; filename="MorabaChat.exe"' );
+		header( 'Content-Length: ' . strlen( $bytes ) );
+		header( 'X-Content-Type-Options: nosniff' );
+		echo $bytes; // phpcs:ignore WordPress.Security.EscapeOutput
+		exit;
+	}
+
 	public static function panel_url() {
 		$page = (int) get_option( 'mp_page_id' );
 		if ( $page && 'publish' === get_post_status( $page ) ) {
@@ -70,14 +126,23 @@ class MP_Frontend {
 		if ( is_string( $mf ) && preg_match( '/^[A-Za-z0-9]{32}$/', $mf ) ) {
 			self::client_manifest( $mf );
 		}
+		if ( 'chat' === $mf ) {
+			self::chat_manifest();
+		}
 		if ( $mf ) {
 			self::manifest();
 		}
 		if ( 'client' === get_query_var( 'mp_sw' ) ) {
 			self::client_service_worker();
 		}
+		if ( 'chat' === get_query_var( 'mp_sw' ) ) {
+			self::service_worker( true );
+		}
 		if ( get_query_var( 'mp_sw' ) ) {
 			self::service_worker();
+		}
+		if ( isset( $_GET['mp_chat_exe'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			self::chat_exe();
 		}
 		if ( get_query_var( 'mp_push_feed' ) ) {
 			MP_Push::feed();
@@ -98,6 +163,10 @@ class MP_Frontend {
 		if ( preg_match( '#/mp-app/?$#', $path ) ) {
 			status_header( 200 );
 			MP_App::render();
+		}
+		if ( get_option( 'permalink_structure' ) && preg_match( '#/' . preg_quote( self::chat_slug(), '#' ) . '/?$#', $path ) && ! get_query_var( 'mp_panel' ) ) {
+			status_header( 200 );
+			set_query_var( 'mp_panel', 'chat' );
 		}
 		if ( preg_match( '#/s/([A-Za-z0-9]{6})/?$#', $path, $pm ) ) {
 			MP_Messages::redirect( $pm[1] );
@@ -144,14 +213,15 @@ class MP_Frontend {
 		}
 		self::no_page_cache();
 		header( 'X-Frame-Options: SAMEORIGIN' );
+		$chat = self::is_chat();
 		if ( ! is_user_logged_in() ) {
-			self::template( 'login' );
+			self::template( 'login', array( 'mp_chat_app' => $chat ) );
 		} elseif ( ! current_user_can( 'mp_access_panel' ) ) {
 			status_header( 403 );
 			self::template( 'no-access' );
 		} else {
 			update_user_meta( get_current_user_id(), 'mp_last_seen', time() );
-			self::template( 'panel' );
+			self::template( 'panel', array( 'mp_chat_app' => $chat ) );
 		}
 		exit;
 	}
@@ -221,20 +291,58 @@ class MP_Frontend {
 		exit;
 	}
 
-	/** Service worker served from the site root so it may control the panel URL. Caches static assets only. */
-	private static function service_worker() {
+	/** «مربع چت»: its own name, icon, scope and start page, so it installs as a second app beside the panel. */
+	private static function chat_manifest() {
+		header( 'Content-Type: application/manifest+json; charset=utf-8' );
+		$icons = array(
+			array( 'src' => MP_URL . 'assets/img/chat-192.png', 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any maskable' ),
+			array( 'src' => MP_URL . 'assets/img/chat-512.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any maskable' ),
+		);
+		echo wp_json_encode(
+			array(
+				'name'             => 'مربع چت',
+				'short_name'       => 'مربع چت',
+				'lang'             => 'fa',
+				'dir'              => 'rtl',
+				'start_url'        => self::chat_url(),
+				'scope'            => self::chat_scope(),
+				'id'               => self::chat_scope(),
+				'display'          => 'standalone',
+				'display_override' => array( 'standalone', 'minimal-ui' ),
+				'orientation'      => 'any',
+				'categories'       => array( 'social', 'business', 'productivity' ),
+				'description'      => 'پیام‌رسان تیم مربع: گفت‌وگوهای تیم، خصوصی و مشتری‌ها',
+				'background_color' => '#161616',
+				'theme_color'      => '#161616',
+				'icons'            => $icons,
+				'shortcuts'        => array(
+					array( 'name' => 'پیام‌های ذخیره‌شده', 'url' => self::chat_url() . '#saved', 'icons' => array( $icons[0] ) ),
+					array( 'name' => 'پنل مربع', 'url' => self::panel_url(), 'icons' => array( array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192' ) ) ),
+				),
+			),
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+		);
+		exit;
+	}
+
+	/**
+	 * Service worker served from the site root so it may control the panel URL (or, with $chat, the chat app's
+	 * /chat/). Caches static assets only. The chat app's one shows message notifications only.
+	 */
+	private static function service_worker( $chat = false ) {
 		header( 'Content-Type: application/javascript; charset=utf-8' );
-		header( 'Service-Worker-Allowed: ' . self::scope() );
+		header( 'Service-Worker-Allowed: ' . ( $chat ? self::chat_scope() : self::scope() ) );
 		header( 'Cache-Control: no-cache' );
 		$assets = array();
-		foreach ( array_merge( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'js/pwa.js' ), array_map( function ( $s ) { return 'js/' . $s; }, self::SCRIPTS ) ) as $a ) {
+		foreach ( array_merge( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'img/chat-192.png', 'js/pwa.js' ), array_map( function ( $s ) { return 'js/' . $s; }, self::SCRIPTS ) ) as $a ) {
 			$assets[] = MP_URL . 'assets/' . $a . ( 0 === strpos( $a, 'fonts/' ) ? '' : '?ver=' . MP_VERSION ); // app.css asks for the font without ?ver
 		}
-		$cache = 'mp-' . MP_VERSION;
-		echo "const CACHE=" . wp_json_encode( $cache ) . ",ASSETS=" . wp_json_encode( $assets ) . ',FEED=' . wp_json_encode( add_query_arg( 'mp_push_feed', 1, home_url( '/' ) ) ) . ',START=' . wp_json_encode( self::panel_url() ) . ',ICON=' . wp_json_encode( MP_URL . 'assets/img/icon-192.png' ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ',WAPI=' . wp_json_encode( rest_url( 'moraba-panel/v1/widget' ) ) . ";\n"; // phpcs:ignore
+		$cache = ( $chat ? 'mp-chat-' : 'mp-' ) . MP_VERSION;
+		$feed  = add_query_arg( $chat ? array( 'mp_push_feed' => 1, 'chat' => 1 ) : array( 'mp_push_feed' => 1 ), home_url( '/' ) );
+		echo "const CACHE=" . wp_json_encode( $cache ) . ",ASSETS=" . wp_json_encode( $assets ) . ',FEED=' . wp_json_encode( $feed ) . ',START=' . wp_json_encode( $chat ? self::chat_url() : self::panel_url() ) . ',ICON=' . wp_json_encode( MP_URL . 'assets/img/' . ( $chat ? 'chat-192.png' : 'icon-192.png' ) ) . ',APPNAME=' . wp_json_encode( $chat ? 'مربع چت' : 'پنل مربع' ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ',WAPI=' . wp_json_encode( rest_url( 'moraba-panel/v1/widget' ) ) . ";\n"; // phpcs:ignore
 		echo <<<'JS'
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n.startsWith('mp-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>/^mp-(chat-)?[\d.]+$/.test(n)&&n.startsWith('mp-chat-')===CACHE.startsWith('mp-chat-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
   const r=e.request; if(r.method!=='GET')return;
   const u=new URL(r.url);
@@ -250,12 +358,12 @@ self.addEventListener('push',e=>{
     const focused=list.find(c=>c.focused&&c.visibilityState==='visible');
     if(focused){focused.postMessage({type:'refresh'});return;}
     return fetch(FEED,{credentials:'include',cache:'no-store'}).then(r=>r.json()).then(n=>{
-      if(!n||!n.title)return self.registration.showNotification('پنل مربع',{body:'اعلان جدید دارید',icon:ICON,badge:ICON,dir:'rtl',lang:'fa',data:{url:START}});
+      if(!n||!n.title)return self.registration.showNotification(APPNAME,{body:'اعلان جدید دارید',icon:ICON,badge:ICON,dir:'rtl',lang:'fa',data:{url:START}});
       if(self.navigator&&self.navigator.setAppBadge)self.navigator.setAppBadge(n.count).catch(()=>{});
       const o={body:n.body,icon:ICON,badge:ICON,tag:n.tag,renotify:true,dir:'rtl',lang:'fa',data:{url:n.url,channel:n.channel||0}};
       if(n.channel)o.actions=[{action:'reply',title:'پاسخ'},{action:'read',title:'خوانده شد'}];
       return self.registration.showNotification(n.title,o);
-    }).catch(()=>self.registration.showNotification('پنل مربع',{body:'اعلان جدید دارید',icon:ICON,dir:'rtl',data:{url:START}}));
+    }).catch(()=>self.registration.showNotification(APPNAME,{body:'اعلان جدید دارید',icon:ICON,dir:'rtl',data:{url:START}}));
   }));
 });
 // Windows 11 widgets (Edge-installed app): the summary is read with the user's own session.
@@ -427,14 +535,17 @@ JS;
 
 	/** Install helper: iPhone banner everywhere, plus Android install button and SW on the login page. */
 	public static function pwa_script( $login = false ) {
+		$chat = self::is_chat();
+		$dl   = self::chat_downloads();
 		return sprintf(
-			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="%s" data-apk="%s" defer></script>',
+			'<script src="%s" data-sw="%s" data-scope="%s" data-icon="%s" data-login="%s" data-apk="%s"%s defer></script>',
 			esc_url( self::asset( 'js/pwa.js' ) ),
-			esc_url( add_query_arg( 'mp_sw', 1, home_url( '/' ) ) ),
-			esc_attr( self::scope() ),
-			esc_url( self::asset( 'img/icon-180.png' ) ),
+			esc_url( add_query_arg( 'mp_sw', $chat ? 'chat' : 1, home_url( '/' ) ) ),
+			esc_attr( $chat ? self::chat_scope() : self::scope() ),
+			esc_url( self::asset( $chat ? 'img/chat-180.png' : 'img/icon-180.png' ) ),
 			$login ? '1' : '',
-			esc_url( self::apk_url() )
+			esc_url( $chat ? $dl['apk'] : self::apk_url() ),
+			$chat ? ' data-chat="1" data-exe="' . esc_url( $dl['exe'] ) . '"' : ''
 		);
 	}
 
@@ -449,12 +560,15 @@ JS;
 			'nonce'  => wp_create_nonce( 'wp_rest' ),
 			'user'   => get_current_user_id(),
 			'apk'    => self::apk_url(),
+			'chatApp' => self::is_chat(),
+			'panel'  => self::panel_url(),
+			'chat'   => array( 'url' => self::chat_url() ) + self::chat_downloads(),
 			'appEntry' => MP_App::url(),
 			'assets' => MP_URL . 'assets/',
 			'version' => MP_VERSION,
 			'emoji'  => array( MP_Chat::emoji_url(), home_url( '/' ) . ( false === strpos( home_url( '/' ), '?' ) ? '?' : '&' ) . 'mp_emoji=' ),
-			'sw'     => add_query_arg( 'mp_sw', 1, home_url( '/' ) ),
-			'scope'  => self::scope(),
+			'sw'     => add_query_arg( 'mp_sw', self::is_chat() ? 'chat' : 1, home_url( '/' ) ),
+			'scope'  => self::is_chat() ? self::chat_scope() : self::scope(),
 			'export' => add_query_arg( array( 'mp_export' => 'ledger', '_wpnonce' => wp_create_nonce( 'mp_export' ) ), home_url( '/' ) ),
 			'tasksExport' => add_query_arg( array( 'mp_export' => 'tasks', '_wpnonce' => wp_create_nonce( 'mp_export' ) ), home_url( '/' ) ),
 			'payrollExport' => add_query_arg( array( 'mp_export' => 'payroll', '_wpnonce' => wp_create_nonce( 'mp_export' ) ), home_url( '/' ) ),
