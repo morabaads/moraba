@@ -132,7 +132,41 @@
     }
     return MP.apiRaw(path, opts);
   };
+  /*
+   * The REST nonce lives a day at most; a page left open longer (the Windows app beside the clock) asks for a fresh
+   * one (?mp_nonce=1, signed in by cookie) every few hours and whenever the server says it has expired.
+   */
+  var renewing = null;
+  MP.renewNonce = function () {
+    if (renewing) return renewing;
+    var u = (C.home || '/') + (String(C.home || '/').indexOf('?') >= 0 ? '&' : '?') + 'mp_nonce=1&_=' + Date.now();
+    renewing = fetch(u, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) {
+      if (r.status === 401) { var e = new Error('ورود شما به پایان رسیده؛ دوباره وارد شوید.'); e.status = 401; e.signedOut = true; throw e; }
+      return r.json();
+    }).then(function (d) {
+      renewing = null;
+      if (d && d.nonce) { C.nonce = d.nonce; MP.emit('nonce', d.nonce); return true; }
+      return false;
+    }, function (e) { renewing = null; if (e && e.signedOut) { MP.emit('signedout'); } throw e; });
+    return renewing;
+  };
+  setInterval(function () { MP.renewNonce().catch(function () {}); }, 4 * 3600 * 1000);
+  document.addEventListener('visibilitychange', function () {
+    // back after a long sleep: renew first so the first click does not fail
+    if (!document.hidden && Date.now() - (MP.lastRenew || 0) > 3600 * 1000) { MP.lastRenew = Date.now(); MP.renewNonce().catch(function () {}); }
+  });
+  MP.lastRenew = Date.now();
   MP.apiRaw = function (path, opts) {
+    return apiOnce(path, opts).catch(function (err) {
+      var stale = err && (err.code === 'rest_cookie_invalid_nonce' || (err.status === 403 && /nonce/i.test(err.code || '')));
+      if (!stale || (opts && opts._retried)) throw err;
+      return MP.renewNonce().then(function (ok) {
+        if (!ok) throw err;
+        return apiOnce(path, Object.assign({}, opts || {}, { _retried: true }));
+      });
+    });
+  };
+  function apiOnce(path, opts) {
     opts = opts || {};
     var url = C.root + path;
     if (opts.query) {

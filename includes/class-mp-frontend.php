@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Version of the Windows app (apps/windows/moraba-chat.c APP_VERSION); installed copies update themselves to it. */
-	const CHAT_EXE_VERSION = '2.3.0';
+	const CHAT_EXE_VERSION = '2.4.0';
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
 	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'chat-shell.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
@@ -17,6 +17,8 @@ class MP_Frontend {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
 		add_filter( 'query_vars', array( __CLASS__, 'query_vars' ) );
 		add_action( 'template_redirect', array( __CLASS__, 'maybe_render' ), 1 );
+		// «مرا به خاطر بسپار» lasts half a year (WordPress: 14 days), so the apps do not ask to sign in every two weeks.
+		add_filter( 'auth_cookie_expiration', function ( $len, $uid, $remember ) { return $remember ? 180 * DAY_IN_SECONDS : $len; }, 10, 3 );
 		add_shortcode( 'moraba_panel', array( __CLASS__, 'shortcode' ) );
 	}
 
@@ -87,7 +89,25 @@ class MP_Frontend {
 	 * UTF-16 placeholder of 300 characters; see apps/windows/moraba-chat.c), so one build serves every site.
 	 */
 	private static function chat_exe() {
+		// The app's own update (2.4+): &sig=1 → the build's ECDSA signature (hex), &raw=1 → the file exactly as it was
+		// signed; the app checks the signature with the public key built into it, then writes its address in itself.
+		if ( isset( $_GET['sig'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			nocache_headers();
+			header( 'Content-Type: text/plain' );
+			echo esc_html( trim( (string) @file_get_contents( MP_DIR . 'assets/app/MorabaChat.exe.sig' ) ) ); // phpcs:ignore
+			exit;
+		}
 		$bytes = (string) file_get_contents( MP_DIR . 'assets/app/MorabaChat.exe' ); // phpcs:ignore WordPress.WP.AlternativeFunctions
+		if ( isset( $_GET['raw'] ) && '' !== $bytes ) { // phpcs:ignore WordPress.Security.NonceVerification
+			while ( ob_get_level() ) {
+				ob_end_clean();
+			}
+			nocache_headers();
+			header( 'Content-Type: application/octet-stream' );
+			header( 'Content-Length: ' . strlen( $bytes ) );
+			echo $bytes; // phpcs:ignore WordPress.Security.EscapeOutput
+			exit;
+		}
 		$mark  = mb_convert_encoding( '@@MORABA_CHAT_URL@@', 'UTF-16LE', 'UTF-8' );
 		$at    = strpos( $bytes, $mark );
 		if ( '' === $bytes || false === $at ) {
@@ -149,6 +169,15 @@ class MP_Frontend {
 		}
 		if ( get_query_var( 'mp_push_feed' ) ) {
 			MP_Push::feed();
+		}
+		// ?mp_nonce=1: a fresh REST nonce for a page that has been open longer than a nonce lives (the Windows app
+		// beside the clock for days). Signed-in by cookie; 401 when the sign-in itself has ended.
+		if ( isset( $_GET['mp_nonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			nocache_headers();
+			if ( ! is_user_logged_in() ) {
+				wp_send_json( array( 'nonce' => '' ), 401 );
+			}
+			wp_send_json( array( 'nonce' => wp_create_nonce( 'wp_rest' ), 'user' => get_current_user_id() ) );
 		}
 		if ( isset( $_GET['mp_client_feed'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			MP_App::client_feed();
@@ -569,6 +598,7 @@ JS;
 			'chat'   => array( 'url' => self::chat_url(), 'feed' => add_query_arg( array( 'mp_push_feed' => 1, 'chat' => 1 ), home_url( '/' ) ) ) + self::chat_downloads(),
 			'appEntry' => MP_App::url(),
 			'assets' => MP_URL . 'assets/',
+			'home'   => home_url( '/' ),
 			'version' => MP_VERSION,
 			'emoji'  => array( MP_Chat::emoji_url(), home_url( '/' ) . ( false === strpos( home_url( '/' ), '?' ) ? '?' : '&' ) . 'mp_emoji=' ),
 			'sw'     => add_query_arg( 'mp_sw', self::is_chat() ? 'chat' : 1, home_url( '/' ) ),

@@ -36,14 +36,19 @@
 #include <dwmapi.h>
 #include <urlmon.h>
 #include <wchar.h>
+#include <stdio.h>
 #include <wtsapi32.h>
 #include <powrprof.h>
+#include <bcrypt.h>
 #ifndef DECLSPEC_XFGVIRT
 #define DECLSPEC_XFGVIRT(a, b)
 #endif
 #include "WebView2.h"
+#include "update-key.h" /* the public key updates are signed with (sign.py) */
 
-#define APP_VERSION L"2.3.0"
+#ifndef APP_VERSION
+#define APP_VERSION L"2.4.0"
+#endif
 #define APP_ID L"Moraba.Chat"
 #define APP_NAME L"\x0645\x0631\x0628\x0639 \x0686\x062A" /* مربع چت */
 #define WND_CLASS L"MorabaChatWnd"
@@ -1249,39 +1254,116 @@ static int newer(const wchar_t *a, const wchar_t *b) { /* is a > b ("2.1.0" > "2
     return 0;
 }
 
+/* ECDSA P-256 / SHA-256: is sighex (r||s, 128 hex digits) a signature of data by UPDATE_KEY? */
+static int verify_update(const BYTE *data, DWORD len, const char *sighex) {
+    BYTE sig[64], hash[32];
+    for (int i = 0; i < 64; i++) {
+        unsigned v;
+        if (!sighex[i * 2] || !sighex[i * 2 + 1] || sscanf(sighex + i * 2, "%2x", &v) != 1) return 0;
+        sig[i] = (BYTE)v;
+    }
+    int ok = 0;
+    BCRYPT_ALG_HANDLE ha = NULL, ea = NULL;
+    BCRYPT_HASH_HANDLE hh = NULL;
+    BCRYPT_KEY_HANDLE key = NULL;
+    if (BCryptOpenAlgorithmProvider(&ha, BCRYPT_SHA256_ALGORITHM, NULL, 0) == 0 &&
+        BCryptCreateHash(ha, &hh, NULL, 0, NULL, 0, 0) == 0 &&
+        BCryptHashData(hh, (PUCHAR)data, len, 0) == 0 &&
+        BCryptFinishHash(hh, hash, 32, 0) == 0 &&
+        BCryptOpenAlgorithmProvider(&ea, BCRYPT_ECDSA_P256_ALGORITHM, NULL, 0) == 0 &&
+        BCryptImportKeyPair(ea, NULL, BCRYPT_ECCPUBLIC_BLOB, &key, (PUCHAR)UPDATE_KEY, sizeof(UPDATE_KEY), 0) == 0)
+        ok = BCryptVerifySignature(key, NULL, hash, 32, sig, 64, 0) == 0;
+    if (key) BCryptDestroyKey(key);
+    if (hh) BCryptDestroyHash(hh);
+    if (ha) BCryptCloseAlgorithmProvider(ha, 0);
+    if (ea) BCryptCloseAlgorithmProvider(ea, 0);
+    return ok;
+}
+
+static BYTE *read_all(const wchar_t *path, DWORD *len) {
+    HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return NULL;
+    DWORD size = GetFileSize(f, NULL), got = 0;
+    BYTE *b = size && size < 64 * 1024 * 1024 ? (BYTE *)HeapAlloc(GetProcessHeap(), 0, size + 1) : NULL;
+    if (b && (!ReadFile(f, b, size, &got, NULL) || got != size)) { HeapFree(GetProcessHeap(), 0, b); b = NULL; }
+    CloseHandle(f);
+    if (b) { b[size] = 0; *len = size; }
+    return b;
+}
+
+/*
+ * Updates from the site, signed: the new program is downloaded exactly as it was built (&raw=1) together with its
+ * signature (&sig=1), checked against the public key built into this program, and only then given this
+ * installation's site address (written into the copy, as the panel does on download) and swapped in. A hacked site
+ * cannot push a program of its own: the private key never leaves the build (apps/, not in the plugin).
+ */
+#ifdef UPD_DEBUG /* test builds: what the update did, in C:\upd.log */
+#define UDBG(...) do { FILE *lf = fopen("C:\\upd.log", "a"); if (lf) { fprintf(lf, __VA_ARGS__); fputc('\n', lf); fclose(lf); } } while (0)
+#else
+#define UDBG(...) do { } while (0)
+#endif
 static DWORD WINAPI update_thread(LPVOID unused) {
     (void)unused;
-    wchar_t info[1300], tmp[MAX_PATH], next[MAX_PATH], old[MAX_PATH], dl[1300];
-    swprintf(info, 1300, L"%ls%lsrest_route=/moraba-panel/v1/app/info&_=%llu", g_url, wcschr(g_url, L'?') ? L"&" : L"?", (unsigned long long)GetTickCount64());
+    wchar_t info[1300], tmp[MAX_PATH], next[MAX_PATH], old[MAX_PATH], dl[1300], sigf[MAX_PATH];
+    const wchar_t *sep = wcschr(g_url, L'?') ? L"&" : L"?";
+    swprintf(info, 1300, L"%ls%lsrest_route=/moraba-panel/v1/app/info&_=%llu", g_url, sep, (unsigned long long)GetTickCount64());
     swprintf(tmp, MAX_PATH, L"%ls\\update.json", g_home);
-    if (FAILED(URLDownloadToFileW(NULL, info, tmp, 0, NULL))) return 0;
-    char buf[4096] = { 0 };
+    if (FAILED(URLDownloadToFileW(NULL, info, tmp, 0, NULL))) { UDBG("info download failed"); return 0; }
     DWORD got = 0;
-    HANDLE f = CreateFileW(tmp, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-    if (f == INVALID_HANDLE_VALUE) return 0;
-    ReadFile(f, buf, sizeof(buf) - 1, &got, NULL);
-    CloseHandle(f);
+    BYTE *jb = read_all(tmp, &got);
     DeleteFileW(tmp);
-    char *v = strstr(buf, "\"desktop\":\"");
-    if (!v) return 0;
-    v += 11;
+    if (!jb) return 0;
+    char *v = strstr((char *)jb, "\"desktop\":\"");
     wchar_t ver[32] = { 0 };
-    for (int i = 0; i < 31 && v[i] && v[i] != '"'; i++) ver[i] = (wchar_t)v[i];
-    if (!newer(ver, APP_VERSION) || (g_updated && !newer(ver, g_new_version))) return 0;
-    swprintf(dl, 1300, L"%ls%lsmp_chat_exe=%ls", g_url, wcschr(g_url, L'?') ? L"&" : L"?", ver);
+    if (v) { v += 11; for (int i = 0; i < 31 && v[i] && v[i] != '"'; i++) ver[i] = (wchar_t)v[i]; }
+    HeapFree(GetProcessHeap(), 0, jb);
+    UDBG("site has %ls", ver);
+    if (!ver[0] || !newer(ver, APP_VERSION) || (g_updated && !newer(ver, g_new_version))) return 0;
+    /* the signature */
+    swprintf(dl, 1300, L"%ls%lsmp_chat_exe=%ls&sig=1&_=%llu", g_url, sep, ver, (unsigned long long)GetTickCount64());
+    swprintf(sigf, MAX_PATH, L"%ls\\update.sig", g_home);
+    if (FAILED(URLDownloadToFileW(NULL, dl, sigf, 0, NULL))) return 0;
+    BYTE *sig = read_all(sigf, &got);
+    DeleteFileW(sigf);
+    if (!sig) return 0;
+    /* the program as built */
+    swprintf(dl, 1300, L"%ls%lsmp_chat_exe=%ls&raw=1&_=%llu", g_url, sep, ver, (unsigned long long)GetTickCount64());
     swprintf(next, MAX_PATH, L"%ls\\MorabaChat.new.exe", g_home);
-    if (FAILED(URLDownloadToFileW(NULL, dl, next, 0, NULL))) return 0;
-    /* a sane Windows program, then swap: the running copy may be renamed, not overwritten */
-    char mz[2] = { 0 };
-    WIN32_FILE_ATTRIBUTE_DATA fa;
-    f = CreateFileW(next, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
-    if (f != INVALID_HANDLE_VALUE) { ReadFile(f, mz, 2, &got, NULL); CloseHandle(f); }
-    if (mz[0] != 'M' || mz[1] != 'Z' || !GetFileAttributesExW(next, GetFileExInfoStandard, &fa) || fa.nFileSizeLow < 100000) { DeleteFileW(next); return 0; }
+    if (FAILED(URLDownloadToFileW(NULL, dl, next, 0, NULL))) { HeapFree(GetProcessHeap(), 0, sig); return 0; }
+    DWORD len = 0;
+    BYTE *exe = read_all(next, &len);
+    DeleteFileW(next);
+    int good = exe && len > 100000 && exe[0] == 'M' && exe[1] == 'Z' && verify_update(exe, len, (const char *)sig);
+    HeapFree(GetProcessHeap(), 0, sig);
+    UDBG("downloaded %lu bytes, signature %s", (unsigned long)len, good ? "good" : "BAD");
+    if (!good) { if (exe) HeapFree(GetProcessHeap(), 0, exe); return 0; }
+    /* this installation's address goes into the new copy (where the build left the placeholder) */
+    /* the placeholder, put together here so that its text appears only once in the program (in SITE_URL) */
+    wchar_t mark[] = L"##MORABA_CHAT_URL##";
+    mark[0] = mark[1] = mark[17] = mark[18] = L'@';
+    DWORD mlen = (DWORD)(wcslen(mark) * sizeof(wchar_t));
+    for (DWORD i = 0; i + 600 <= len; i++) {
+        if (memcmp(exe + i, mark, mlen) == 0) {
+            wchar_t addr[300] = { 0 };
+            for (int k = 0; k < 299 && SITE_URL[k]; k++) addr[k] = SITE_URL[k];
+            if (addr[0] != L'h') lstrcpynW(addr, g_url, 300); /* a development copy: the address in use */
+            memcpy(exe + i, addr, 600);
+            break;
+        }
+    }
+    HANDLE f = CreateFileW(next, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    DWORD w = 0;
+    int written = f != INVALID_HANDLE_VALUE && WriteFile(f, exe, len, &w, NULL) && w == len;
+    if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+    HeapFree(GetProcessHeap(), 0, exe);
+    if (!written) { DeleteFileW(next); return 0; }
+    /* swap: the running copy may be renamed, not overwritten */
     swprintf(old, MAX_PATH, L"%ls\\MorabaChat.old.exe", g_home);
     DeleteFileW(old);
     if (!MoveFileExW(g_self, old, MOVEFILE_REPLACE_EXISTING)) { DeleteFileW(next); return 0; }
     if (!MoveFileExW(next, g_self, MOVEFILE_REPLACE_EXISTING)) { MoveFileExW(old, g_self, MOVEFILE_REPLACE_EXISTING); return 0; }
     wcsncpy(g_new_version, ver, 31);
+    UDBG("swapped in %ls", ver);
     PostMessageW(g_wnd, WM_UPDATED, 0, 0);
     return 0;
 }

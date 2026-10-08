@@ -80,3 +80,10 @@
     });
   });
 })();
+// The sign-in itself ended (cookie expired or signed out elsewhere): back to the sign-in page, once a minute at most.
+window.MP.on('signedout', function () {
+  var t = 0; try { t = +sessionStorage.getItem('mp_reboot') || 0; } catch (e) { /* private */ }
+  if (Date.now() - t < 60000) return;
+  try { sessionStorage.setItem('mp_reboot', String(Date.now())); } catch (e) { /* private */ }
+  location.reload();
+});

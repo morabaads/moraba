@@ -84,6 +84,7 @@ if ( $mp_support && ! preg_match( '#^(https?://|mailto:|tel:)#', $mp_support ) )
 					'label_password' => 'رمز عبور',
 					'label_remember' => 'مرا به خاطر بسپار',
 					'label_log_in'   => 'ورود',
+					'value_remember' => true, // the panel, «مربع چت» and the apps stay signed in
 				)
 			);
 			?>
