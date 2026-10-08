@@ -3563,3 +3563,16 @@ a.ios-install-btn{display:flex;align-items:center;justify-content:center;text-de
 .cp-me-other{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;border-radius:12px;background:none;color:var(--ink);font:inherit;font-size:14px;cursor:pointer;text-align:right}
 .cp-me-other:hover{background:var(--surface-2)}
 .cp-me-other .icon{width:18px;height:18px;color:var(--brand)}
+.cp-tattach{display:grid;gap:6px;font-size:13px;color:var(--ink-2)}
+.cp-tdrop{display:flex;align-items:center;justify-content:center;gap:10px;min-height:76px;padding:12px;border:1.5px dashed var(--line-strong);border-radius:14px;background:var(--surface-2,var(--surface));color:var(--muted);font:inherit;font-size:13px;cursor:pointer;text-align:center}
+.cp-tdrop:hover{border-color:var(--brand);color:var(--brand-strong)}
+.cp-tdrop .icon{width:22px;height:22px;flex:none}
+.cp-sheet.cp-drop .cp-tdrop{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 10%,transparent);color:var(--brand-strong)}
+.cp-tfiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.cp-tfiles:empty{display:none}
+.cp-tfile{position:relative;display:grid;gap:4px;padding:4px;border-radius:12px;background:var(--surface-2,var(--surface));overflow:hidden}
+.cp-tfile img,.cp-tfile b{width:100%;aspect-ratio:1;border-radius:9px;object-fit:cover;display:grid;place-items:center;background:var(--brand);color:#fff;font-size:12px}
+.cp-tfile small{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.cp-tprog{position:absolute;inset-inline-start:0;bottom:0;height:3px;width:0;background:var(--brand);transition:width .2s}
+.cp-tx{position:absolute;top:6px;inset-inline-end:6px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;cursor:pointer}
+.cp-tx .icon{width:13px;height:13px}

@@ -626,6 +626,7 @@ window.MPClientChat = function (o) {
 
   return {
     load: load,
+    upload: upload,
     start: function () { if (started) return load(false); started = true; return load(true); },
     preview: function () { canEdit = false; text.disabled = true; text.placeholder = 'در حالت نمای مشتری پیام فرستاده نمی‌شود'; ['cp-clip', 'cp-mic', 'cp-emoji'].forEach(function (id) { $(id).disabled = true; }); form.querySelector('.composer-send').disabled = true; }
   };

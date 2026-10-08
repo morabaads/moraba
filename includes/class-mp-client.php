@@ -257,7 +257,7 @@ class MP_Client {
 	}
 
 	/**
-	 * POST client/{token}/tasks {title, description?, date?} — the client adds a task to the project, when the
+	 * POST client/{token}/tasks {title, description?, file_ids?} — the client adds a task to the project (for today), when the
 	 * team allowed it for this group. It goes to the group's maker (else the project's first member), shows
 	 * «از طرف مشتری», and the group's colleagues get a notification and a line in the chat.
 	 */
@@ -278,9 +278,15 @@ class MP_Client {
 		if ( '' === $title ) {
 			return self::err( 'عنوان کار را بنویسید.' );
 		}
-		$date = (string) $r['date'];
-		if ( ! preg_match( '/^\d{4}-\d\d-\d\d$/', $date ) || $date < MP_Util::today() ) {
-			$date = MP_Util::today();
+		$date = MP_Util::today(); // the team sets the schedule; the client only asks
+		// Pictures or files sent with it: uploaded through client/{token}/upload, not yet used anywhere.
+		$files = array();
+		foreach ( array_slice( array_unique( array_map( 'intval', (array) $r['file_ids'] ) ), 0, 10 ) as $fid ) {
+			$f = $fid ? MP_Files::get( $fid ) : null;
+			if ( ! $f || 'message' !== $f->context || (int) $f->context_id !== (int) $ch->id || (int) $f->user_id || $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'messages' ) . ' WHERE file_id = %d LIMIT 1', $fid ) ) ) {
+				return self::err( 'یکی از پیوست‌ها پیدا نشد؛ دوباره بفرستید.', 404 );
+			}
+			$files[] = $f;
 		}
 		$owner = MP_Util::is_panel_user( (int) $ch->created_by ) ? (int) $ch->created_by : 0;
 		if ( ! $owner ) {
@@ -310,6 +316,9 @@ class MP_Client {
 			)
 		);
 		$id = (int) $wpdb->insert_id;
+		foreach ( $files as $f ) {
+			$wpdb->update( self::t( 'files' ), array( 'context' => 'task', 'context_id' => $id, 'user_id' => $owner ), array( 'id' => $f->id ) );
+		}
 		MP_Audit::log( 'create', 'task', $id, '«' . $title . '» از طرف مشتری ' . $who . ' در پرتال «' . $ch->title . '»' );
 		foreach ( MP_Rest::channel_members( $ch ) as $member ) {
 			MP_Notify::event( 'task_client', $member, array( 'CLIENT' => $who, 'GROUP' => $ch->title, 'TASK' => $title ), 'calendar', $id );
@@ -317,7 +326,7 @@ class MP_Client {
 		self::system( $ch->id, 0, $who . ' کار «' . $title . '» را اضافه کرد', array( 't' => 'task', 'id' => $id ) );
 		self::log_acting( $ch, 'افزودن کار «' . $title . '»' );
 		MP_Live::bump();
-		return array( 'id' => $id, 'title' => $title, 'date' => $date );
+		return array( 'id' => $id, 'title' => $title, 'date' => $date, 'files' => count( $files ) );
 	}
 
 	private static function otp_key( $ch, $mobile ) {

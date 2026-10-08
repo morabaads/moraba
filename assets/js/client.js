@@ -303,28 +303,48 @@
   function addTask() {
     var title = h('input', { name: 'title', maxlength: '200', required: '', placeholder: 'مثلاً نسخه انگلیسی کارت ویزیت' });
     var desc = h('textarea', { name: 'description', maxlength: '2000', placeholder: 'جزئیات، توضیح یا لینک (اختیاری)' });
-    var t = today(), opts = [];
-    for (var i = 0; i < 60; i++) {
-      var d = new Date(Date.parse(t + 'T12:00:00') + i * 864e5), iso = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-      opts.push(h('option', { value: iso, text: (i === 0 ? 'امروز · ' : i === 1 ? 'فردا · ' : '') + jal(iso) }));
+    // Pictures (or any file): pick, paste or drop; they go up in pieces when the task is sent.
+    var files = [], pick = h('input', { type: 'file', multiple: '', hidden: '' });
+    var thumbs = h('div', { class: 'cp-tfiles' });
+    var drop = h('button', { type: 'button', class: 'cp-tdrop', html: icon('image') + '<span>تصویر یا فایل را اینجا بکشید یا بزنید تا انتخاب کنید</span>', onclick: function () { pick.click(); } });
+    function add(list) {
+      Array.prototype.forEach.call(list || [], function (f) { if (files.length < 10) files.push({ f: f, url: /^image\//.test(f.type) ? URL.createObjectURL(f) : '' }); });
+      if (list && list.length && files.length >= 10) toast('حداکثر ۱۰ پیوست');
+      draw();
     }
-    var date = h('select', { name: 'date' }, opts);
-    var shade, f = h('form', { class: 'cp-taskform' }, [
+    function draw() {
+      thumbs.replaceChildren.apply(thumbs, files.map(function (x, i) {
+        return h('div', { class: 'cp-tfile' }, [
+          x.url ? h('img', { src: x.url, alt: '' }) : h('b', { text: (x.f.name.split('.').pop() || 'FILE').slice(0, 4).toUpperCase() }),
+          h('small', { text: x.f.name }), h('i', { class: 'cp-tprog' }),
+          h('button', { type: 'button', class: 'cp-tx', 'aria-label': 'حذف', html: icon('close'), onclick: function () { if (x.url) URL.revokeObjectURL(x.url); files.splice(i, 1); draw(); } })]);
+      }));
+    }
+    pick.onchange = function () { add(pick.files); pick.value = ''; };
+    var shade, sheet, f = h('form', { class: 'cp-taskform' }, [
       h('label', null, [document.createTextNode('عنوان کار'), title]),
       h('label', null, [document.createTextNode('توضیحات'), desc]),
-      h('label', null, [document.createTextNode('تا چه روزی؟'), date]),
+      h('div', { class: 'cp-tattach' }, [h('span', { text: 'پیوست (اختیاری)' }), drop, pick, thumbs]),
       h('div', { class: 'cp-sheet-actions' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', text: 'انصراف', onclick: function () { shade.remove(); } }),
         h('button', { type: 'submit', class: 'btn btn-primary', html: icon('plus') + 'ثبت کار' })])]);
+    f.addEventListener('paste', function (e) { var l = e.clipboardData && e.clipboardData.files; if (l && l.length) { e.preventDefault(); add(l); } });
     f.onsubmit = function (e) {
       e.preventDefault();
       var b = f.querySelector('[type=submit]'); b.disabled = true;
-      api('/tasks', { title: title.value, description: desc.value, date: date.value, name: myName() })
+      var bars = thumbs.querySelectorAll('.cp-tprog'), ids = [];
+      files.reduce(function (p, x, i) {
+        return p.then(function () { return chat.upload(x.f, function (v) { if (bars[i]) bars[i].style.width = Math.round(v * 100) + '%'; }).then(function (up) { ids.push(up.id); }); });
+      }, Promise.resolve())
+        .then(function () { return api('/tasks', { title: title.value, description: desc.value, file_ids: ids, name: myName() }); })
         .then(function () { shade.remove(); toast('کار ثبت شد؛ تیم مربع باخبر شد.'); refresh(); loadChat(false); })
         .catch(function (err) { b.disabled = false; toast(err.message || 'ثبت نشد'); });
     };
-    shade = h('div', { class: 'cp-sheet-shade', onclick: function (e) { if (e.target === shade) shade.remove(); } }, [
-      h('div', { class: 'cp-sheet', role: 'dialog', 'aria-modal': 'true' }, [h('h3', { text: 'افزودن کار به پروژه' }), h('p', { text: 'کار به برنامه پروژه اضافه می‌شود و تیم مربع همان لحظه خبردار می‌شود.' }), f])]);
+    sheet = h('div', { class: 'cp-sheet', role: 'dialog', 'aria-modal': 'true' }, [h('h3', { text: 'افزودن کار به پروژه' }), h('p', { text: 'کار به برنامه پروژه اضافه می‌شود و تیم مربع همان لحظه خبردار می‌شود.' }), f]);
+    ['dragenter', 'dragover'].forEach(function (t) { sheet.addEventListener(t, function (e) { if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); sheet.classList.add('cp-drop'); } }); });
+    sheet.addEventListener('dragleave', function (e) { if (!sheet.contains(e.relatedTarget)) sheet.classList.remove('cp-drop'); });
+    sheet.addEventListener('drop', function (e) { sheet.classList.remove('cp-drop'); if (e.dataTransfer && e.dataTransfer.files.length) { e.preventDefault(); add(e.dataTransfer.files); } });
+    shade = h('div', { class: 'cp-sheet-shade', onclick: function (e) { if (e.target === shade) shade.remove(); } }, [sheet]);
     document.body.append(shade);
     setTimeout(function () { title.focus(); }, 50);
   }
