@@ -3,8 +3,8 @@
 1 24 "moraba-chat.manifest"
 2 RCDATA ".vendor/WebView2Loader.dll"
 1 VERSIONINFO
-FILEVERSION 2,2,0,0
-PRODUCTVERSION 2,2,0,0
+FILEVERSION 2,3,0,0
+PRODUCTVERSION 2,3,0,0
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -15,8 +15,8 @@ BEGIN
       VALUE "CompanyName", "Moraba Studio"
       VALUE "FileDescription", "Moraba Chat"
       VALUE "ProductName", "Moraba Chat"
-      VALUE "FileVersion", "2.2.0"
-      VALUE "ProductVersion", "2.2.0"
+      VALUE "FileVersion", "2.3.0"
+      VALUE "ProductVersion", "2.3.0"
       VALUE "OriginalFilename", "MorabaChat.exe"
     END
   END

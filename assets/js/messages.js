@@ -447,9 +447,10 @@
     schedBar();
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
-      tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
-      tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('user') + (c.pv ? 'مشتری و ورود' : 'مشتریان و ظاهر'), onclick: function () { clientSettings(c); } }));
-      if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
+      // (the desktop shell hides these: the same actions are in the ⋯ menu, like Telegram's clean header)
+      tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm tool-pill', text: 'لینک مشتری', onclick: function () { shareLink(c); } }));
+      tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm tool-pill', html: icon('user') + (c.pv ? 'مشتری و ورود' : 'مشتریان و ظاهر'), onclick: function () { clientSettings(c); } }));
+      if (c.project_id) tools.append(el('button', { type: 'button', class: 'btn btn-secondary btn-sm tool-pill', html: icon('eye') + 'پرتال', onclick: function () { MP.portal(c.project_id); } }));
     }
     if (c.settings && c.settings.topics) {
       tools.prepend(el('button', { type: 'button', class: 'icon-btn sm keep' + (topic ? '' : ' on'), title: 'تاپیک‌ها', 'aria-label': 'تاپیک‌ها', html: icon('list'), onclick: function () { select(c.id, 0, { topics: true }); } }));
@@ -457,6 +458,7 @@
     }
     if (c.type !== 'saved') tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جلسه آنلاین', 'aria-label': 'جلسه آنلاین', html: icon('video'), onclick: function () { startMeeting(c); } }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جستجو در گفت‌وگو', 'aria-label': 'جستجو در گفت‌وگو', html: icon('search'), onclick: openFind }));
+    if (FINE && !MP_CONFIG_POP()) tools.append(el('button', { type: 'button', class: 'icon-btn sm keep side-btn' + (sidePref() ? ' on' : ''), title: 'ستون اطلاعات', 'aria-label': 'نمایش یا پنهان کردن ستون اطلاعات', 'aria-pressed': String(sidePref()), html: icon('sidebar'), onclick: toggleSide }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', 'aria-label': 'گزینه‌های گفت‌وگو', title: 'گزینه‌ها', html: icon('more'), onclick: function (e) { chatMenu(c, e.currentTarget); } }));
   }
   function startMeeting(c) {
@@ -486,6 +488,7 @@
   function toggleSide() {
     try { localStorage.setItem('mp_chat_side', sidePref() ? '0' : '1'); } catch (e) { /* private */ }
     drawSide();
+    var sb = $('#chat-tools .side-btn'); if (sb) { sb.classList.toggle('on', sidePref()); sb.setAttribute('aria-pressed', String(sidePref())); }
   }
   window.addEventListener('resize', function () { if (sideEl && layout.classList.contains('side-open') !== sideOn()) drawSide(); });
   $('#chat-who').onclick = function () { if (!current) return; if (sideWide()) toggleSide(); else chatInfo(chan()); };

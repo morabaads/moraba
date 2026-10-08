@@ -43,7 +43,7 @@
 #endif
 #include "WebView2.h"
 
-#define APP_VERSION L"2.2.0"
+#define APP_VERSION L"2.3.0"
 #define APP_ID L"Moraba.Chat"
 #define APP_NAME L"\x0645\x0631\x0628\x0639 \x0686\x062A" /* مربع چت */
 #define WND_CLASS L"MorabaChatWnd"
@@ -615,8 +615,8 @@ static void tray_menu(void) {
 
 static void settings_to_page(void) {
     wchar_t j[300];
-    swprintf(j, 300, L"{\"t\":\"settings\",\"v\":{\"autostart\":%lu,\"tray\":%lu,\"notify\":%lu,\"sound\":%lu,\"preview\":%lu,\"hotkey\":%lu}}",
-        reg_get(L"autostart", 1), reg_get(L"tray", 1), reg_get(L"notify", 1), reg_get(L"sound", 1), reg_get(L"preview", 1), reg_get(L"hotkey", 1));
+    swprintf(j, 300, L"{\"t\":\"settings\",\"v\":{\"autostart\":%lu,\"tray\":%lu,\"notify\":%lu,\"sound\":%lu,\"preview\":%lu,\"hotkey\":%lu,\"sysframe\":%lu}}",
+        reg_get(L"autostart", 1), reg_get(L"tray", 1), reg_get(L"notify", 1), reg_get(L"sound", 1), reg_get(L"preview", 1), reg_get(L"hotkey", 1), reg_get(L"sysframe", 0));
     post_json(j);
 }
 
@@ -775,6 +775,8 @@ static HWND pop_window(ICoreWebView2 *web);
 static void apply_theme(const wchar_t *j);
 static void apply_zoom(double z);
 static void web_colour(ICoreWebView2Controller *ctl);
+static void set_frame(int custom);
+static void resize_web(void);
 
 /* page → host (the main window and the separate chat windows alike) */
 static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
@@ -794,6 +796,7 @@ static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, I
         long v = json_num(j, L"v", 0);
         json_str(j, L"k", k, 24);
         if (!wcscmp(k, L"autostart")) set_autostart(v != 0);
+        else if (!wcscmp(k, L"sysframe")) { reg_set(k, v ? 1 : 0); set_frame(!v); resize_web(); }
         else if (!wcscmp(k, L"tray") || !wcscmp(k, L"notify") || !wcscmp(k, L"sound") || !wcscmp(k, L"preview") || !wcscmp(k, L"hotkey")) {
             reg_set(k, v ? 1 : 0);
             if (!wcscmp(k, L"hotkey")) apply_hotkey();
@@ -892,10 +895,102 @@ static HRESULT STDMETHODCALLTYPE on_permission(void *self, ICoreWebView2 *sender
 }
 HANDLER(h_permission, on_permission);
 
+/* ------------------------------------------------------------------ the title bar (Telegram Desktop draws its own)
+ *
+ * The caption goes (WM_NCCALCSIZE keeps the side and bottom borders, so resizing, the shadow and Windows 11's
+ * rounded corners stay) and a slim bar in the theme's colours takes its place: the title in the middle and
+ * minimise / maximise / close on the right. Hit-testing answers HTCAPTION / HTMINBUTTON / HTMAXBUTTON / HTCLOSE, so
+ * dragging, double-click, the system menu, Aero Snap and Windows 11's snap layouts (hover on maximise) work as
+ * usual. Registry "sysframe" = 1 (settings → advanced → «قاب پنجره ویندوز») brings the normal frame back. */
+static int g_custom, g_hot, g_pressed; /* g_hot / g_pressed: HTMINBUTTON, HTMAXBUTTON or HTCLOSE */
+
+static UINT dpi_of(HWND h) { UINT d = GetDpiForWindow(h); return d ? d : 96; }
+static int title_h(void) { return g_custom ? MulDiv(32, dpi_of(g_wnd), 96) : 0; }
+static int frame_y(HWND h) { UINT d = dpi_of(h); return GetSystemMetricsForDpi(SM_CYFRAME, d) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, d); }
+static COLORREF mix(COLORREF a, COLORREF b, int pct) {
+    return RGB((GetRValue(a) * (100 - pct) + GetRValue(b) * pct) / 100, (GetGValue(a) * (100 - pct) + GetGValue(b) * pct) / 100, (GetBValue(a) * (100 - pct) + GetBValue(b) * pct) / 100);
+}
+/* the buttons from the right: close, maximise, minimise (client coordinates) */
+static void button_rect(int which, RECT *r) {
+    RECT c;
+    GetClientRect(g_wnd, &c);
+    int w = MulDiv(46, dpi_of(g_wnd), 96), i = which == HTCLOSE ? 0 : which == HTMAXBUTTON ? 1 : 2;
+    r->right = c.right - i * w; r->left = r->right - w; r->top = 0; r->bottom = title_h();
+}
+static void invalidate_title(void) {
+    if (!g_custom) return;
+    RECT c;
+    GetClientRect(g_wnd, &c);
+    c.bottom = title_h();
+    InvalidateRect(g_wnd, &c, FALSE);
+}
+static void paint_title(HDC dc) {
+    UINT dpi = dpi_of(g_wnd);
+    RECT c;
+    GetClientRect(g_wnd, &c);
+    c.bottom = title_h();
+    HBRUSH bg = CreateSolidBrush(g_bg);
+    FillRect(dc, &c, bg);
+    DeleteObject(bg);
+    COLORREF ink = g_focused ? g_ink : mix(g_ink, g_bg, 45);
+    SetBkMode(dc, TRANSPARENT);
+    NONCLIENTMETRICSW ncm = { sizeof(ncm) };
+    SystemParametersInfoForDpi(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0, dpi);
+    ncm.lfCaptionFont.lfWeight = FW_NORMAL;
+    HFONT tf = CreateFontIndirectW(&ncm.lfCaptionFont), old = (HFONT)SelectObject(dc, tf);
+    wchar_t t[120];
+    GetWindowTextW(g_wnd, t, 120);
+    RECT tr = c;
+    tr.left += MulDiv(150, dpi, 96); tr.right -= MulDiv(150, dpi, 96);
+    SetTextColor(dc, ink);
+    DrawTextW(dc, t, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+    HFONT gf = CreateFontW(-MulDiv(10, dpi, 96), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Segoe MDL2 Assets");
+    SelectObject(dc, gf);
+    const int codes[3] = { HTMINBUTTON, HTMAXBUTTON, HTCLOSE };
+    for (int i = 0; i < 3; i++) {
+        RECT r;
+        button_rect(codes[i], &r);
+        COLORREF gl = ink;
+        if (codes[i] == g_hot || codes[i] == g_pressed) {
+            COLORREF fill = codes[i] == HTCLOSE ? (g_pressed == HTCLOSE ? RGB(0x94, 0x1E, 0x14) : RGB(0xC4, 0x2B, 0x1C)) : mix(g_bg, g_ink, g_pressed == codes[i] ? 20 : 11);
+            HBRUSH b = CreateSolidBrush(fill);
+            FillRect(dc, &r, b);
+            DeleteObject(b);
+            if (codes[i] == HTCLOSE) gl = RGB(255, 255, 255);
+        }
+        const wchar_t *glyph = codes[i] == HTMINBUTTON ? L"\xE921" : codes[i] == HTCLOSE ? L"\xE8BB" : IsZoomed(g_wnd) ? L"\xE923" : L"\xE922";
+        SetTextColor(dc, gl);
+        DrawTextW(dc, glyph, 1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
+    SelectObject(dc, old);
+    DeleteObject(tf);
+    DeleteObject(gf);
+}
+/* where in the title bar (screen point): a button, the top resize edge, or the caption; HTNOWHERE below it */
+static LRESULT title_hit(HWND h, LPARAM lp) {
+    POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+    ScreenToClient(h, &pt);
+    if (pt.y < 0 || pt.y >= title_h()) return HTNOWHERE;
+    RECT c;
+    GetClientRect(h, &c);
+    int edge = MulDiv(5, dpi_of(h), 96);
+    if (!IsZoomed(h) && pt.y < edge) return pt.x < edge * 2 ? HTTOPLEFT : pt.x >= c.right - edge * 2 ? HTTOPRIGHT : HTTOP;
+    const int codes[3] = { HTMINBUTTON, HTMAXBUTTON, HTCLOSE };
+    for (int i = 0; i < 3; i++) { RECT r; button_rect(codes[i], &r); if (PtInRect(&r, pt)) return codes[i]; }
+    return HTCAPTION;
+}
+static void set_frame(int custom) {
+    g_custom = custom;
+    g_hot = g_pressed = 0;
+    SetWindowPos(g_wnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    InvalidateRect(g_wnd, NULL, TRUE);
+}
+
 static void resize_web(void) {
     if (!g_ctl) return;
     RECT rc;
     GetClientRect(g_wnd, &rc);
+    rc.top += title_h();
     ICoreWebView2Controller_put_Bounds(g_ctl, rc);
 }
 
@@ -907,7 +1002,8 @@ static void setup_web(ICoreWebView2Controller *ctl, ICoreWebView2 *web) {
     ICoreWebView2Settings *s = NULL;
     if (SUCCEEDED(ICoreWebView2_get_Settings(web, &s))) {
         ICoreWebView2Settings_put_AreDevToolsEnabled(s, FALSE);
-        ICoreWebView2Settings_put_AreDefaultContextMenusEnabled(s, FALSE); /* the page has its own menus */
+        /* the page shows its own menus; text boxes get the browser's (spelling suggestions, paste…) */
+        ICoreWebView2Settings_put_AreDefaultContextMenusEnabled(s, TRUE);
         ICoreWebView2Settings_put_IsStatusBarEnabled(s, FALSE);
         ICoreWebView2Settings_put_IsZoomControlEnabled(s, FALSE); /* the page's own scale (Ctrl+= / Ctrl+−) */
         ICoreWebView2Settings3 *s3 = NULL;
@@ -979,6 +1075,8 @@ static void dark_frame(HWND w) {
     DwmSetWindowAttribute(w, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
     DwmSetWindowAttribute(w, 35 /* DWMWA_CAPTION_COLOR (Windows 11) */, &g_bg, sizeof(g_bg));
     DwmSetWindowAttribute(w, 36 /* DWMWA_TEXT_COLOR */, &g_ink, sizeof(g_ink));
+    COLORREF edge = mix(g_bg, g_ink, 12);
+    DwmSetWindowAttribute(w, 34 /* DWMWA_BORDER_COLOR (Windows 11) */, &edge, sizeof(edge));
 }
 
 static void web_colour(ICoreWebView2Controller *ctl) {
@@ -1012,6 +1110,7 @@ static void apply_theme(const wchar_t *j) {
     g_bg_brush = CreateSolidBrush(g_bg);
     dark_frame(g_wnd);
     web_colour(g_ctl);
+    InvalidateRect(g_wnd, NULL, TRUE);
     for (int k = 0; k < 16; k++) if (g_pops[k].wnd) { dark_frame(g_pops[k].wnd); web_colour(g_pops[k].ctl); }
 }
 
@@ -1213,8 +1312,66 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         FillRect((HDC)wp, &rc, g_bg_brush ? g_bg_brush : (HBRUSH)GetStockObject(BLACK_BRUSH));
         return 1;
     }
+    case WM_NCCALCSIZE:
+        if (g_custom && wp) {
+            NCCALCSIZE_PARAMS *np = (NCCALCSIZE_PARAMS *)lp;
+            LONG top = np->rgrc[0].top;
+            LRESULT r = DefWindowProcW(h, msg, wp, lp);
+            np->rgrc[0].top = top; /* no caption; the side and bottom borders stay */
+            if (IsZoomed(h)) np->rgrc[0].top += frame_y(h); /* maximised: the frame hangs off the screen */
+            return r;
+        }
+        break;
+    case WM_NCHITTEST:
+        if (g_custom) {
+            LRESULT r = DefWindowProcW(h, msg, wp, lp);
+            if (r == HTCLIENT) { LRESULT t = title_hit(h, lp); if (t != HTNOWHERE) return t; }
+            return r;
+        }
+        break;
+    case WM_PAINT:
+        if (g_custom) { PAINTSTRUCT ps; HDC dc = BeginPaint(h, &ps); paint_title(dc); EndPaint(h, &ps); return 0; }
+        break;
+    case WM_NCMOUSEMOVE:
+        if (g_custom) {
+            int hot = (wp == HTMINBUTTON || wp == HTMAXBUTTON || wp == HTCLOSE) ? (int)wp : 0;
+            if (hot != g_hot) { g_hot = hot; invalidate_title(); }
+            TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE | TME_NONCLIENT, h, 0 };
+            TrackMouseEvent(&tme);
+        }
+        break;
+    case WM_NCMOUSELEAVE:
+        if (g_custom && (g_hot || g_pressed)) { g_hot = g_pressed = 0; invalidate_title(); }
+        break;
+    case WM_NCLBUTTONDOWN: case WM_NCLBUTTONDBLCLK:
+        if (g_custom && (wp == HTMINBUTTON || wp == HTMAXBUTTON || wp == HTCLOSE)) { g_pressed = (int)wp; invalidate_title(); return 0; }
+        break;
+    case WM_NCLBUTTONUP:
+        if (g_custom && (wp == HTMINBUTTON || wp == HTMAXBUTTON || wp == HTCLOSE)) {
+            int was = g_pressed;
+            g_pressed = 0;
+            invalidate_title();
+            if (was == (int)wp) {
+                if (wp == HTMINBUTTON) ShowWindow(h, SW_MINIMIZE);
+                else if (wp == HTMAXBUTTON) ShowWindow(h, IsZoomed(h) ? SW_RESTORE : SW_MAXIMIZE);
+                else PostMessageW(h, WM_CLOSE, 0, 0);
+            }
+            return 0;
+        }
+        break;
+    case WM_DPICHANGED: {
+        RECT *r = (RECT *)lp;
+        SetWindowPos(h, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
+    case WM_SETTEXT: {
+        LRESULT r = DefWindowProcW(h, msg, wp, lp);
+        invalidate_title();
+        return r;
+    }
     case WM_SIZE:
         resize_web();
+        if (g_custom) InvalidateRect(h, NULL, FALSE);
         set_visible(wp != SIZE_MINIMIZED && IsWindowVisible(h));
         return 0;
     case WM_MOVE:
@@ -1224,6 +1381,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         int on = LOWORD(wp) != WA_INACTIVE;
         if (on != g_focused) {
             g_focused = on;
+            invalidate_title();
             post_json(on ? L"{\"t\":\"focus\",\"on\":1}" : L"{\"t\":\"focus\",\"on\":0}");
         }
         if (on && g_ctl) ICoreWebView2Controller_MoveFocus(g_ctl, COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
@@ -1509,6 +1667,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     g_wnd = CreateWindowExW(WS_EX_APPWINDOW, WND_CLASS, APP_NAME, WS_OVERLAPPEDWINDOW, (sw - w) / 2, (shh - hgt) / 2, w, hgt, NULL, NULL, inst, NULL);
     if (!g_wnd) return 1;
     dark_frame(g_wnd);
+    if (!reg_get(L"sysframe", 0)) set_frame(1);
     WTSRegisterSessionNotification(g_wnd, NOTIFY_FOR_THIS_SESSION); /* lock / unlock for attendance */
     device_id();
 

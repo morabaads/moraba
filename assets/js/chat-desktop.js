@@ -87,6 +87,7 @@
     ['Ctrl + 1 … 9', 'رفتن به پوشه اول تا نهم (نمای دسکتاپ)'],
     ['Ctrl + =  /  Ctrl + −', 'بزرگ‌تر / کوچک‌تر کردن کل رابط'],
     ['Ctrl + W  /  Ctrl + Q', 'رفتن کنار ساعت / خروج کامل (اپ ویندوز)'],
+    ['Ctrl + L', 'قفل با رمز محلی'],
     ['Ctrl + /', 'همین فهرست']
   ];
   function keysHelp() {
@@ -176,7 +177,9 @@
       post({ t: 'badge', n: n.count || 0 });
       if (!n.id) return;
       // Hidden, minimised, or behind other windows: a Windows notification (an open chat in front shows it anyway).
-      if (lastId >= 0 && n.id > lastId && (document.hidden || !focused)) post({ t: 'notify', id: n.id, title: n.title, body: n.body, channel: n.channel || 0 });
+      // Locked with the local passcode: no name, no text, no reply box.
+      var lk = MP.isLocked && MP.isLocked();
+      if (lastId >= 0 && n.id > lastId && (document.hidden || !focused || lk)) post(lk ? { t: 'notify', id: n.id, title: 'مربع چت', body: 'پیام تازه', channel: 0, noreply: 1 } : { t: 'notify', id: n.id, title: n.title, body: n.body, channel: n.channel || 0 });
       lastId = Math.max(lastId, n.id);
     }).catch(function () { busy = false; });
   }
@@ -202,6 +205,7 @@
   }
   function toastReply(ch, text) {
     if (!text.trim()) return;
+    if (MP.isLocked && MP.isLocked()) { post({ t: 'show' }); return; }
     toastRead(ch).then(function () {
       return MP.api('channels/' + ch + '/messages', { method: 'POST', body: { body: text } });
     }).catch(function (e) {
@@ -251,6 +255,8 @@
     var t = e.target, a = t.closest && t.closest('a[href]'), field = inField(t) ? t : null, sel = String(window.getSelection() || '');
     var img = t.tagName === 'IMG' && !t.closest('.msg-row') ? t : null;
     var items = [];
+    // Text boxes with the spell checker: the browser's own menu (spelling suggestions, paste…).
+    if (field && MP.spellOn && MP.spellOn()) return;
     if (field) {
       items.push(['clip', 'بریدن', function () { field.focus(); document.execCommand('cut'); }, !field.value || field.selectionStart === field.selectionEnd]);
       items.push(['copy', 'کپی', function () { field.focus(); document.execCommand('copy'); }, !field.value || field.selectionStart === field.selectionEnd]);

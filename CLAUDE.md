@@ -66,6 +66,15 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     refreshes from the server behind it. 2.2 host: page `{t:'theme', dark, bg, ink}` colours the title bar + WebView
     background (registry `bg`/`ink`/`dark`), `{t:'zoom', v}` (registry `zoom` %), `{t:'hide'|'quit'}`, memory target
     LOW after 5 min hidden, `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` without background throttling.
+    2.3 host: its own title bar (WM_NCCALCSIZE drops the caption, keeps side/bottom borders; 32px bar painted in the theme
+    colours with Segoe MDL2 glyphs; WM_NCHITTEST answers HTCAPTION/HTMIN/HTMAX/HTCLOSE/HTTOP so drag, snap layouts and the
+    system menu work; WebView bounds start below it); registry `sysframe` = 1 (settings → advanced) = normal frame.
+    Default context menus are on so text boxes get the browser menu with spelling suggestions (page `MP.spellOn`,
+    localStorage `mp_spell`); everything else keeps the page's own menus.
+  - Local passcode (chat app): `PAGES.privacy`/`passcode` in chat-shell.js, SHA-256 + salt in localStorage `mp_lock_{user}`,
+    auto-lock after idle (`after` minutes), Ctrl+L, opens locked; `mp_locked_at` syncs the lock across chat windows (storage
+    event); while locked `.app` is inert/hidden, notifications go out as «مربع چت / پیام تازه» without reply. «فراموش کردن» = log out.
+  - Chat header in the shell: client pills hidden (they are in the ⋯ menu), `.side-btn` toggles the info column.
 - Automatic attendance (`class-mp-presence.php`, options `mp_presence_on` / `mp_presence_idle`, «حضور خودکار» in the
   attendance page for supervisors): sessions with `attendance.source = 'auto'` from first to last real input, closed at the last
   report when reports stop (sleep/shutdown), cut at midnight, merged across gaps < 2 min, < 1 min dropped; manual «خروج» pauses

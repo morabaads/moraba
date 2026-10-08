@@ -79,6 +79,7 @@
           f.unread && f.id !== 'unread' ? el('i', { class: 'tg-badge', text: f.unread > 99 ? '۹۹+' : fa(f.unread) }) : null);
       })),
       el('div', { class: 'tg-rail-foot' },
+        lockCfg() ? el('button', { type: 'button', class: 'tg-folder', title: 'قفل کردن  (Ctrl+L)', onclick: function () { lock(); } }, el('span', { class: 'tg-fico', html: icon('lock-key') }), el('small', { text: 'قفل' })) : null,
         el('button', { type: 'button', class: 'tg-folder', title: 'پیام‌های ذخیره‌شده  (Ctrl+0)', onclick: function () { MP.chatDesk.saved(); } }, el('span', { class: 'tg-fico', html: icon('bookmark') }), el('small', { text: 'ذخیره' })),
         el('button', { type: 'button', class: 'tg-folder', title: 'تنظیمات', onclick: function () { MP.tgSettings(); } }, el('span', { class: 'tg-fico', html: icon('settings') }), el('small', { text: 'تنظیمات' }))));
   }
@@ -128,6 +129,7 @@
         item('clock', 'حضور و مرخصی', function () { MP.showView('attendance'); }),
         item('grid', 'پنل مربع', function () { window.open(C.panel, '_blank'); }),
         el('hr'),
+        lockCfg() ? item('lock-key', 'قفل کردن', lock, 'Ctrl+L') : null,
         item('settings', 'تنظیمات', function () { MP.tgSettings(); }),
         item('help', 'میان‌برهای صفحه‌کلید', function () { if (MP.keysHelp) MP.keysHelp(); }, 'Ctrl+/'),
         el('label', { class: 'tg-ditem tg-dswitch' }, el('span', { class: 'tg-dico', html: icon('moon') }), el('span', { text: 'حالت شب' }), el('span', { class: 'switch' }, night, el('i')))),
@@ -200,6 +202,7 @@
             s.append(
               row('user', 'ویرایش پروفایل', 'عکس، نام، سمت', { onclick: closeFor(function () { MP.openProfile(me.id); }) }),
               row('bell', 'اعلان‌ها و صداها', host ? 'اعلان ویندوز، صدا، پیش‌نمایش' : 'اعلان مرورگر', { onclick: function () { go('notify'); } }),
+              row('lock-key', 'حریم خصوصی و امنیت', lockCfg() ? 'رمز محلی روشن است' : 'رمز محلی، قفل خودکار', { onclick: function () { go('privacy'); } }),
               row('palette', 'تنظیمات گفت‌وگو', 'تم، رنگ، پس‌زمینه، اندازه متن', { onclick: function () { go('chat'); } }),
               row('monitor', 'پیشرفته', host ? 'یکپارچگی با ویندوز، کارایی' : 'کارایی', { onclick: function () { go('advanced'); } }),
               row('edit', 'حساب کاربری', 'ایمیل، تلگرام، بله، پیامک', { onclick: closeFor(function () { MP.openAccount(); }) }),
@@ -283,9 +286,13 @@
             s.replaceChildren(el('h4', { text: 'یکپارچگی با ویندوز' }),
               row('repeat', 'اجرا با روشن شدن ویندوز', 'کنار ساعت و بی‌صدا باز می‌شود', { end: sw(v.autostart, function (on) { MP.desktop.set('autostart', on); }) }),
               row('close', 'بستن پنجره = رفتن کنار ساعت', 'برای خروج کامل از منوی آیکون کنار ساعت «خروج»', { end: sw(v.tray, function (on) { MP.desktop.set('tray', on); }) }),
-              row('menu', 'میانبر Ctrl + Shift + M', 'از هر برنامه‌ای مربع چت را جلو می‌آورد یا پنهان می‌کند', { end: sw(v.hotkey, function (on) { MP.desktop.set('hotkey', on); }) }));
+              row('menu', 'میانبر Ctrl + Shift + M', 'از هر برنامه‌ای مربع چت را جلو می‌آورد یا پنهان می‌کند', { end: sw(v.hotkey, function (on) { MP.desktop.set('hotkey', on); }) }),
+              row('monitor', 'قاب پنجره ویندوز', 'نوار عنوان معمولی ویندوز به‌جای نوار هم‌رنگ تم', { end: sw(v.sysframe, function (on) { MP.desktop.set('sysframe', on); }) }));
           });
         }
+        var typing = sec('نوشتن');
+        typing.append(row('spell', 'غلط‌یاب املایی', 'زیر کلمه‌های اشتباه خط می‌کشد؛ کلیک راست روی آن، پیشنهادها را نشان می‌دهد', { end: sw(MP.spellOn(), function (on) { store('mp_spell', on ? null : '0'); applySpell(); }) }));
+        b.append(typing);
         var p = S.boot.prefs, perf = sec('کارایی');
         perf.append(row('repeat', 'انیمیشن‌ها', '', { end: sw(!p.motion, function (on) { p.motion = !on; MP.savePrefs(); }) }),
           row('download', 'پاک کردن حافظه این دستگاه', 'نسخه ذخیره‌شده گفت‌وگوها برای باز شدن سریع؛ دوباره ساخته می‌شود', { onclick: function () {
@@ -297,6 +304,52 @@
       });
     }
   };
+  var AFTER = [[0, 'خاموش'], [1, '۱ دقیقه'], [5, '۵ دقیقه'], [15, '۱۵ دقیقه'], [60, '۱ ساعت'], [300, '۵ ساعت']];
+  PAGES.privacy = function () {
+    show('حریم خصوصی و امنیت', function (b) {
+      var c = lockCfg(), s = sec('رمز محلی');
+      if (!c) {
+        s.append(row('lock-key', 'روشن کردن رمز محلی', 'کسی پشت این کامپیوتر بدون رمز، پیام‌ها را نمی‌بیند', { onclick: function () { go('passcode'); } }));
+      } else {
+        s.append(row('edit', 'تغییر رمز محلی', '', { onclick: function () { go('passcode'); } }),
+          row('lock-key', 'الان قفل کن', 'Ctrl + L', { onclick: closeFor(lock) }),
+          row('close', 'خاموش کردن رمز محلی', '', { danger: true, onclick: function () { saveLock(null); MP.toast('رمز محلی خاموش شد'); drawRail(); PAGES.privacy(); } }));
+        var auto = sec('قفل خودکار بعد از بی‌کاری');
+        auto.append(el('div', { class: 'tg-scale' }, AFTER.map(function (a) {
+          return el('button', { type: 'button', class: (c.after || 0) === a[0] ? 'on' : '', 'aria-pressed': String((c.after || 0) === a[0]), text: a[1], onclick: function () { c.after = a[0]; saveLock(c); PAGES.privacy(); } });
+        })));
+        b.append(s, auto);
+      }
+      if (!c) b.append(s);
+      b.append(el('p', { class: 'tg-hint', text: 'رمز فقط روی همین دستگاه نگه داشته می‌شود. با هر بار باز شدن برنامه، با Ctrl + L و بعد از مدت بی‌کاری، مربع چت قفل می‌شود و اعلان‌ها هم بدون نام و متن می‌آیند. اگر رمز را فراموش کنید، با خروج از حساب پاک می‌شود.' }));
+    });
+  };
+  PAGES.passcode = function () {
+    show('رمز محلی', function (b) {
+      var a = el('input', { type: 'password', class: 'input', autocomplete: 'new-password', inputmode: 'numeric', 'aria-label': 'رمز تازه', placeholder: 'رمز تازه (دست‌کم ۴ نویسه)' });
+      var r = el('input', { type: 'password', class: 'input', autocomplete: 'new-password', inputmode: 'numeric', 'aria-label': 'تکرار رمز', placeholder: 'تکرار رمز' });
+      var err = el('small', { class: 'tg-lock-err' });
+      var f = el('form', { class: 'tg-pass' }, a, r, err, el('button', { type: 'submit', class: 'btn btn-primary', text: 'ذخیره رمز' }));
+      f.onsubmit = function (e) {
+        e.preventDefault();
+        var v = MP.faDigits ? a.value.replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }) : a.value;
+        var v2 = r.value.replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); });
+        if (v.length < 4) { err.textContent = 'رمز دست‌کم ۴ نویسه باشد'; return; }
+        if (v !== v2) { err.textContent = 'دو رمز یکی نیستند'; return; }
+        var salt = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+        digest(v, salt).then(function (h) {
+          var old = lockCfg();
+          saveLock({ salt: salt, hash: h, after: old ? old.after : 15 });
+          MP.toast('رمز محلی ذخیره شد');
+          drawRail();
+          back();
+        });
+      };
+      b.append(el('section', { class: 'tg-ssec' }, el('h4', { text: lockCfg() ? 'رمز تازه' : 'یک رمز برای این دستگاه' }), f));
+      setTimeout(function () { a.focus(); }, 50);
+    });
+  };
+
   /** «مقیاس رابط»: default switch + steps, like Telegram's «Default interface scale». */
   function scaleSec() {
     var s = sec('مقیاس رابط'), z = scale();
@@ -331,6 +384,100 @@
       if (f) { e.preventDefault(); MP.chatDesk.folder(f.id); }
     }
   });
+
+  /* ------------------------------------------------------------ Local passcode (Telegram's «رمز محلی») */
+
+  var LKEY = 'mp_lock_' + (C.user || 'u');
+  function lockCfg() { try { return JSON.parse(read(LKEY) || 'null'); } catch (e) { return null; } }
+  function saveLock(c) { store(LKEY, c ? JSON.stringify(c) : null); if (!c) { store('mp_locked_at', null); } }
+  function digest(code, salt) {
+    var data = salt + ':' + code;
+    if (window.crypto && crypto.subtle && window.TextEncoder) {
+      return crypto.subtle.digest('SHA-256', new TextEncoder().encode(data)).then(function (b) {
+        return Array.from(new Uint8Array(b)).map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+      });
+    }
+    var h = 0x811c9dc5; // no secure context (plain http): FNV-1a
+    for (var i = 0; i < data.length; i++) { h ^= data.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return Promise.resolve('f' + h.toString(16));
+  }
+  var locked = false, lastAct = Date.now(), lockEl = null;
+  MP.isLocked = function () { return locked; };
+  ['pointerdown', 'keydown', 'wheel'].forEach(function (ev) { document.addEventListener(ev, function () { if (!locked) lastAct = Date.now(); }, true); });
+  setInterval(function () { var c = lockCfg(); if (c && c.after && !locked && Date.now() - lastAct > c.after * 60000) lock(); }, 15000);
+  function lock() {
+    var c = lockCfg();
+    if (!c || locked || !C.chatApp) return;
+    locked = true;
+    store('mp_locked_at', String(Date.now())); // other «مربع چت» windows lock too
+    document.documentElement.classList.add('mp-locked');
+    var app = $('.app'); if (app) app.inert = true;
+    if (modal) modal.close();
+    closeDrawer();
+    if (MP.dialog && MP.dialog.close) MP.dialog.close();
+    var input = el('input', { type: 'password', inputmode: 'numeric', autocomplete: 'off', class: 'input tg-lock-in', 'aria-label': 'رمز محلی', maxlength: 64 });
+    var err = el('small', { class: 'tg-lock-err', role: 'alert' });
+    var box = el('form', { class: 'tg-lock-box' },
+      el('img', { src: C.assets + 'img/chat-192.png', alt: '' }),
+      el('strong', { text: 'مربع چت قفل است' }), el('small', { text: 'رمز محلی را وارد کنید' }),
+      input, err, el('button', { type: 'submit', class: 'btn btn-primary', text: 'باز کردن' }),
+      el('button', { type: 'button', class: 'link tg-lock-forgot', text: 'رمز را فراموش کرده‌اید؟ خروج از حساب', onclick: forgot }));
+    box.onsubmit = function (e) {
+      e.preventDefault();
+      var v = input.value.replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); });
+      digest(v, lockCfg().salt).then(function (h) {
+        if (h === lockCfg().hash) { unlock(); store('mp_locked_at', null); return; }
+        err.textContent = 'رمز درست نیست';
+        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+        input.select();
+      });
+    };
+    lockEl = el('div', { class: 'tg-lock', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'مربع چت قفل است' }, box);
+    document.body.append(lockEl);
+    setTimeout(function () { input.focus(); }, 60);
+    MP.emit('lock', true);
+  }
+  function unlock() {
+    if (!locked) return;
+    locked = false; lastAct = Date.now();
+    document.documentElement.classList.remove('mp-locked');
+    var app = $('.app'); if (app) app.inert = false;
+    if (lockEl) lockEl.remove();
+    lockEl = null;
+    MP.emit('lock', false);
+  }
+  function forgot() {
+    MP.confirm('خروج از حساب', 'رمز محلی پاک می‌شود و باید دوباره با نام کاربری و رمز حساب وارد شوید.', 'خروج', true).then(function (ok) {
+      if (!ok) return;
+      saveLock(null);
+      MP.api('auth/logout', { method: 'POST' }).then(function () { location.replace(C.chat && C.chat.url ? C.chat.url : '/'); }, function () { location.href = S.boot && S.boot.logoutUrl ? S.boot.logoutUrl : '/'; });
+    });
+  }
+  MP.lockNow = lock;
+  window.addEventListener('storage', function (e) {
+    if (e.key !== 'mp_locked_at') return;
+    if (e.newValue) lock(); else unlock();
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === 'KeyL' && C.chatApp) {
+      e.preventDefault();
+      if (lockCfg()) lock(); else MP.tgSettings('privacy');
+    }
+  });
+
+  /* ------------------------------------------------------------ Spell checking in the composer */
+
+  MP.spellOn = function () { return read('mp_spell') !== '0'; };
+  function applySpell() {
+    var t = document.getElementById('composer-text');
+    if (!t) return;
+    t.spellcheck = MP.spellOn();
+    t.setAttribute('lang', 'fa');
+  }
+  applySpell();
+
+  // A passcode: «مربع چت» opens locked (a separate chat window only while the others are locked).
+  if (lockCfg() && C.chatApp && (!C.pop || read('mp_locked_at'))) lock();
 
   if (document.readyState !== 'loading') sync(); else document.addEventListener('DOMContentLoaded', sync);
 })();
