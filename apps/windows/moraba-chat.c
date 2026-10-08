@@ -36,23 +36,26 @@
 #include <dwmapi.h>
 #include <urlmon.h>
 #include <wchar.h>
+#include <wtsapi32.h>
+#include <powrprof.h>
 #ifndef DECLSPEC_XFGVIRT
 #define DECLSPEC_XFGVIRT(a, b)
 #endif
 #include "WebView2.h"
 
-#define APP_VERSION L"2.0.0"
+#define APP_VERSION L"2.1.0"
 #define APP_ID L"Moraba.Chat"
 #define APP_NAME L"\x0645\x0631\x0628\x0639 \x0686\x062A" /* مربع چت */
 #define WND_CLASS L"MorabaChatWnd"
+#define POP_CLASS L"MorabaChatPop"
 #define REG_KEY L"Software\\MorabaChat"
 #define RUN_KEY L"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 
 /* Replaced in the downloaded file by the site's chat address (UTF-16LE, the rest of the 300 characters NUL). */
 static volatile const wchar_t SITE_URL[300] = L"@@MORABA_CHAT_URL@@";
 
-enum { WM_TRAY = WM_APP + 1, WM_UPDATED, WM_HOSTMSG };
-enum { T_TICK = 1, T_RETRY, T_UPDATE };
+enum { WM_TRAY = WM_APP + 1, WM_UPDATED, WM_HOSTMSG, WM_TOAST };
+enum { T_TICK = 1, T_RETRY, T_UPDATE, T_PRESENCE };
 enum { ID_OPEN = 100, ID_DND_1H, ID_DND_8H, ID_DND_TOMORROW, ID_DND_OFF, ID_NOTIFY, ID_AUTOSTART, ID_SETTINGS, ID_RESTART, ID_EXIT };
 
 static HINSTANCE g_inst;
@@ -68,6 +71,8 @@ static NOTIFYICONDATAW g_nid;
 static int g_unread = -1, g_focused, g_quitting, g_updated, g_last_channel, g_loaded;
 static ULONGLONG g_dnd_until; /* GetTickCount64 */
 static wchar_t g_new_version[32];
+static wchar_t g_device[40], g_presence[64]; /* this computer's id for attendance; «حاضر از ۰۹:۱۲» */
+static int g_locked, g_presence_on = 1;
 
 /* ------------------------------------------------------------------ small helpers */
 
@@ -225,6 +230,7 @@ static int dnd(void) { return g_dnd_until && GetTickCount64() < g_dnd_until; }
 static void tray_tip(void) {
     if (g_unread > 0) swprintf(g_nid.szTip, 128, L"%ls \x2014 %d \x067E\x06CC\x0627\x0645 \x0646\x062E\x0648\x0627\x0646\x062F\x0647%ls", APP_NAME, g_unread, dnd() ? L" (\x0645\x0632\x0627\x062D\x0645 \x0646\x0634\x0648)" : L"");
     else swprintf(g_nid.szTip, 128, L"%ls%ls", APP_NAME, dnd() ? L" (\x0645\x0632\x0627\x062D\x0645 \x0646\x0634\x0648)" : L"");
+    if (g_presence[0] && wcslen(g_nid.szTip) + wcslen(g_presence) + 2 < 128) { lstrcatW(g_nid.szTip, L"\n"); lstrcatW(g_nid.szTip, g_presence); }
 }
 
 static void set_unread(int n) {
@@ -251,13 +257,243 @@ static void set_unread(int n) {
     SetWindowTextW(g_wnd, t);
 }
 
-/** A Windows notification from the tray icon (clicking it opens that chat). */
-static void notify(const wchar_t *title, const wchar_t *body, int channel) {
+
+/* ------------------------------------------------------------------ Windows notifications with a reply box
+ *
+ * Toasts through WinRT (Windows.UI.Notifications), called by hand: mingw has no headers for them, so the few
+ * interfaces needed are reached by their IIDs and vtable slots (after IUnknown's 3 and IInspectable's 3).
+ * A toast carries a text box and «ارسال» / «خوانده شد», like Telegram; what the person does arrives on a worker
+ * thread (Activated) and is handed to the window (WM_TOAST), which passes it to the page. Shown toasts are kept
+ * alive, so answering one from the action centre still reaches us while the app runs. If WinRT is missing or
+ * refuses (an old Windows 10, no Start-menu shortcut), the tray balloon is used as before. */
+typedef struct HSTRING__ *RTSTR;
+typedef HRESULT (WINAPI *RoGetActivationFactoryFn)(RTSTR, REFIID, void **);
+typedef HRESULT (WINAPI *RoActivateInstanceFn)(RTSTR, void **);
+typedef HRESULT (WINAPI *WindowsCreateStringFn)(const wchar_t *, UINT32, RTSTR *);
+typedef HRESULT (WINAPI *WindowsDeleteStringFn)(RTSTR);
+typedef const wchar_t *(WINAPI *WindowsGetStringRawBufferFn)(RTSTR, UINT32 *);
+static RoGetActivationFactoryFn pRoGetActivationFactory;
+static RoActivateInstanceFn pRoActivateInstance;
+static WindowsCreateStringFn pWindowsCreateString;
+static WindowsDeleteStringFn pWindowsDeleteString;
+static WindowsGetStringRawBufferFn pWindowsGetStringRawBuffer;
+
+static const GUID IID_ToastStatics = { 0x50ac103f, 0xd235, 0x4598, { 0xbb, 0xef, 0x98, 0xfe, 0x4d, 0x1a, 0x3a, 0xd4 } };
+static const GUID IID_ToastFactory = { 0x04124b20, 0x82c6, 0x4229, { 0xb1, 0x09, 0xfd, 0x9e, 0xd4, 0x66, 0x2b, 0x53 } };
+static const GUID IID_Toast2 = { 0x9dfb9fd1, 0x143a, 0x490e, { 0x90, 0xbf, 0xb9, 0xfb, 0xa7, 0x13, 0x2d, 0xe7 } };
+static const GUID IID_ToastArgs = { 0xe3bf92f3, 0xc197, 0x436f, { 0x82, 0x65, 0x06, 0x25, 0x82, 0x4f, 0x8d, 0xac } };
+static const GUID IID_ToastArgs2 = { 0xab7da512, 0xcc61, 0x568e, { 0x81, 0xbe, 0x30, 0x4a, 0xc3, 0x10, 0x38, 0xfa } };
+static const GUID IID_InspMap = { 0x1b0d3570, 0x0877, 0x5ec2, { 0x8a, 0x2c, 0x3b, 0x95, 0x39, 0x50, 0x6a, 0xca } };
+static const GUID IID_PropValue = { 0x4bd682dd, 0x7554, 0x40e9, { 0x9a, 0x9b, 0x82, 0x65, 0x4e, 0xde, 0x7e, 0x62 } };
+static const GUID IID_XmlDoc = { 0xf7f3a506, 0x1e87, 0x42d6, { 0xbc, 0xfb, 0xb8, 0xc8, 0x09, 0xfa, 0x54, 0x94 } };
+static const GUID IID_XmlDocIO = { 0x6cd0e74e, 0xee65, 0x4489, { 0x9e, 0xbf, 0xca, 0x43, 0xe8, 0x7b, 0xa6, 0x37 } };
+static const GUID IID_ToastActivated = { 0xab54de2d, 0x97d9, 0x5528, { 0xb6, 0xad, 0x10, 0x5a, 0xfe, 0x15, 0x65, 0x30 } };
+static const GUID IID_Agile = { 0x94ea2b94, 0xe9cc, 0x49e0, { 0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90 } };
+
+#define VT(o, i) ((*(void ***)(o))[i])
+typedef HRESULT (STDMETHODCALLTYPE *QiFn)(void *, REFIID, void **);
+typedef ULONG (STDMETHODCALLTYPE *RelFn)(void *);
+typedef HRESULT (STDMETHODCALLTYPE *Fn0)(void *);
+typedef HRESULT (STDMETHODCALLTYPE *FnP)(void *, void *);
+typedef HRESULT (STDMETHODCALLTYPE *FnPP)(void *, void *, void *);
+static void rt_release(void *o) { if (o) ((RelFn)VT(o, 2))(o); }
+static HRESULT rt_qi(void *o, REFIID iid, void **out) { *out = NULL; return ((QiFn)VT(o, 0))(o, iid, out); }
+static RTSTR hs(const wchar_t *s) { RTSTR h = NULL; pWindowsCreateString(s, (UINT32)wcslen(s), &h); return h; }
+static void hs_copy(RTSTR h, wchar_t *out, int n) { UINT32 len = 0; const wchar_t *p = h ? pWindowsGetStringRawBuffer(h, &len) : NULL; lstrcpynW(out, p ? p : L"", n); }
+
+static void *g_notifier, *g_toast_factory, *g_toasts[12];
+static int g_toast_ok = -1, g_toast_n;
+
+/* Activated (worker thread): "reply:12\ntext" | "read:12" | "open:12" → the window */
+static HRESULT STDMETHODCALLTYPE ta_qi(void *self, REFIID riid, void **out) {
+    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_ToastActivated) || IsEqualIID(riid, &IID_Agile)) { *out = self; return S_OK; }
+    *out = NULL;
+    return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE ta_ref(void *self) { (void)self; return 1; }
+static HRESULT STDMETHODCALLTYPE ta_invoke(void *self, void *sender, void *args) {
+    (void)self; (void)sender;
+    wchar_t act[64] = L"", text[2000] = L"";
+    void *a = NULL;
+    if (args && SUCCEEDED(rt_qi(args, &IID_ToastArgs, &a)) && a) {
+        RTSTR h = NULL;
+        if (SUCCEEDED(((FnP)VT(a, 6))(a, &h)) && h) { hs_copy(h, act, 64); pWindowsDeleteString(h); }
+        rt_release(a);
+    }
+    if (args && SUCCEEDED(rt_qi(args, &IID_ToastArgs2, &a)) && a) {
+        void *set = NULL, *map = NULL, *val = NULL, *pv = NULL;
+        if (SUCCEEDED(((FnP)VT(a, 6))(a, &set)) && set) {
+            if (SUCCEEDED(rt_qi(set, &IID_InspMap, &map)) && map) {
+                RTSTR key = hs(L"reply");
+                if (SUCCEEDED(((FnPP)VT(map, 6))(map, key, &val)) && val) {
+                    if (SUCCEEDED(rt_qi(val, &IID_PropValue, &pv)) && pv) {
+                        RTSTR h = NULL;
+                        if (SUCCEEDED(((FnP)VT(pv, 19))(pv, &h)) && h) { hs_copy(h, text, 2000); pWindowsDeleteString(h); }
+                        rt_release(pv);
+                    }
+                    rt_release(val);
+                }
+                pWindowsDeleteString(key);
+                rt_release(map);
+            }
+            rt_release(set);
+        }
+        rt_release(a);
+    }
+    size_t n = wcslen(act) + wcslen(text) + 2;
+    wchar_t *msg = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, n * sizeof(wchar_t));
+    if (!msg) return S_OK;
+    lstrcpyW(msg, act); lstrcatW(msg, L"\n"); lstrcatW(msg, text);
+    if (!PostMessageW(g_wnd, WM_TOAST, 0, (LPARAM)msg)) HeapFree(GetProcessHeap(), 0, msg);
+    return S_OK;
+}
+static void *ta_vtbl[] = { (void *)ta_qi, (void *)ta_ref, (void *)ta_ref, (void *)ta_invoke };
+static struct { void **vtbl; } g_toast_handler = { ta_vtbl };
+
+static int toast_init(void) {
+    if (g_toast_ok >= 0) return g_toast_ok;
+    g_toast_ok = 0;
+    if (!reg_get(L"toast", 1)) return 0; /* HKCU\Software\MorabaChat\toast = 0: the plain balloon */
+    HMODULE m = LoadLibraryW(L"combase.dll");
+    if (!m) return 0;
+    pRoGetActivationFactory = (RoGetActivationFactoryFn)(void *)GetProcAddress(m, "RoGetActivationFactory");
+    pRoActivateInstance = (RoActivateInstanceFn)(void *)GetProcAddress(m, "RoActivateInstance");
+    pWindowsCreateString = (WindowsCreateStringFn)(void *)GetProcAddress(m, "WindowsCreateString");
+    pWindowsDeleteString = (WindowsDeleteStringFn)(void *)GetProcAddress(m, "WindowsDeleteString");
+    pWindowsGetStringRawBuffer = (WindowsGetStringRawBufferFn)(void *)GetProcAddress(m, "WindowsGetStringRawBuffer");
+    if (!pRoGetActivationFactory || !pRoActivateInstance || !pWindowsCreateString || !pWindowsDeleteString || !pWindowsGetStringRawBuffer) return 0;
+    void *statics = NULL;
+    RTSTR cls = hs(L"Windows.UI.Notifications.ToastNotificationManager");
+    if (SUCCEEDED(pRoGetActivationFactory(cls, &IID_ToastStatics, &statics)) && statics) {
+        RTSTR id = hs(APP_ID);
+        ((FnPP)VT(statics, 7))(statics, id, &g_notifier); /* CreateToastNotifierWithId */
+        pWindowsDeleteString(id);
+        rt_release(statics);
+    }
+    pWindowsDeleteString(cls);
+    cls = hs(L"Windows.UI.Notifications.ToastNotification");
+    pRoGetActivationFactory(cls, &IID_ToastFactory, &g_toast_factory);
+    pWindowsDeleteString(cls);
+    g_toast_ok = g_notifier && g_toast_factory;
+    return g_toast_ok;
+}
+
+/* XML text: & < > " escaped; appended to a growing buffer */
+static void xml_add(wchar_t *buf, size_t cap, const wchar_t *s, int esc) {
+    size_t i = wcslen(buf);
+    for (; *s && i + 8 < cap; s++) {
+        const wchar_t *r = NULL;
+        if (esc && *s == L'&') r = L"&amp;"; else if (esc && *s == L'<') r = L"&lt;"; else if (esc && *s == L'>') r = L"&gt;"; else if (esc && *s == L'"') r = L"&quot;";
+        else if (*s < 0x20 && *s != L'\n') continue;
+        if (r) { while (*r) buf[i++] = *r++; } else buf[i++] = *s;
+    }
+    buf[i] = 0;
+}
+
+static int toast_show(const wchar_t *title, const wchar_t *body, int channel, int reply) {
+    if (!toast_init()) return 0;
+    static wchar_t xml[4000];
+    wchar_t ch[16];
+    _itow(channel, ch, 10);
+    xml[0] = 0;
+    xml_add(xml, 4000, L"<toast launch=\"open:", 0); xml_add(xml, 4000, ch, 0);
+    xml_add(xml, 4000, L"\"><visual><binding template=\"ToastGeneric\"><text hint-maxLines=\"1\">", 0);
+    xml_add(xml, 4000, title, 1);
+    xml_add(xml, 4000, L"</text><text>", 0);
+    xml_add(xml, 4000, body, 1);
+    xml_add(xml, 4000, L"</text></binding></visual>", 0);
+    if (reply && channel > 0) {
+        xml_add(xml, 4000, L"<actions><input id=\"reply\" type=\"text\" placeHolderContent=\"\x067E\x0627\x0633\x062E\x2026\"/>"
+            L"<action content=\"\x0627\x0631\x0633\x0627\x0644\" arguments=\"reply:", 0);
+        xml_add(xml, 4000, ch, 0);
+        xml_add(xml, 4000, L"\" hint-inputId=\"reply\"/><action content=\"\x062E\x0648\x0627\x0646\x062F\x0647 \x0634\x062F\" arguments=\"read:", 0);
+        xml_add(xml, 4000, ch, 0);
+        xml_add(xml, 4000, L"\"/></actions>", 0);
+    }
+    if (!reg_get(L"sound", 1)) xml_add(xml, 4000, L"<audio silent=\"true\"/>", 0);
+    xml_add(xml, 4000, L"</toast>", 0);
+
+    void *insp = NULL, *io = NULL, *doc = NULL, *toast = NULL, *t2 = NULL;
+    int ok = 0;
+    RTSTR cls = hs(L"Windows.Data.Xml.Dom.XmlDocument"), x = hs(xml);
+    if (SUCCEEDED(pRoActivateInstance(cls, &insp)) && insp && SUCCEEDED(rt_qi(insp, &IID_XmlDocIO, &io)) && io &&
+        SUCCEEDED(((FnP)VT(io, 6))(io, x)) && SUCCEEDED(rt_qi(insp, &IID_XmlDoc, &doc)) && doc &&
+        SUCCEEDED(((FnPP)VT(g_toast_factory, 6))(g_toast_factory, doc, &toast)) && toast) {
+        if (SUCCEEDED(rt_qi(toast, &IID_Toast2, &t2)) && t2) {
+            wchar_t tag[20] = L"c";
+            lstrcatW(tag, ch);
+            RTSTR ht = hs(tag), hg = hs(L"chat");
+            ((FnP)VT(t2, 6))(t2, ht); /* put_Tag: a newer message of the same chat replaces the older toast */
+            ((FnP)VT(t2, 8))(t2, hg); /* put_Group */
+            pWindowsDeleteString(ht); pWindowsDeleteString(hg);
+            rt_release(t2);
+        }
+        INT64 tok = 0;
+        ((FnPP)VT(toast, 11))(toast, &g_toast_handler, &tok); /* add_Activated */
+        ok = SUCCEEDED(((FnP)VT(g_notifier, 6))(g_notifier, toast)); /* Show */
+    }
+    pWindowsDeleteString(cls); pWindowsDeleteString(x);
+    rt_release(doc); rt_release(io); rt_release(insp);
+    if (ok) {
+        int i = g_toast_n++ % 12;
+        rt_release(g_toasts[i]);
+        g_toasts[i] = toast;
+    } else rt_release(toast);
+    return ok;
+}
+
+/* JSON string body (quotes, backslashes, control characters escaped) */
+static void json_add(wchar_t *buf, size_t cap, const wchar_t *s) {
+    size_t i = wcslen(buf);
+    for (; *s && i + 8 < cap; s++) {
+        if (*s == L'"' || *s == L'\\') { buf[i++] = L'\\'; buf[i++] = *s; }
+        else if (*s == L'\n') { buf[i++] = L'\\'; buf[i++] = L'n'; }
+        else if (*s < 0x20) continue;
+        else buf[i++] = *s;
+    }
+    buf[i] = 0;
+}
+
+static void show_window(void);
+
+/** What the person did on a toast (WM_TOAST, UI thread). */
+static void toast_action(wchar_t *m) {
+    wchar_t *text = wcschr(m, L'\n');
+    if (text) *text++ = 0;
+    const wchar_t *c = wcschr(m, L':');
+    int ch = c ? _wtoi(c + 1) : 0;
+    if (!wcsncmp(m, L"reply:", 6) && ch) {
+        if (!text || !*text) return;
+        static wchar_t j[4400];
+        swprintf(j, 64, L"{\"t\":\"reply\",\"channel\":%d,\"text\":\"", ch);
+        json_add(j, 4390, text);
+        lstrcatW(j, L"\"}");
+        post_json(j);
+    } else if (!wcsncmp(m, L"read:", 5) && ch) {
+        wchar_t j[64];
+        swprintf(j, 64, L"{\"t\":\"read\",\"channel\":%d}", ch);
+        post_json(j);
+    } else {
+        show_window();
+        if (ch) { wchar_t j[64]; swprintf(j, 64, L"{\"t\":\"open\",\"channel\":%d}", ch); post_json(j); }
+    }
+}
+
+/** A Windows notification: a toast with a reply box, or the tray balloon (clicking either opens that chat). */
+static void notify(const wchar_t *title, const wchar_t *body, int channel, int reply) {
     if (!reg_get(L"notify", 1) || dnd()) return;
+    const wchar_t *shown = reg_get(L"preview", 1) && body && *body ? body : L"\x067E\x06CC\x0627\x0645 \x062A\x0627\x0632\x0647";
+    if (toast_show(title && *title ? title : APP_NAME, shown, channel, reply)) {
+        if (GetForegroundWindow() != g_wnd) {
+            FLASHWINFO fw = { sizeof(fw), g_wnd, FLASHW_TRAY | FLASHW_TIMERNOFG, 0, 0 };
+            FlashWindowEx(&fw);
+        }
+        return;
+    }
     g_last_channel = channel;
     g_nid.uFlags = NIF_INFO | NIF_SHOWTIP;
     lstrcpynW(g_nid.szInfoTitle, title && *title ? title : APP_NAME, 64);
-    lstrcpynW(g_nid.szInfo, reg_get(L"preview", 1) && body && *body ? body : L"\x067E\x06CC\x0627\x0645 \x062A\x0627\x0632\x0647", 256);
+    lstrcpynW(g_nid.szInfo, shown, 256);
     g_nid.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON | NIIF_RESPECT_QUIET_TIME | (reg_get(L"sound", 1) ? 0 : NIIF_NOSOUND);
     g_nid.hBalloonIcon = g_icon;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
@@ -367,6 +603,69 @@ static void apply_hotkey(void) {
     if (reg_get(L"hotkey", 1)) RegisterHotKey(g_wnd, 1, MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT, 'M');
 }
 
+/* ------------------------------------------------------------------ automatic attendance
+ *
+ * Every minute, and at once on lock, unlock, sleep, wake and shutdown, the page is told how long it has been
+ * since the last keyboard or mouse input on this computer, whether the session is locked, and whether something
+ * keeps the screen on (a call, a meeting). The page sends it to the site (POST presence), which turns it into
+ * attendance (includes/class-mp-presence.php): only time with real work counts; idle, locked, asleep or switched
+ * off does not. The answer («حاضر از ۰۹:۱۲») shows in the tray tooltip. */
+static void device_id(void) {
+    DWORD sz = sizeof(g_device);
+    if (RegGetValueW(HKEY_CURRENT_USER, REG_KEY, L"device", RRF_RT_REG_SZ, NULL, g_device, &sz) == ERROR_SUCCESS && g_device[0]) return;
+    GUID g;
+    CoCreateGuid(&g);
+    swprintf(g_device, 40, L"w%08lx%04x%04x%02x%02x%02x%02x%02x%02x", (unsigned long)g.Data1, g.Data2, g.Data3, g.Data4[0], g.Data4[1], g.Data4[2], g.Data4[3], g.Data4[4], g.Data4[5]);
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_KEY, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL) == ERROR_SUCCESS) {
+        RegSetValueExW(k, L"device", 0, REG_SZ, (const BYTE *)g_device, (DWORD)((wcslen(g_device) + 1) * sizeof(wchar_t)));
+        RegCloseKey(k);
+    }
+}
+
+static DWORD idle_seconds(void) {
+    LASTINPUTINFO li = { sizeof(li) };
+    if (!GetLastInputInfo(&li)) return 0;
+    return (GetTickCount() - li.dwTime) / 1000; /* the tick count goes on during sleep, so idle does too */
+}
+
+/* A program holding the screen on (a video call, a meeting, a presentation) counts as being there — but only up
+   to 45 minutes without any input, so a film left playing does not fill the night. */
+static int screen_held(DWORD idle) {
+    EXECUTION_STATE st = 0;
+    if (idle > 45 * 60) return 0;
+    if (CallNtPowerInformation(SystemExecutionState, NULL, 0, &st, sizeof(st)) != 0) return 0;
+    return (st & ES_DISPLAY_REQUIRED) != 0;
+}
+
+static void activity(const wchar_t *ev) {
+    if (!g_loaded || !g_web) return;
+    DWORD idle = idle_seconds();
+    wchar_t j[220];
+    swprintf(j, 220, L"{\"t\":\"activity\",\"ev\":\"%ls\",\"idle\":%lu,\"locked\":%d,\"busy\":%d,\"device\":\"%ls\"}",
+        ev, (unsigned long)idle, g_locked, !g_locked && screen_held(idle), g_device);
+    post_json(j);
+}
+
+/* the site's answer: {"t":"presence","on":1,"present":1,"since":"09:12"} */
+static void presence_state(const wchar_t *j) {
+    int on = (int)json_num(j, L"on", 1), present = (int)json_num(j, L"present", 0);
+    wchar_t since[8];
+    json_str(j, L"since", since, 8);
+    g_presence[0] = 0;
+    if (on && present) {
+        lstrcpyW(g_presence, L"\x062D\x0627\x0636\x0631"); /* حاضر */
+        if (since[0]) { lstrcatW(g_presence, L" \x0627\x0632 "); lstrcatW(g_presence, since); } /* از 09:12 */
+    }
+    if (on != g_presence_on) {
+        g_presence_on = on;
+        SetTimer(g_wnd, T_PRESENCE, on ? 60000 : 15 * 60000, NULL); /* switched off on the site: ask now and then */
+    }
+    tray_tip();
+    g_nid.uFlags = NIF_TIP | NIF_SHOWTIP;
+    Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+}
+
 /* ------------------------------------------------------------------ the taskbar jump list */
 
 static IShellLinkW *task_link(const wchar_t *args, const wchar_t *title) {
@@ -449,7 +748,10 @@ static const wchar_t *path_of(const wchar_t *uri) { const wchar_t *p = uri + wcs
 
 static void open_outside(const wchar_t *uri) { ShellExecuteW(NULL, L"open", uri, NULL, NULL, SW_SHOWNORMAL); }
 
-/* page → host */
+static void open_pop(int channel, const wchar_t *title);
+static HWND pop_window(ICoreWebView2 *web);
+
+/* page → host (the main window and the separate chat windows alike) */
 static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
     (void)self; (void)sender;
     LPWSTR j = NULL;
@@ -461,7 +763,7 @@ static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, I
         wchar_t title[128], body[300];
         json_str(j, L"title", title, 128);
         json_str(j, L"body", body, 300);
-        notify(title, body, (int)json_num(j, L"channel", 0));
+        notify(title, body, (int)json_num(j, L"channel", 0), !json_num(j, L"noreply", 0));
     } else if (!wcscmp(t, L"set")) {
         wchar_t k[24];
         long v = json_num(j, L"v", 0);
@@ -473,6 +775,12 @@ static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, I
         }
     } else if (!wcscmp(t, L"settings?")) settings_to_page();
     else if (!wcscmp(t, L"show")) show_window();
+    else if (!wcscmp(t, L"presence")) presence_state(j);
+    else if (!wcscmp(t, L"popout")) {
+        wchar_t title[128];
+        json_str(j, L"title", title, 128);
+        open_pop((int)json_num(j, L"channel", 0), title);
+    }
     CoTaskMemFree(j);
     return S_OK;
 }
@@ -487,7 +795,7 @@ static HRESULT STDMETHODCALLTYPE on_new_window(void *self, ICoreWebView2 *sender
     if (same_origin(uri) && wcsstr(uri, L"mp_file=")) {
         wchar_t dl[2200];
         swprintf(dl, 2200, L"%ls%ls", uri, wcsstr(uri, L"download=") ? L"" : L"&download=1");
-        ICoreWebView2_Navigate(g_web, dl); /* an attachment: WebView2 downloads it, the chat stays */
+        ICoreWebView2_Navigate(sender, dl); /* an attachment: WebView2 downloads it, the chat stays */
     } else open_outside(uri);
     CoTaskMemFree(uri);
     return S_OK;
@@ -509,7 +817,7 @@ static HRESULT STDMETHODCALLTYPE on_navigating(void *self, ICoreWebView2 *sender
         int ours = !_wcsnicmp(p, g_scope, sl) || wcsstr(p, L"wp-login.php") || wcsstr(p, L"mp_file=") || wcsstr(p, L"mp_panel=chat") || wcsstr(p, L"rest_route");
         if (!wcscmp(p, L"/") || (!wcsncmp(p, L"/?", 2) && !wcsstr(p, L"mp_"))) { /* the site's home (after signing out): back to the chat */
             ICoreWebView2NavigationStartingEventArgs_put_Cancel(args, TRUE);
-            ICoreWebView2_Navigate(g_web, g_url);
+            ICoreWebView2_Navigate(sender, g_url);
         } else if (!ours) {
             ICoreWebView2NavigationStartingEventArgs_put_Cancel(args, TRUE);
             open_outside(uri);
@@ -525,15 +833,20 @@ static HRESULT STDMETHODCALLTYPE on_navigated(void *self, ICoreWebView2 *sender,
     (void)self; (void)sender;
     BOOL ok = TRUE;
     ICoreWebView2NavigationCompletedEventArgs_get_IsSuccess(args, &ok);
-    if (ok) { g_loaded = 1; KillTimer(g_wnd, T_RETRY); return S_OK; }
+    HWND owner = sender == g_web ? g_wnd : pop_window(sender);
+    if (ok) {
+        if (sender == g_web && !g_loaded) { g_loaded = 1; activity(L"start"); }
+        if (owner) KillTimer(owner, T_RETRY);
+        return S_OK;
+    }
     COREWEBVIEW2_WEB_ERROR_STATUS st = COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN;
     ICoreWebView2NavigationCompletedEventArgs_get_WebErrorStatus(args, &st);
     if (st == COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED) return S_OK;
-    ICoreWebView2_NavigateToString(g_web,
+    ICoreWebView2_NavigateToString(sender,
         L"<!doctype html><html dir=rtl lang=fa><meta charset=utf-8><style>html,body{height:100%;margin:0;background:#161616;color:#eee;font:15px 'Segoe UI',Tahoma,sans-serif;display:grid;place-items:center;text-align:center}"
         L"b{display:block;font-size:19px;margin-bottom:8px}i{display:inline-block;width:26px;height:26px;border:3px solid #444;border-top-color:#f28a24;border-radius:50%;animation:r 1s linear infinite;margin-top:18px}@keyframes r{to{transform:rotate(360deg)}}</style>"
         L"<div><b>\x0627\x062A\x0635\x0627\x0644 \x0628\x0631\x0642\x0631\x0627\x0631 \x0646\x06CC\x0633\x062A</b>\x0647\x0645\x06CC\x0646 \x06A9\x0647 \x0627\x06CC\x0646\x062A\x0631\x0646\x062A \x0648\x0635\x0644 \x0634\x0648\x062F\x060C \x06AF\x0641\x062A\x200C\x0648\x06AF\x0648\x0647\x0627 \x062E\x0648\x062F\x0634\x0627\x0646 \x0628\x0627\x0632 \x0645\x06CC\x200C\x0634\x0648\x0646\x062F.<br><i></i></div></html>");
-    SetTimer(g_wnd, T_RETRY, 6000, NULL);
+    if (owner) SetTimer(owner, T_RETRY, 6000, NULL);
     return S_OK;
 }
 HANDLER(h_navigated, on_navigated);
@@ -557,21 +870,17 @@ static void resize_web(void) {
     ICoreWebView2Controller_put_Bounds(g_ctl, rc);
 }
 
-static HRESULT STDMETHODCALLTYPE on_controller(void *self, HRESULT err, ICoreWebView2Controller *ctl) {
-    (void)self;
-    if (FAILED(err) || !ctl) return S_OK;
-    g_ctl = ctl;
-    ICoreWebView2Controller_AddRef(g_ctl);
-    ICoreWebView2Controller_get_CoreWebView2(g_ctl, &g_web);
+/** The same browser settings and handlers for the main window and every separate chat window. */
+static void setup_web(ICoreWebView2Controller *ctl, ICoreWebView2 *web) {
     /* the window's colour behind the page: no white flash */
     ICoreWebView2Controller2 *c2 = NULL;
-    if (SUCCEEDED(ICoreWebView2Controller_QueryInterface(g_ctl, &IID_ICoreWebView2Controller2, (void **)&c2))) {
+    if (SUCCEEDED(ICoreWebView2Controller_QueryInterface(ctl, &IID_ICoreWebView2Controller2, (void **)&c2))) {
         COREWEBVIEW2_COLOR bg = { 255, 0x16, 0x16, 0x16 };
         ICoreWebView2Controller2_put_DefaultBackgroundColor(c2, bg);
         ICoreWebView2Controller2_Release(c2);
     }
     ICoreWebView2Settings *s = NULL;
-    if (SUCCEEDED(ICoreWebView2_get_Settings(g_web, &s))) {
+    if (SUCCEEDED(ICoreWebView2_get_Settings(web, &s))) {
         ICoreWebView2Settings_put_AreDevToolsEnabled(s, FALSE);
         ICoreWebView2Settings_put_AreDefaultContextMenusEnabled(s, FALSE); /* the page has its own menus */
         ICoreWebView2Settings_put_IsStatusBarEnabled(s, FALSE);
@@ -583,20 +892,145 @@ static HRESULT STDMETHODCALLTYPE on_controller(void *self, HRESULT err, ICoreWeb
         }
         ICoreWebView2Settings_Release(s);
     }
-    ICoreWebView2_AddScriptToExecuteOnDocumentCreated(g_web, L"window.__MP_DESKTOP={v:'" APP_VERSION L"',os:'windows'};", NULL);
+    ICoreWebView2_AddScriptToExecuteOnDocumentCreated(web, L"window.__MP_DESKTOP={v:'" APP_VERSION L"',os:'windows'};", NULL);
     EventRegistrationToken tok;
-    ICoreWebView2_add_WebMessageReceived(g_web, (ICoreWebView2WebMessageReceivedEventHandler *)&h_message, &tok);
-    ICoreWebView2_add_NewWindowRequested(g_web, (ICoreWebView2NewWindowRequestedEventHandler *)&h_new_window, &tok);
-    ICoreWebView2_add_NavigationStarting(g_web, (ICoreWebView2NavigationStartingEventHandler *)&h_navigating, &tok);
-    ICoreWebView2_add_NavigationCompleted(g_web, (ICoreWebView2NavigationCompletedEventHandler *)&h_navigated, &tok);
-    ICoreWebView2_add_PermissionRequested(g_web, (ICoreWebView2PermissionRequestedEventHandler *)&h_permission, &tok);
+    ICoreWebView2_add_WebMessageReceived(web, (ICoreWebView2WebMessageReceivedEventHandler *)&h_message, &tok);
+    ICoreWebView2_add_NewWindowRequested(web, (ICoreWebView2NewWindowRequestedEventHandler *)&h_new_window, &tok);
+    ICoreWebView2_add_NavigationStarting(web, (ICoreWebView2NavigationStartingEventHandler *)&h_navigating, &tok);
+    ICoreWebView2_add_NavigationCompleted(web, (ICoreWebView2NavigationCompletedEventHandler *)&h_navigated, &tok);
+    ICoreWebView2_add_PermissionRequested(web, (ICoreWebView2PermissionRequestedEventHandler *)&h_permission, &tok);
+}
+
+static HRESULT STDMETHODCALLTYPE on_controller(void *self, HRESULT err, ICoreWebView2Controller *ctl) {
+    (void)self;
+    if (FAILED(err) || !ctl) return S_OK;
+    g_ctl = ctl;
+    ICoreWebView2Controller_AddRef(g_ctl);
+    ICoreWebView2Controller_get_CoreWebView2(g_ctl, &g_web);
+    setup_web(g_ctl, g_web);
     resize_web();
     set_visible(IsWindowVisible(g_wnd) && !IsIconic(g_wnd));
     ICoreWebView2_Navigate(g_web, g_url);
     SetTimer(g_wnd, T_TICK, 15000, NULL);
+    SetTimer(g_wnd, T_PRESENCE, 60000, NULL);
     return S_OK;
 }
 HANDLER(h_controller, on_controller);
+
+/* ------------------------------------------------------------------ a chat in its own window
+ *
+ * «باز کردن در پنجره جدا» in the chat (or the page's {t:"popout"}): a small window of its own with just that
+ * conversation (the chat page with ?pop=ID), sharing the main window's browser profile and sign-in. Opening the
+ * same chat again brings its window forward. Up to 16 at a time. */
+typedef struct Pop { HWND wnd; ICoreWebView2Controller *ctl; ICoreWebView2 *web; int channel, pending; wchar_t url[1200]; } Pop;
+static Pop g_pops[16];
+typedef struct { HandlerVtbl *vtbl; LONG ref; int idx; } PopHandler;
+
+static Pop *pop_of(HWND h) { for (int i = 0; i < 16; i++) if (h && g_pops[i].wnd == h) return &g_pops[i]; return NULL; }
+static HWND pop_window(ICoreWebView2 *web) { for (int i = 0; i < 16; i++) if (web && g_pops[i].web == web) return g_pops[i].wnd; return NULL; }
+
+static HRESULT STDMETHODCALLTYPE on_pop_controller(void *self, HRESULT err, ICoreWebView2Controller *ctl) {
+    Pop *p = &g_pops[((PopHandler *)self)->idx];
+    p->pending = 0;
+    if (FAILED(err) || !ctl || !p->wnd) return S_OK; /* closed before the browser was ready */
+    p->ctl = ctl;
+    ICoreWebView2Controller_AddRef(ctl);
+    ICoreWebView2Controller_get_CoreWebView2(ctl, &p->web);
+    setup_web(ctl, p->web);
+    RECT rc;
+    GetClientRect(p->wnd, &rc);
+    ICoreWebView2Controller_put_Bounds(ctl, rc);
+    ICoreWebView2Controller_put_IsVisible(ctl, TRUE);
+    ICoreWebView2_Navigate(p->web, p->url);
+    ICoreWebView2Controller_MoveFocus(ctl, COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+    return S_OK;
+}
+static HandlerVtbl pop_ctl_vtbl = { (void *)h_qi, (void *)h_addref, (void *)h_release, (void *)on_pop_controller };
+static PopHandler g_pop_handlers[16];
+
+static void dark_frame(HWND w) {
+    BOOL dark = TRUE;
+    DwmSetWindowAttribute(w, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
+    COLORREF cap = RGB(0x16, 0x16, 0x16), txt = RGB(0xEE, 0xEE, 0xEE);
+    DwmSetWindowAttribute(w, 35 /* DWMWA_CAPTION_COLOR (Windows 11) */, &cap, sizeof(cap));
+    DwmSetWindowAttribute(w, 36 /* DWMWA_TEXT_COLOR */, &txt, sizeof(txt));
+}
+
+static void open_pop(int channel, const wchar_t *title) {
+    if (!g_env || channel <= 0) return;
+    for (int i = 0; i < 16; i++)
+        if (g_pops[i].wnd && g_pops[i].channel == channel) {
+            if (IsIconic(g_pops[i].wnd)) ShowWindow(g_pops[i].wnd, SW_RESTORE);
+            SetForegroundWindow(g_pops[i].wnd);
+            return;
+        }
+    int i = 0;
+    while (i < 16 && (g_pops[i].wnd || g_pops[i].pending)) i++;
+    if (i == 16) return;
+    Pop *p = &g_pops[i];
+    memset(p, 0, sizeof(*p));
+    p->channel = channel;
+    swprintf(p->url, 1200, L"%ls%lspop=%d#chat-%d", g_url, wcschr(g_url, L'?') ? L"&" : L"?", channel, channel);
+    wchar_t caption[200] = L"";
+    if (title && *title) { lstrcpynW(caption, title, 120); lstrcatW(caption, L" \x2014 "); }
+    lstrcatW(caption, APP_NAME);
+    /* beside the main window, each new one a little lower */
+    UINT dpi = GetDpiForWindow(g_wnd);
+    int w = MulDiv(480, dpi ? dpi : 96, 96), hgt = MulDiv(760, dpi ? dpi : 96, 96);
+    RECT mr, wa;
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
+    GetWindowRect(g_wnd, &mr);
+    int x = IsWindowVisible(g_wnd) ? mr.left - w / 2 + i * 28 : wa.right - w - 40 - i * 28, y = (IsWindowVisible(g_wnd) ? mr.top : wa.top + 40) + i * 28;
+    if (x < wa.left) x = wa.left + 8;
+    if (x + w > wa.right) x = wa.right - w - 8;
+    if (y + hgt > wa.bottom) hgt = wa.bottom - y - 8;
+    p->wnd = CreateWindowExW(WS_EX_APPWINDOW, POP_CLASS, caption, WS_OVERLAPPEDWINDOW, x, y, w, hgt, NULL, NULL, g_inst, NULL);
+    if (!p->wnd) return;
+    dark_frame(p->wnd);
+    ShowWindow(p->wnd, SW_SHOWNORMAL);
+    SetForegroundWindow(p->wnd);
+    g_pop_handlers[i].vtbl = &pop_ctl_vtbl;
+    g_pop_handlers[i].ref = 1;
+    g_pop_handlers[i].idx = i;
+    p->pending = 1;
+    if (FAILED(ICoreWebView2Environment_CreateCoreWebView2Controller(g_env, p->wnd, (ICoreWebView2CreateCoreWebView2ControllerCompletedHandler *)&g_pop_handlers[i]))) p->pending = 0;
+}
+
+static LRESULT CALLBACK pop_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    Pop *p = pop_of(h);
+    switch (msg) {
+    case WM_SIZE:
+        if (p && p->ctl) {
+            RECT rc;
+            GetClientRect(h, &rc);
+            ICoreWebView2Controller_put_Bounds(p->ctl, rc);
+            ICoreWebView2Controller_put_IsVisible(p->ctl, wp != SIZE_MINIMIZED);
+        }
+        return 0;
+    case WM_MOVE:
+        if (p && p->ctl) ICoreWebView2Controller_NotifyParentWindowPositionChanged(p->ctl);
+        return 0;
+    case WM_ACTIVATE:
+        if (LOWORD(wp) != WA_INACTIVE && p && p->ctl) ICoreWebView2Controller_MoveFocus(p->ctl, COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+        return 0;
+    case WM_GETMINMAXINFO: {
+        MINMAXINFO *mm = (MINMAXINFO *)lp;
+        mm->ptMinTrackSize.x = 340; mm->ptMinTrackSize.y = 420;
+        return 0;
+    }
+    case WM_TIMER:
+        if (wp == T_RETRY) { KillTimer(h, T_RETRY); if (p && p->web) ICoreWebView2_Navigate(p->web, p->url); }
+        return 0;
+    case WM_DESTROY:
+        if (p) {
+            if (p->ctl) { ICoreWebView2Controller_Close(p->ctl); ICoreWebView2Controller_Release(p->ctl); }
+            if (p->web) ICoreWebView2_Release(p->web);
+            p->ctl = NULL; p->web = NULL; p->wnd = NULL; p->channel = 0;
+        }
+        return 0;
+    }
+    return DefWindowProcW(h, msg, wp, lp);
+}
 
 static HRESULT STDMETHODCALLTYPE on_environment(void *self, HRESULT err, ICoreWebView2Environment *env) {
     (void)self;
@@ -722,6 +1156,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     }
     case WM_TIMER:
         if (wp == T_TICK) post_json(L"{\"t\":\"tick\"}");
+        else if (wp == T_PRESENCE) activity(L"tick");
         else if (wp == T_RETRY) { KillTimer(h, T_RETRY); if (g_web) ICoreWebView2_Navigate(g_web, g_url); }
         else if (wp == T_UPDATE) CloseHandle(CreateThread(NULL, 0, update_thread, NULL, 0, NULL));
         return 0;
@@ -761,6 +1196,18 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         g_nid.uFlags = NIF_TIP | NIF_SHOWTIP;
         Shell_NotifyIconW(NIM_MODIFY, &g_nid);
         return 0;
+    case WM_TOAST:
+        toast_action((wchar_t *)lp);
+        HeapFree(GetProcessHeap(), 0, (void *)lp);
+        return 0;
+    case WM_WTSSESSION_CHANGE:
+        if (wp == WTS_SESSION_LOCK) { g_locked = 1; activity(L"lock"); }
+        else if (wp == WTS_SESSION_UNLOCK) { g_locked = 0; activity(L"unlock"); }
+        return 0;
+    case WM_POWERBROADCAST:
+        if (wp == PBT_APMSUSPEND) activity(L"sleep");
+        else if (wp == PBT_APMRESUMESUSPEND || wp == PBT_APMRESUMEAUTOMATIC) { g_locked = 0; activity(L"wake"); }
+        return TRUE;
     case WM_UPDATED:
         g_updated = 1;
         g_last_channel = 0;
@@ -777,6 +1224,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         return TRUE;
     }
     case WM_QUERYENDSESSION:
+        activity(L"end"); /* signing out or shutting down: work ends at the last input */
         g_quitting = 1;
         save_placement();
         return TRUE;
@@ -788,6 +1236,8 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_DESTROY:
         Shell_NotifyIconW(NIM_DELETE, &g_nid);
+        WTSUnRegisterSessionNotification(h);
+        for (int i = 0; i < 16; i++) if (g_pops[i].wnd) DestroyWindow(g_pops[i].wnd);
         if (g_ctl) ICoreWebView2Controller_Close(g_ctl);
         PostQuitMessage(0);
         return 0;
@@ -961,6 +1411,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     wc.hbrBackground = CreateSolidBrush(RGB(0x16, 0x16, 0x16));
     wc.lpszClassName = WND_CLASS;
     RegisterClassExW(&wc);
+    wc.lpfnWndProc = pop_proc;
+    wc.lpszClassName = POP_CLASS;
+    RegisterClassExW(&wc);
     g_taskbar_msg = RegisterWindowMessageW(L"TaskbarButtonCreated");
 
     /* a comfortable first size; afterwards, where the person left it */
@@ -968,11 +1421,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     int w = sw > 1400 ? 1180 : sw * 85 / 100, hgt = shh > 900 ? 780 : shh * 85 / 100;
     g_wnd = CreateWindowExW(WS_EX_APPWINDOW, WND_CLASS, APP_NAME, WS_OVERLAPPEDWINDOW, (sw - w) / 2, (shh - hgt) / 2, w, hgt, NULL, NULL, inst, NULL);
     if (!g_wnd) return 1;
-    BOOL dark = TRUE;
-    DwmSetWindowAttribute(g_wnd, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
-    COLORREF cap = RGB(0x16, 0x16, 0x16), txt = RGB(0xEE, 0xEE, 0xEE);
-    DwmSetWindowAttribute(g_wnd, 35 /* DWMWA_CAPTION_COLOR (Windows 11) */, &cap, sizeof(cap));
-    DwmSetWindowAttribute(g_wnd, 36 /* DWMWA_TEXT_COLOR */, &txt, sizeof(txt));
+    dark_frame(g_wnd);
+    WTSRegisterSessionNotification(g_wnd, NOTIFY_FOR_THIS_SESSION); /* lock / unlock for attendance */
+    device_id();
 
     WINDOWPLACEMENT wp = { sizeof(wp) };
     DWORD wsz = sizeof(wp);

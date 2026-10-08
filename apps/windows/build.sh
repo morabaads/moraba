@@ -17,5 +17,5 @@ cp "$V/runtimes/win-x64/native/WebView2Loader.dll" .vendor/WebView2Loader.dll
 x86_64-w64-mingw32-windres moraba-chat.rc -O coff -o .vendor/res.o
 x86_64-w64-mingw32-gcc -municode -mwindows -O2 -s -Wall -Wextra -Wno-unused-parameter -Wno-cast-function-type -Wno-unknown-pragmas -Wno-missing-field-initializers -isystem "$V/build/native/include" \
   -o ../../assets/app/MorabaChat.exe moraba-chat.c .vendor/res.o \
-  -lole32 -loleaut32 -lshell32 -luuid -ldwmapi -lurlmon -luser32 -lgdi32 -static
+  -lole32 -loleaut32 -lshell32 -luuid -ldwmapi -lurlmon -lwtsapi32 -lpowrprof -luser32 -lgdi32 -static
 ls -l ../../assets/app/MorabaChat.exe

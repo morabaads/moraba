@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Version of the Windows app (apps/windows/moraba-chat.c APP_VERSION); installed copies update themselves to it. */
-	const CHAT_EXE_VERSION = '2.0.0';
+	const CHAT_EXE_VERSION = '2.1.0';
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
 	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );

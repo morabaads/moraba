@@ -188,7 +188,22 @@
     else if (d.t === 'focus') { focused = !!d.on; if (focused) MP.refreshCounts(); }
     else if (d.t === 'panel') window.open(C.panel, '_blank');
     else if (d.t === 'activity') presence(d);
+    else if (d.t === 'reply' && d.channel) toastReply(+d.channel, String(d.text || ''));
+    else if (d.t === 'read' && d.channel) toastRead(+d.channel);
   });
+
+  /* Answers typed into a Windows notification and its «خوانده شد» button: done here, the window stays hidden. */
+  function toastRead(ch) {
+    return MP.api('channels/' + ch + '/messages', { noCache: true }).then(function () { MP.refreshCounts(); check(); }).catch(function () {});
+  }
+  function toastReply(ch, text) {
+    if (!text.trim()) return;
+    toastRead(ch).then(function () {
+      return MP.api('channels/' + ch + '/messages', { method: 'POST', body: { body: text } });
+    }).catch(function (e) {
+      post({ t: 'notify', title: 'پاسخ فرستاده نشد', body: (e && e.message) || 'دوباره از خود گفت‌وگو بفرستید', channel: ch, noreply: 1 });
+    });
+  }
   check();
 
   /* Automatic attendance: the app reports how long since the last keyboard/mouse input, lock, sleep, wake and

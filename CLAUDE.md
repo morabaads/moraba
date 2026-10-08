@@ -47,6 +47,17 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     tick/open/saved/switch/panel/focus/settings) plus desktop UX for everyone with a mouse: Ctrl+K quick switcher, Alt+↑/↓,
     Ctrl+F/0, typing goes to the composer, hover toolbar on messages (react/reply/menu, double-click = reply), resizable chat list.
     Tested under Wine + Xvfb with a stand-in WebView2Loader.dll that records calls and replays page messages (no real WebView2 in Wine).
+    2.1: Windows toasts with a reply box (WinRT called by hand via IIDs/vtable slots, no SDK headers; Activated on a worker
+    thread → WM_TOAST → page `{t:'reply'|'read'}`; balloon fallback, registry `toast=0` forces it), a chat in its own window
+    (page `{t:'popout'}` → window class `MorabaChatPop` + own controller, page `?pop=ID` = body `chat-pop`, just that chat),
+    attendance activity (`{t:'activity', idle, locked, busy, ev, device}` every 60 s + lock/unlock/sleep/wake/end; device id in
+    registry `device`; the page POSTs `presence` and answers `{t:'presence'}` for the tray tooltip).
+  - Third column beside an open chat (≥1200px with a mouse): `#chat-side` = `chatInfo(c, side)` (info, members, media/files),
+    toggled by the chat header, remembered in localStorage `mp_chat_side`.
+- Automatic attendance (`class-mp-presence.php`, options `mp_presence_on` / `mp_presence_idle`, «حضور خودکار» in the
+  attendance page for supervisors): sessions with `attendance.source = 'auto'` from first to last real input, closed at the last
+  report when reports stop (sleep/shutdown), cut at midnight, merged across gaps < 2 min, < 1 min dropped; manual «خروج» pauses
+  it for the day. Scenario test: `php tests/presence-test.php /tmp/wp/wp-load.php`.
 - Widgets (profile menu → «ویجت‌ها روی صفحه اصلی», `assets/js/widgets.js`):
   - Android: `apps/android/` plain-Java app (no Gradle/AndroidX), four widgets (tasks card, attendance with live Chronometer, messages, next meeting).
     Build with `apps/android/build.sh` (needs SDK at `/opt/android`: platforms;android-34 + build-tools;35.0.0 — d8 34 crashes) → `assets/app/moraba.apk`.
