@@ -88,6 +88,8 @@
   $('cp-step-code').elements.code.addEventListener('input', function () { var v = latin(this.value).replace(/\D/g, ''); this.value = fa(v); if (v.length === 5) $('cp-step-code').requestSubmit(); });
   $('cp-change').onclick = function () { $('cp-step-code').hidden = true; $('cp-step-mobile').hidden = false; loginError(''); };
   $('cp-resend').onclick = function () { requestCode(loginMobile); };
+  /** Another of this person's conversations (a group, or the private chat with support) without a new login. */
+  function switchTo(id) { api('/switch', { id: id }).then(function (r) { location.href = r.url + '#chat'; }).catch(function (e) { toast(e.message || 'باز نشد'); }); }
   function logout() { api('/logout', {}).then(function () { location.reload(); }).catch(function () { location.reload(); }); }
   $('cp-logout').onclick = logout;
   /* Header circle: who is logged in, the project, and «خروج از حساب». */
@@ -103,9 +105,13 @@
       h('div', { class: 'cp-me-head' }, [
         me.logged_in ? h('span', { class: 'cp-avatar', text: initials(me.name) }) : h('span', { class: 'cp-client-logo sm' }),
         h('div', null, [h('strong', { text: me.logged_in ? me.name : (me.client || me.title) }), h('small', { text: (me.client || '') + (me.client && me.title ? ' · ' : '') + me.title })])]),
-      me.logged_in ? h('button', { type: 'button', role: 'menuitem', class: 'cp-me-out', html: icon('logout') + '<span>' + (me.preview ? 'پایان نمای مشتری' : 'خروج از حساب') + '</span>', onclick: function () { closeMe(); logout(); } })
+      (me.others || []).length ? h('div', { class: 'cp-me-others' }, [h('small', { text: 'گفت‌وگوهای دیگر شما' })].concat(me.others.map(function (x) {
+        return h('button', { type: 'button', role: 'menuitem', class: 'cp-me-other', html: icon(x.pv ? 'chat' : 'user') + '<span></span>', onclick: function () { closeMe(); switchTo(x.id); } });
+      }))) : null,
+      me.logged_in ? h('button', { type: 'button', role: 'menuitem', class: 'cp-me-out', html: icon('logout') + '<span>' + (me.preview ? 'پایان «از طرف مشتری»' : 'خروج از حساب') + '</span>', onclick: function () { closeMe(); logout(); } })
         : h('p', { class: 'cp-me-note', text: 'برای این پرتال ورود با شماره موبایل لازم نیست.' })
     ]);
+    Array.prototype.forEach.call(meMenu.querySelectorAll('.cp-me-other span'), function (sp, i) { sp.textContent = me.others[i].title; });
     if (!me.logged_in) logoInto(meMenu.querySelector('.cp-client-logo'), me.logo, me.client || me.title);
     meMenu.style.top = (b.bottom + 8) + 'px';
     meMenu.style.left = Math.max(8, Math.min(b.left, innerWidth - Math.min(280, innerWidth - 16) - 8)) + 'px';
@@ -293,7 +299,7 @@
   }
 
   /* The team may let this client add tasks (group settings → «اجازه‌های مشتری»). */
-  function canAddTask() { return !!(me && me.can_add_task && !me.preview); }
+  function canAddTask() { return !!(me && me.can_add_task); }
   function addTask() {
     var title = h('input', { name: 'title', maxlength: '200', required: '', placeholder: 'مثلاً نسخه انگلیسی کارت ویزیت' });
     var desc = h('textarea', { name: 'description', maxlength: '2000', placeholder: 'جزئیات، توضیح یا لینک (اختیاری)' });
@@ -486,7 +492,7 @@
   }
   var chat = window.MPClientChat({
     base: base, h: h, icon: icon, fa: fa, jal: jal, today: today, toast: toast, sysCard: sysCard,
-    myName: myName, isLogged: function () { return !!(me && me.logged_in); }, preview: function () { return !!(me && me.preview); },
+    myName: myName, isLogged: function () { return !!(me && me.logged_in); }, preview: function () { return false; },
     team: function () { return (me && me.team) || 'تیم مربع'; },
     empty: function () { return empty('chat', 'اولین پیام را بفرستید', 'تیم مربع همین‌جا پاسخ می‌دهد؛ عکس، ویس و هر نوع فایلی هم می‌توانید بفرستید.'); },
     onStale: function () { refresh(); },
@@ -517,7 +523,7 @@
       logoInto($('cp-client-logo'), m.logo, m.client || m.title);
       logoInto($('cp-client-logo-m'), m.logo, m.client || m.title);
       logoInto($('cp-chat-client'), m.logo, m.client || m.title);
-      $('cp-chat-sub').textContent = m.title + ' · پاسخ همین‌جا می‌آید'; $('cp-chat-sub').dataset.base = $('cp-chat-sub').textContent;
+      $('cp-chat-sub').textContent = m.pv ? 'پشتیبانی · گفت‌وگوی خصوصی شما با تیم' : m.title + ' · پاسخ همین‌جا می‌آید'; $('cp-chat-sub').dataset.base = $('cp-chat-sub').textContent;
       var hr = new Date().getHours(), first = m.logged_in ? String(m.name).split(' ')[0] : '';
       $('cp-hello').textContent = (hr < 12 ? 'صبح بخیر' : hr < 17 ? 'روز بخیر' : 'عصر بخیر') + (first ? '، ' + first : '');
       $('cp-hello-sub').textContent = (m.client || '') + (m.client && m.title ? ' · ' : '') + m.title;
@@ -525,9 +531,8 @@
       // Staff seeing the portal as this client: a banner, and nothing can be sent.
       if (m.preview) {
         $('cp-preview').hidden = false; document.body.classList.add('cp-previewing');
-        $('cp-preview-who').textContent = 'نمای مشتری: ' + (m.name || 'مشتری');
+        $('cp-preview-who').textContent = 'از طرف مشتری: ' + (m.name || 'مشتری');
         $('cp-preview-end').onclick = function () { logout(); };
-        chat.preview();
       }
       if (m.logged_in) { $('cp-logout').hidden = false; $('cp-me-avatar').hidden = false; $('cp-me-avatar').textContent = initials(m.name); $('cp-client-logo-m').hidden = true; }
       else { form.elements.name.hidden = false; try { form.elements.name.value = localStorage.getItem('mp-client-name') || ''; } catch (e) { /* private */ } }

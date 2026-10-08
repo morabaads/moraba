@@ -58,7 +58,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 		</nav>
 	</aside>
 	<main class="main cp-main" id="main">
-		<div class="cp-preview" id="cp-preview" hidden role="status"><span class="cp-preview-dot"></span><div><strong id="cp-preview-who"></strong><small>فقط مشاهده؛ پیام، نظر و تأیید در این حالت ثبت نمی‌شود.</small></div><button type="button" class="cp-preview-end" id="cp-preview-end">پایان</button></div>
+		<div class="cp-preview" id="cp-preview" hidden role="status"><span class="cp-preview-dot"></span><div><strong id="cp-preview-who"></strong><small>هر پیام، فایل، نظر، تأیید یا کاری که اینجا ثبت کنید به نام مشتری ثبت می‌شود (و در گزارش فعالیت به نام شما).</small></div><button type="button" class="cp-preview-end" id="cp-preview-end">پایان</button></div>
 		<header class="topbar cp-topbar">
 			<div class="cp-top-mobile"><img src="<?php echo esc_url( $mp_b['logo'] ); ?>" alt="<?php echo esc_attr( $mp_b['name'] ); ?>" class="cp-studio-logo sm<?php echo esc_attr( $mp_lc ); ?>"></div>
 			<div class="hello"><strong id="cp-hello"></strong><span id="cp-hello-sub"></span></div>

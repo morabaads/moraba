@@ -1152,6 +1152,8 @@ class MP_Chat {
 			'desc'   => isset( $s['desc'] ) ? (string) $s['desc'] : '',
 			// Client groups: may the client add tasks to the project from the portal?
 			'client_tasks' => ! empty( $s['client_tasks'] ) && 'client' === $ch->type,
+			// The customer's private chat with the studio (MP_Client::pv_for); kept as 1 so SQL can find it.
+			'pv'           => ! empty( $s['pv'] ) && 'client' === $ch->type ? 1 : 0,
 		);
 	}
 

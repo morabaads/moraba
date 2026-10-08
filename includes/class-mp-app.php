@@ -192,7 +192,7 @@ class MP_App {
 	<a class="login-alt" href="<?php echo esc_url( MP_Frontend::panel_url() ); ?>"><span>پنل کارمندان</span></a>
 <?php endif; ?>
 <?php foreach ( $portals as $p ) : ?>
-	<a class="login-alt" href="<?php echo esc_url( MP_Client::url( $p[0]->token ) ); ?>"><span><?php echo esc_html( $p[0]->client_name ? $p[0]->client_name . ' · ' . $p[0]->title : $p[0]->title ); ?></span></a>
+	<a class="login-alt" href="<?php echo esc_url( MP_Client::url( $p[0]->token ) ); ?>"><span><?php echo esc_html( MP_Client::is_pv( $p[0] ) ? 'پشتیبانی ' . MP_Client::brand()['name'] : ( $p[0]->client_name ? $p[0]->client_name . ' · ' . $p[0]->title : $p[0]->title ) ); ?></span></a>
 <?php endforeach; ?>
 </div></main></body></html>
 		<?php

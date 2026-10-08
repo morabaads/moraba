@@ -25,6 +25,7 @@ class MP_Client {
 			array( 'customers', 'POST', 'save_customer', $auth ),
 			array( "customers/$id", 'POST', 'save_customer', $auth ),
 			array( "customers/$id", 'DELETE', 'archive_customer', array( 'MP_Rest', 'can_manage' ) ),
+			array( "customers/$id/pv", 'POST', 'open_pv', $auth ),
 			array( 'portal-brand', 'GET', 'get_brand', $auth ),
 			array( 'portal-brand', 'POST', 'save_brand', array( 'MP_Rest', 'can_manage' ) ),
 			array( "channels/$id/client/preview", 'POST', 'start_preview', $auth ),
@@ -39,6 +40,7 @@ class MP_Client {
 			array( "$tok/login/verify", 'POST', 'login_verify', '__return_true' ),
 			array( "$tok/logout", 'POST', 'logout', '__return_true' ),
 			array( "$tok/tasks", 'POST', 'add_task', '__return_true' ),
+			array( "$tok/switch", 'POST', 'switch_to', '__return_true' ),
 		);
 		foreach ( $routes as $r ) {
 			register_rest_route( MP_Rest::NS, '/' . $r[0], array( 'methods' => $r[1], 'callback' => array( __CLASS__, $r[2] ), 'permission_callback' => $r[3] ) );
@@ -143,7 +145,25 @@ class MP_Client {
 		return $p['contact'] ? $p['contact'] : (object) array( 'id' => 0, 'channel_id' => (int) $ch->id, 'name' => 'مشتری', 'mobile' => '' );
 	}
 
-	/** True when this browser sees the portal through a staff «دیدن مثل مشتری» (view only). */
+	/** The supervisor acting as the client in this browser («از طرف مشتری»), or 0. */
+	public static function acting_manager( $ch ) {
+		if ( self::real_session( $ch ) ) {
+			return 0;
+		}
+		$p = self::preview( $ch );
+		return $p ? (int) $p['uid'] : 0;
+	}
+
+	/** Audit line for something a supervisor did in the portal on the client's behalf. */
+	public static function log_acting( $ch, $what ) {
+		$uid = self::acting_manager( $ch );
+		if ( $uid ) {
+			$u = get_userdata( $uid );
+			MP_Audit::log( 'update', 'channel', $ch->id, ( $u ? $u->display_name : 'ناظر' ) . ' از طرف مشتری در «' . $ch->title . '»: ' . $what );
+		}
+	}
+
+	/** True when this browser sees the portal through a supervisor's «از طرف مشتری». */
 	public static function is_preview( $ch ) {
 		return ! self::real_session( $ch ) && (bool) self::preview( $ch );
 	}
@@ -158,6 +178,10 @@ class MP_Client {
 		$c = isset( $_COOKIE[ self::preview_cookie( $ch ) ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ self::preview_cookie( $ch ) ] ) ) : '';
 		$p = explode( '|', $c );
 		if ( 4 !== count( $p ) || (int) $p[2] < time() || ! hash_equals( self::sign( 'pv|' . $ch->id . '|' . $p[0] . '|' . $p[1] . '|' . $p[2] . '|' . $ch->token ), $p[3] ) ) {
+			return null;
+		}
+		// Only a supervisor's preview counts (a colleague who stopped being one loses it at once).
+		if ( ! MP_Util::is_manager( (int) $p[0] ) ) {
 			return null;
 		}
 		$contact = (int) $p[1] ? $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'client_contacts' ) . ' WHERE id = %d AND channel_id = %d', (int) $p[1], $ch->id ) ) : null;
@@ -212,7 +236,7 @@ class MP_Client {
 		$s  = self::session( $ch );
 		$pv = $s && self::is_preview( $ch );
 		return array(
-			'title'         => $ch->title,
+			'title'         => self::is_pv( $ch ) ? 'پشتیبانی ' . self::brand()['name'] : $ch->title,
 			'client'        => $ch->client_name,
 			'team'          => self::brand()['name'],
 			'preview'       => $pv,
@@ -222,6 +246,8 @@ class MP_Client {
 			'name'          => $s ? $s->name : '',
 			'sms'           => MP_Auth::otp_enabled(),
 			'can_add_task'  => self::can_add_task( $ch ),
+			'pv'            => self::is_pv( $ch ),
+			'others'        => self::others( $ch ),
 		);
 	}
 
@@ -241,9 +267,6 @@ class MP_Client {
 		$gate = self::gate( $ch );
 		if ( $gate ) {
 			return $gate;
-		}
-		if ( self::is_preview( $ch ) ) {
-			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
 		}
 		if ( ! self::can_add_task( $ch ) ) {
 			return self::err( 'افزودن کار برای این پرتال فعال نیست.', 403 );
@@ -292,6 +315,7 @@ class MP_Client {
 			MP_Notify::event( 'task_client', $member, array( 'CLIENT' => $who, 'GROUP' => $ch->title, 'TASK' => $title ), 'calendar', $id );
 		}
 		self::system( $ch->id, 0, $who . ' کار «' . $title . '» را اضافه کرد', array( 't' => 'task', 'id' => $id ) );
+		self::log_acting( $ch, 'افزودن کار «' . $title . '»' );
 		MP_Live::bump();
 		return array( 'id' => $id, 'title' => $title, 'date' => $date );
 	}
@@ -415,6 +439,7 @@ class MP_Client {
 			'can_staff'     => MP_Util::is_manager() || (int) $ch->created_by === get_current_user_id(),
 			'manager'       => MP_Util::is_manager(),
 			'client_tasks'  => MP_Chat::settings( $ch )['client_tasks'],
+			'pv'            => self::is_pv( $ch ),
 		);
 	}
 
@@ -523,45 +548,31 @@ class MP_Client {
 			}
 		}
 		MP_Audit::log( $r['id'] ? 'update' : 'create', 'client', $id, $name );
-		// With a mobile, the customer can always open a portal: they join the client group of each chosen
-		// project (made if missing) and every client group they already have; with none at all, a group of
-		// their own (no project) is made. Each new membership texts them that group's link; groups they are
-		// already in are left alone (no repeated SMS).
+		// Groups are made by the team only. With a mobile, the customer gets their private chat with the
+		// studio (its link is texted the first time) and joins the existing client groups picked in the form.
 		$portal = array();
 		$mobile = MP_Auth::normalize( $r['phone'] );
 		if ( $mobile ) {
 			$cust   = self::customer( $id );
 			$groups = array();
-			foreach ( isset( $keep ) ? $keep : array() as $pid ) {
-				$ch = self::group_for( $cust, $pid );
-				if ( $ch ) {
-					$groups[ (int) $ch->id ] = $ch;
-				}
+			$pv     = self::pv_for( $cust );
+			if ( $pv ) {
+				$groups[ (int) $pv->id ] = $pv;
 			}
-			foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND client_id = %d AND archived_at IS NULL ORDER BY id", $id ) ) as $ch ) {
-				$groups[ (int) $ch->id ] = $ch;
-			}
-			// Existing client groups picked in the form: the customer joins them too (a group with no customer becomes theirs).
 			foreach ( is_array( $r['group_ids'] ) ? $r['group_ids'] : array() as $gid ) {
 				$ch = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE id = %d AND type = 'client' AND archived_at IS NULL", (int) $gid ) );
-				if ( ! $ch || ! MP_Rest::can_read_channel( $ch->id ) ) {
+				if ( ! $ch || ! MP_Rest::can_read_channel( $ch->id ) || self::is_pv( $ch ) ) {
 					continue;
 				}
 				if ( ! (int) $ch->client_id ) {
-					$wpdb->update( self::t( 'channels' ), array( 'client_id' => $id ), array( 'id' => $ch->id ) );
+					$wpdb->update( self::t( 'channels' ), array( 'client_id' => $id, 'client_name' => MP_Util::text( $cust->name, 120 ) ), array( 'id' => $ch->id ) );
 				}
 				$groups[ (int) $ch->id ] = $ch;
-			}
-			if ( ! $groups ) {
-				$ch = self::group_for( $cust, 0 );
-				if ( $ch ) {
-					$groups[ (int) $ch->id ] = $ch;
-				}
 			}
 			foreach ( $groups as $ch ) {
 				$res = self::add_person( $ch, $cust->name, $mobile );
 				if ( $res['added'] ) {
-					$portal[] = array( 'group' => $ch->title, 'project' => $ch->project_id ? (string) $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $ch->project_id ) ) : '', 'sms' => $res['sms'], 'error' => $res['error'] );
+					$portal[] = array( 'group' => self::is_pv( $ch ) ? 'گفت‌وگوی خصوصی' : $ch->title, 'project' => $ch->project_id ? (string) $wpdb->get_var( $wpdb->prepare( 'SELECT name FROM ' . self::t( 'projects' ) . ' WHERE id = %d', $ch->project_id ) ) : '', 'sms' => $res['sms'], 'error' => $res['error'] );
 				}
 			}
 		}
@@ -594,6 +605,7 @@ class MP_Client {
 			'id'         => (int) $ch->id,
 			'title'      => $ch->title,
 			'client'     => $ch->client_name,
+			'pv'         => self::is_pv( $ch ),
 			'project_id' => (int) $ch->project_id,
 			'logo'       => self::logo_url( $ch ),
 			'url'        => self::url( $ch->token ),
@@ -746,11 +758,15 @@ class MP_Client {
 	}
 
 	/**
-	 * POST channels/{id}/client/preview {contact_id?} — this browser sees the portal as that client person
-	 * (or as a client in general) for two hours. View only: sending, comments and decisions are refused.
+	 * POST channels/{id}/client/preview {contact_id?} — supervisors only: this browser opens the portal as that
+	 * client person (or as a client in general) for two hours and can do everything they can (messages, files,
+	 * comments, approvals, tasks), all recorded under the client's name and in the audit log.
 	 */
 	public static function start_preview( WP_REST_Request $r ) {
 		global $wpdb;
+		if ( ! MP_Util::is_manager() ) {
+			return self::err( 'فقط ناظر می‌تواند پرتال را از طرف مشتری باز کند.', 403 );
+		}
 		$ch = self::team_channel( $r['id'] );
 		if ( ! $ch || $ch->archived_at ) {
 			return self::err( 'گروه مشتری پیدا نشد.', 404 );
@@ -765,7 +781,7 @@ class MP_Client {
 		// A real client login in this browser would win over the preview; it is cleared first.
 		setcookie( self::cookie_name( $ch ), '', array( 'expires' => time() - 3600, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
 		setcookie( self::preview_cookie( $ch ), $val, array( 'expires' => $exp, 'path' => COOKIEPATH ? COOKIEPATH : '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
-		MP_Audit::log( 'view', 'channel', $ch->id, 'دیدن پرتال «' . $ch->title . '» مثل مشتری' );
+		MP_Audit::log( 'view', 'channel', $ch->id, 'باز کردن پرتال «' . $ch->title . '» از طرف مشتری' );
 		return array( 'url' => self::url( $ch->token ) );
 	}
 
@@ -943,6 +959,113 @@ class MP_Client {
 		MP_Audit::log( 'create', 'channel', $id, 'گروه مشتری «' . $customer->name . '» (خودکار)' );
 		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $id ) );
 	}
+	/* ------------------------------------------------------------------ Private chat / support (one per customer) */
+
+	/** Is this client channel the customer's private chat with the studio (not a group)? */
+	public static function is_pv( $ch ) {
+		return $ch && 'client' === $ch->type && ! empty( $ch->settings ) && false !== strpos( (string) $ch->settings, '"pv":1' );
+	}
+
+	/**
+	 * The customer's private chat with the studio: every colleague sees it and may answer, and the customer
+	 * reaches «پشتیبانی» there even before any group is made for them. Made on first need ($create).
+	 */
+	public static function pv_for( $customer, $create = true ) {
+		global $wpdb;
+		if ( ! $customer ) {
+			return null;
+		}
+		$ch = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . " WHERE type = 'client' AND client_id = %d AND archived_at IS NULL AND settings LIKE %s ORDER BY id LIMIT 1", $customer->id, '%"pv":1%' ) );
+		if ( $ch || ! $create ) {
+			return $ch;
+		}
+		$wpdb->insert(
+			self::t( 'channels' ),
+			array(
+				'type'        => 'client',
+				'project_id'  => 0,
+				'title'       => MP_Util::text( $customer->name, 160 ),
+				'client_name' => MP_Util::text( $customer->name, 120 ),
+				'client_id'   => (int) $customer->id,
+				'token'       => wp_generate_password( 32, false, false ),
+				'created_by'  => get_current_user_id(),
+				'created_at'  => MP_Util::now(),
+				'settings'    => wp_json_encode( array( 'pv' => 1 ) ),
+			)
+		);
+		$id = (int) $wpdb->insert_id;
+		MP_Audit::log( 'create', 'channel', $id, 'گفت‌وگوی خصوصی با «' . $customer->name . '»' );
+		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $id ) );
+	}
+
+	/** POST customers/{id}/pv — the customer's private chat (made now if missing), for «پیام خصوصی». */
+	public static function open_pv( WP_REST_Request $r ) {
+		global $wpdb;
+		$cust = self::customer( (int) $r['id'] );
+		if ( ! $cust ) {
+			return self::err( 'مشتری پیدا نشد.', 404 );
+		}
+		$ch     = self::pv_for( $cust );
+		$mobile = MP_Auth::normalize( $cust->phone );
+		if ( $mobile && ! $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'client_contacts' ) . ' WHERE channel_id = %d', $ch->id ) ) ) {
+			self::add_person( $ch, $cust->name, $mobile, false );
+		}
+		$uid = get_current_user_id();
+		return MP_Rest::channel_payload( MP_Rest::channel_for( $ch->id, $uid ), $uid );
+	}
+
+	/**
+	 * The client person's other conversations with the studio (same mobile): their groups and the private
+	 * chat («پشتیبانی», offered even before it exists). Only for a real mobile login.
+	 */
+	private static function others( $ch ) {
+		global $wpdb;
+		$s = self::real_session( $ch );
+		if ( ! $s ) {
+			return array();
+		}
+		$out = array();
+		$pv  = false;
+		foreach ( $wpdb->get_results( $wpdb->prepare( 'SELECT ch.* FROM ' . self::t( 'client_contacts' ) . ' cc JOIN ' . self::t( 'channels' ) . " ch ON ch.id = cc.channel_id WHERE cc.mobile = %s AND ch.type = 'client' AND ch.archived_at IS NULL ORDER BY ch.id", $s->mobile ) ) as $o ) {
+			$pv = $pv || self::is_pv( $o );
+			if ( (int) $o->id !== (int) $ch->id ) {
+				$out[] = array( 'id' => (int) $o->id, 'title' => self::is_pv( $o ) ? 'پشتیبانی ' . self::brand()['name'] : $o->title, 'pv' => self::is_pv( $o ) );
+			}
+		}
+		if ( ! $pv && $ch->client_id && self::customer( (int) $ch->client_id ) ) {
+			$out[] = array( 'id' => 0, 'title' => 'پشتیبانی ' . self::brand()['name'], 'pv' => true );
+		}
+		return $out;
+	}
+
+	/**
+	 * POST client/{token}/switch {id} — open another of the person's conversations (id 0: the private chat
+	 * with support, made now if needed) without logging in again.
+	 */
+	public static function switch_to( WP_REST_Request $r ) {
+		global $wpdb;
+		$ch = self::channel( $r['token'] );
+		$s  = $ch ? self::real_session( $ch ) : null;
+		if ( ! $s ) {
+			return self::err( 'برای این کار با شماره موبایل وارد شوید.', 401, 'mp_login_required' );
+		}
+		$id = (int) $r['id'];
+		if ( $id ) {
+			$to = $wpdb->get_row( $wpdb->prepare( 'SELECT ch.* FROM ' . self::t( 'channels' ) . ' ch JOIN ' . self::t( 'client_contacts' ) . " cc ON cc.channel_id = ch.id WHERE ch.id = %d AND ch.type = 'client' AND ch.archived_at IS NULL AND cc.mobile = %s", $id, $s->mobile ) );
+		} else {
+			$to = self::pv_for( self::customer( (int) $ch->client_id ) );
+			if ( $to ) {
+				self::add_person( $to, $s->name, $s->mobile, false );
+			}
+		}
+		if ( ! $to ) {
+			return self::err( 'این گفت‌وگو پیدا نشد.', 404 );
+		}
+		$contact = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'client_contacts' ) . ' WHERE channel_id = %d AND mobile = %s', $to->id, $s->mobile ) );
+		self::start_session( $to, $contact );
+		return array( 'url' => self::url( $to->token ) );
+	}
+
 
 	public static function remove_contact( WP_REST_Request $r ) {
 		global $wpdb;

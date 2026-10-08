@@ -3558,3 +3558,8 @@ a.ios-install-btn{display:flex;align-items:center;justify-content:center;text-de
 .cp-task .chip.cp-by{margin-inline-start:6px;font-size:10.5px}
 @media (max-width:640px){.cp-sheet-shade{align-items:end;padding:0}.cp-sheet{border-radius:22px 22px 0 0;padding-bottom:calc(18px + env(safe-area-inset-bottom))}}
 .msg-row.me .v-play{background:#fff;color:var(--brand-strong);box-shadow:none}
+.cp-me-others{display:grid;gap:2px;padding:6px 0;margin:4px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.cp-me-others small{padding:4px 12px;font-size:11.5px;color:var(--muted)}
+.cp-me-other{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:0;border-radius:12px;background:none;color:var(--ink);font:inherit;font-size:14px;cursor:pointer;text-align:right}
+.cp-me-other:hover{background:var(--surface-2)}
+.cp-me-other .icon{width:18px;height:18px;color:var(--brand)}

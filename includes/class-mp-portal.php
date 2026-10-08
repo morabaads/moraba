@@ -359,9 +359,6 @@ class MP_Portal {
 		if ( ! $x ) {
 			return self::err( 'طرح پیدا نشد.', 404 );
 		}
-		if ( MP_Client::is_preview( $ch ) ) {
-			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
-		}
 		if ( ! MP_Rest::client_rate_ok( $ch->id ) ) {
 			return self::err( 'کمی صبر کنید و دوباره بفرستید.', 429 );
 		}
@@ -370,6 +367,7 @@ class MP_Portal {
 		if ( $e ) {
 			return $e;
 		}
+		MP_Client::log_acting( $ch, 'نظر روی طرح «' . $x->title . '»' );
 		self::notify( $x->project_id, 'portal_comment', array( 'CLIENT' => '' !== $name ? $name : $ch->client_name, 'TITLE' => $x->title, 'PREVIEW' => wp_trim_words( (string) $r['body'], 14 ) ), $x->id );
 		return self::payload( $x, $ch->token );
 	}
@@ -381,9 +379,6 @@ class MP_Portal {
 		if ( ! $x || 'superseded' === $x->status ) {
 			return self::err( 'طرح پیدا نشد.', 404 );
 		}
-		if ( MP_Client::is_preview( $ch ) ) {
-			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
-		}
 		$d    = 'approved' === $r['decision'] ? 'approved' : 'changes';
 		$name = MP_Util::text( $r['name'], 80 );
 		$note = MP_Util::long_text( $r['note'], 1000 );
@@ -394,6 +389,7 @@ class MP_Portal {
 		MP_Client::system( 0, $x->project_id, ( '' !== $name ? $name : $ch->client_name ) . ( 'approved' === $d ? ' طرح «' . $x->title . '» را تأیید کرد ✓' : ' برای طرح «' . $x->title . '» درخواست تغییر داد.' ), array( 't' => 'design', 'id' => (int) $x->id ) );
 		self::notify( $x->project_id, 'approved' === $d ? 'portal_approved' : 'portal_changes', array( 'CLIENT' => '' !== $name ? $name : $ch->client_name, 'TITLE' => $x->title, 'NOTE' => $note ), $x->id );
 		MP_Audit::log( 'update', 'portal', $x->id, '«' . $x->title . '»: ' . self::STATUS[ $d ] . ' توسط مشتری' );
+		MP_Client::log_acting( $ch, self::STATUS[ $d ] . ' طرح «' . $x->title . '»' );
 		return self::payload( self::get( $x->id ), $ch->token );
 	}
 }

@@ -87,17 +87,11 @@ class MP_Client_Chat {
 		return '' !== $who['ck'] && isset( $x['ck'] ) && hash_equals( (string) $x['ck'], $who['ck'] );
 	}
 
-	/** The group of the link, once the visitor may use it; WP_Error otherwise. $write: refuse a staff preview. */
-	private static function group( WP_REST_Request $r, $write = true ) {
+	/** The group of the link, once the visitor may use it (a supervisor acting as the client may too); WP_Error otherwise. */
+	private static function group( WP_REST_Request $r ) {
 		$ch = MP_Client::channel( (string) $r['token'] );
 		$g  = MP_Client::gate( $ch );
-		if ( $g ) {
-			return $g;
-		}
-		if ( $write && MP_Client::is_preview( $ch ) ) {
-			return self::err( 'این پرتال را در حالت «دیدن مثل مشتری» باز کرده‌اید؛ فقط مشاهده ممکن است.', 403 );
-		}
-		return $ch;
+		return $g ? $g : $ch;
 	}
 
 	private static function own_message( WP_REST_Request $r, $ch ) {
@@ -176,7 +170,7 @@ class MP_Client_Chat {
 	 */
 	public static function messages( WP_REST_Request $r ) {
 		global $wpdb;
-		$ch = self::group( $r, false );
+		$ch = self::group( $r );
 		if ( is_wp_error( $ch ) ) {
 			return $ch;
 		}
@@ -222,7 +216,7 @@ class MP_Client_Chat {
 			'read'     => self::team_read( $ch->id ),
 			'typing'   => $typing,
 			'now'      => MP_Util::now(),
-			'can_edit' => (bool) $who['uid'] && ! MP_Client::is_preview( $ch ),
+			'can_edit' => (bool) $who['uid'],
 		);
 	}
 
@@ -294,6 +288,7 @@ class MP_Client_Chat {
 			MP_Live::set_activity( (int) $ch->id, $who['uid'], 'idle' );
 		}
 		MP_Live::bump();
+		MP_Client::log_acting( $ch, $file ? 'فرستادن فایل' : 'پیام: ' . wp_trim_words( $body, 10 ) );
 		$m       = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d', $id ) );
 		$preview = '' !== trim( $body ) ? wp_trim_words( MP_Chat::plain( $body ), 12 ) : MP_Chat::snippet( $m );
 		foreach ( MP_Rest::channel_members( $ch ) as $member ) {

@@ -1207,6 +1207,7 @@ class MP_Rest {
 			$wpdb->prepare(
 				'SELECT * FROM ' . self::t( 'channels' ) . " WHERE (type IN ('project','client') AND project_id IN ($in))
 				OR (type = 'client' AND project_id = 0 AND created_by = %d)
+				OR (type = 'client' AND settings LIKE '%%\"pv\":1%%')
 				OR (type = 'direct' AND (user_a = %d OR user_b = %d))
 				OR (type = 'saved' AND user_a = %d)
 				OR (type IN ('group','client') AND id IN (SELECT channel_id FROM " . self::t( 'channel_members' ) . ' WHERE user_id = %d)) ORDER BY id',
@@ -1243,6 +1244,10 @@ class MP_Rest {
 			global $wpdb;
 			return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'channel_members' ) . ' WHERE channel_id = %d', $ch->id ) ) );
 		}
+		// A customer's private chat: the whole team (support).
+		if ( MP_Client::is_pv( $ch ) ) {
+			return MP_Util::panel_users();
+		}
 		// Client groups: the project's members (or the maker) plus colleagues added to the group.
 		$base = $ch->project_id ? MP_Util::project_members( $ch->project_id ) : array( (int) $ch->created_by );
 		return 'client' === $ch->type ? array_values( array_unique( array_merge( $base, MP_Client::extra_staff( $ch->id ) ) ) ) : $base;
@@ -1275,6 +1280,7 @@ class MP_Rest {
 			'project_id'  => (int) $ch->project_id,
 			'client_name' => $ch->client_name,
 			'client_id'   => (int) $ch->client_id,
+			'pv'          => MP_Client::is_pv( $ch ),
 			'token'       => 'client' === $ch->type ? $ch->token : '',
 			'other'       => $other,
 			// Online now / last seen, from the panel's heartbeat (unix time).
