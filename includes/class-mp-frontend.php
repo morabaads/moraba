@@ -564,6 +564,7 @@ JS;
 			'user'   => get_current_user_id(),
 			'apk'    => self::apk_url(),
 			'chatApp' => self::is_chat(),
+			'pop'    => self::is_chat() && isset( $_GET['pop'] ) ? (int) $_GET['pop'] : 0, // phpcs:ignore WordPress.Security.NonceVerification
 			'panel'  => self::panel_url(),
 			'chat'   => array( 'url' => self::chat_url(), 'feed' => add_query_arg( array( 'mp_push_feed' => 1, 'chat' => 1 ), home_url( '/' ) ) ) + self::chat_downloads(),
 			'appEntry' => MP_App::url(),

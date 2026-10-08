@@ -732,8 +732,11 @@ class MP_Install {
 			check_in datetime NOT NULL,
 			check_out datetime DEFAULT NULL,
 			note varchar(200) NOT NULL DEFAULT '',
+			source varchar(10) NOT NULL DEFAULT 'manual',
+			last_beat datetime DEFAULT NULL,
 			PRIMARY KEY  (id),
-			KEY user_date (user_id,work_date)
+			KEY user_date (user_id,work_date),
+			KEY open_auto (source,check_out)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'leaves' ) . " (

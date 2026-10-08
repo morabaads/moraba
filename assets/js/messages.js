@@ -9,7 +9,7 @@
   var chatLayer = null;
   function closeChat() { finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx(); closeAttach();
     layout.classList.remove('open'); document.body.classList.remove('chat-full');
-    current = 0; stop(); renderList(); liveRestart();
+    current = 0; stop(); renderList(); liveRestart(); if (sideEl) drawSide();
     if (chatLayer) { var l = chatLayer; chatLayer = null; MP.popLayer(l); }
   }
   var box = $('#chat-messages'), layout = $('#chat-layout'), text = $('#composer-text');
@@ -452,7 +452,33 @@
   function startMeeting(c) {
     MP.meetingForm(c.type === 'client' ? { channelId: c.id, projectId: c.project_id, title: 'جلسه با ' + (c.client_name || c.title) } : { title: 'جلسه ' + c.title, people: c.member_ids });
   }
-  $('#chat-who').onclick = function () { if (current) chatInfo(chan()); };
+  /* A chat in its own small window: the Windows app opens one natively, a browser opens a popup. */
+  function MP_CONFIG_POP() { return !!(window.MP_CONFIG && window.MP_CONFIG.pop); }
+  function popOut(c) {
+    var C2 = window.MP_CONFIG || {}, base = C2.chat && C2.chat.url;
+    if (!base) return;
+    if (MP.desktop) { MP.desktop.post({ t: 'popout', channel: c.id, title: c.title }); return; }
+    var w = window.open(base + (base.indexOf('?') >= 0 ? '&' : '?') + 'pop=' + c.id + '#chat-' + c.id, 'mpchat' + c.id, 'popup,width=480,height=760');
+    if (!w) MP.toast('مرورگر پنجره جدا را بست؛ اجازه پنجره بازشو را بدهید.', { error: true });
+  }
+  MP.popOut = function (id) { var c = chan(id); if (c) popOut(c); };
+
+  /* Third column (wide screens, like Telegram Desktop): the chat's info, members, media and files beside it. */
+  var sideEl = null;
+  function sideWide() { return window.innerWidth >= 1200 && FINE; }
+  function sidePref() { try { return localStorage.getItem('mp_chat_side') === '1'; } catch (e) { return false; } }
+  function sideOn() { return sideWide() && sidePref() && !!current; }
+  function drawSide() {
+    if (!sideEl) { sideEl = el('aside', { class: 'card chat-side', id: 'chat-side', 'aria-label': 'اطلاعات گفت‌وگو' }); layout.append(sideEl); }
+    layout.classList.toggle('side-open', sideOn());
+    if (sideOn() && chan()) chatInfo(chan(), sideEl); else sideEl.replaceChildren();
+  }
+  function toggleSide() {
+    try { localStorage.setItem('mp_chat_side', sidePref() ? '0' : '1'); } catch (e) { /* private */ }
+    drawSide();
+  }
+  window.addEventListener('resize', function () { if (sideEl && layout.classList.contains('side-open') !== sideOn()) drawSide(); });
+  $('#chat-who').onclick = function () { if (!current) return; if (sideWide()) toggleSide(); else chatInfo(chan()); };
 
   /* ------------------------------------------------------------ Opening a chat */
 
@@ -472,7 +498,7 @@
       if (!chatLayer) chatLayer = MP.pushLayer(function () { chatLayer = null; closeChat(); });
     }
     box.replaceChildren(MP.skeleton(3));
-    drawHead(); showPinned(null); downBtn();
+    drawHead(); showPinned(null); downBtn(); drawSide();
     text.value = draftOf(id); composerState(); autoGrow();
     $('#composer').hidden = false;
     postLock(c); applyLook(c);
@@ -2573,7 +2599,7 @@
 
   /* ------------------------------------------------------------ Chat info: members, media, files, links, voice */
 
-  function chatInfo(c) {
+  function chatInfo(c, side) {
     if (!c) return;
     var tabs = [['media', 'رسانه'], ['files', 'فایل‌ها'], ['links', 'لینک‌ها'], ['voice', 'ویس']], tab = 'media';
     var pane = el('div', { class: 'ci-pane' }), seg = el('div', { class: 'seg ci-tabs', role: 'tablist' });
@@ -2626,7 +2652,11 @@
         st.topics ? el('button', { type: 'button', class: 'chip', html: icon('list') + ' تاپیک‌ها', onclick: function () { MP.dialog.close(); select(c.id, 0, { topics: true }); } }) : null,
         c.role === 'admin' ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('settings') + 'مدیریت گروه', onclick: function () { groupAdmin(c); } }) : el('span', { class: 'chip', text: c.role === 'readonly' ? 'نقش شما: فقط‌خواندنی' : 'نقش شما: عضو' }));
     }
-    MP.dialog.open('اطلاعات گفت‌وگو', el('div', { class: 'ci-info' }, head, admin, acts, members, seg, pane), { wide: true, focus: false });
+    var info = el('div', { class: 'ci-info' }, head, admin, acts, members, seg, pane);
+    if (side) {
+      side.replaceChildren(el('div', { class: 'cs-top' }, el('strong', { text: 'اطلاعات گفت‌وگو' }),
+        el('button', { type: 'button', class: 'icon-btn sm', title: 'بستن ستون', 'aria-label': 'بستن ستون اطلاعات', html: icon('close'), onclick: toggleSide })), info);
+    } else MP.dialog.open('اطلاعات گفت‌وگو', info, { wide: true, focus: false });
     load();
   }
 
@@ -2998,6 +3028,7 @@
   function chatMenuItems(c) {
     var forAll = S.manager && c.type !== 'direct', items = [], sep = null;
     if (current !== c.id) items.push(['chat', 'باز کردن گفت‌وگو', function () { select(c.id); }]);
+    if (FINE && !MP_CONFIG_POP()) items.push(['grid', 'باز کردن در پنجره جدا', function () { popOut(c); }]);
     // Pin
     if (c.pinned === 'all') {
       if (forAll) items.push(['pin', 'برداشتن سنجاق برای همه', function () { setPin(c, 'all', false); }]);
@@ -3009,7 +3040,7 @@
     items.push(isUnread(c) ? ['checks', 'علامت خوانده‌شده', function () { markRead(c); }] : ['chat', 'علامت نخوانده', function () { toggleRead(c); }]);
     items.push(['folder', c.arch_me ? 'بیرون آوردن از بایگانی' : 'بایگانی', function () { archiveChat(c, !c.arch_me); }]);
     if (c.pinned === 'me' && S.channels.filter(function (x) { return x.pinned === 'me'; }).length > 1) items.push(['list', 'ترتیب سنجاق‌ها', pinOrder]);
-    items.push(['eye', 'اطلاعات گفت‌وگو', function () { chatInfo(c); }]);
+    items.push(['eye', 'اطلاعات گفت‌وگو', function () { if (sideWide() && c.id === current) { if (!sidePref()) toggleSide(); } else chatInfo(c); }]);
     if (S.boot.channels.ai && c.last) items.push(['list', 'خلاصه هوشمند پیام‌ها', function () { summarize(c); }]);
     items.push(['image', 'ظاهر گفت‌وگو', function () { chatLook(c); }]);
     if (isGroup(c) && c.role === 'admin') items.push(['settings', 'مدیریت گروه', function () { groupAdmin(c); }]);

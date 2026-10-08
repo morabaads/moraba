@@ -153,18 +153,19 @@
   if (document.readyState !== 'loading') setTimeout(setupResize, 500); else document.addEventListener('DOMContentLoaded', function () { setTimeout(setupResize, 500); });
 
   /* ------------------------------------------------------------ The Windows app (WebView2 host) */
+  if (C.pop) document.title = 'مربع چت';
   if (!host) { MP.desktop = null; return; }
   function post(o) { try { host.postMessage(o); } catch (e) { /* host gone */ } }
   MP.desktop = { post: post };
 
   // Unread messages on the taskbar button and the tray icon.
   var origBadges = MP.updateBadges;
-  MP.updateBadges = function (c) { origBadges(c); var n = (c || S.boot.counts || {}).messages || 0; post({ t: 'badge', n: n }); };
+  MP.updateBadges = function (c) { origBadges(c); if (C.pop) return; var n = (c || S.boot.counts || {}).messages || 0; post({ t: 'badge', n: n }); };
 
   // While the window is hidden the host wakes the page every few seconds: news become Windows notifications.
   var lastId = -1, busy = false, focused = true;
   function check() {
-    if (busy) return; busy = true;
+    if (busy || C.pop) return; busy = true;
     var u = C.chat && C.chat.feed ? C.chat.feed : '/?mp_push_feed=1&chat=1';
     fetch(u, { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (n) {
       busy = false;
@@ -186,8 +187,22 @@
     else if (d.t === 'shown') MP.refreshCounts();
     else if (d.t === 'focus') { focused = !!d.on; if (focused) MP.refreshCounts(); }
     else if (d.t === 'panel') window.open(C.panel, '_blank');
+    else if (d.t === 'activity') presence(d);
   });
   check();
+
+  /* Automatic attendance: the app reports how long since the last keyboard/mouse input, lock, sleep, wake and
+     shutdown (and whether a call keeps the screen on); the site turns that into attendance (MP_Presence). */
+  var lastPresent = null;
+  function presence(d) {
+    fetch(C.root + 'presence', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': C.nonce },
+      body: JSON.stringify({ idle: d.idle || 0, locked: d.locked ? 1 : 0, busy: d.busy ? 1 : 0, ev: d.ev || 'tick', device: d.device || '' }) })
+      .then(function (r) { return r.json(); }).then(function (st) {
+        post({ t: 'presence', on: st.enabled ? 1 : 0, present: st.present ? 1 : 0, since: st.since ? String(st.since).slice(11, 16) : '' });
+        if (lastPresent !== null && lastPresent !== !!st.present && MP.loadAttendance) MP.loadAttendance();
+        lastPresent = !!st.present;
+      }).catch(function () { /* offline: the site ends the session at the last report */ });
+  }
 
   /* The app's own settings (kept by the host in the Windows registry). */
   function settingsDialog(v) {

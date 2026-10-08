@@ -409,11 +409,13 @@ class MP_Rest_Work {
 			'open'      => ! $s->check_out,
 			'seconds'   => max( 0, $end - $start ),
 			'note'      => $s->note,
+			'auto'      => isset( $s->source ) && 'auto' === $s->source,
 		);
 	}
 
 	public static function list_attendance( WP_REST_Request $r ) {
 		global $wpdb;
+		MP_Presence::sweep(); // automatic sessions whose computer went quiet end at their last report
 		$user = self::uid();
 		if ( 'all' === $r['user_id'] || ( (int) $r['user_id'] && (int) $r['user_id'] !== self::uid() ) ) {
 			if ( ! MP_Util::is_manager() ) {
@@ -452,12 +454,14 @@ class MP_Rest_Work {
 			}
 			$wpdb->insert( self::t( 'attendance' ), array( 'user_id' => $uid, 'work_date' => MP_Util::today(), 'check_in' => MP_Util::now(), 'note' => $note ) );
 			MP_Audit::log( 'in', 'attendance', $wpdb->insert_id, 'ورود ' . MP_Jalali::digits( current_time( 'H:i' ) ) );
+			MP_Presence::manual( $uid, 'in' );
 		} elseif ( 'out' === $r['action'] ) {
 			if ( ! $open ) {
 				return self::err( 'ورودی ثبت نشده است.' );
 			}
 			$wpdb->update( self::t( 'attendance' ), array( 'check_out' => MP_Util::now(), 'note' => '' !== $note ? $note : $open->note ), array( 'id' => $open->id ) );
 			MP_Audit::log( 'out', 'attendance', $open->id, 'خروج ' . MP_Jalali::digits( current_time( 'H:i' ) ) );
+			MP_Presence::manual( $uid, 'out' );
 		} else {
 			return self::err( 'عملیات معتبر نیست.' );
 		}

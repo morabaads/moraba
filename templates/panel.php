@@ -32,7 +32,7 @@ $mp_nav = array(
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
 <script>try{var p=JSON.parse(localStorage.getItem('mp-prefs')||'{}');if(p.dark!==false)document.documentElement.classList.add('dark');if(p.motion)document.documentElement.classList.add('reduced-motion');}catch(e){}</script>
 </head>
-<body class="is-loading<?php echo $mp_chat_app ? ' chat-app' : ''; ?>">
+<body class="is-loading<?php echo $mp_chat_app ? ' chat-app' : ''; ?><?php echo $mp_chat_app && isset( $_GET['pop'] ) ? ' chat-pop' : ''; // phpcs:ignore WordPress.Security.NonceVerification ?>">
 <?php include MP_DIR . 'templates/sprite.svg'; ?>
 <div class="splash" aria-hidden="true"><img src="<?php echo MP_Frontend::asset( $mp_chat_app ? 'img/chat-192.png' : 'img/symbol.png' ); // phpcs:ignore ?>" alt=""><span class="splash-bar"><i></i></span></div>
 <div class="offline-bar" id="offline-bar" role="status" hidden><?php echo $mp_i( 'alarm' ); // phpcs:ignore ?>اتصال اینترنت قطع است؛ تغییرات پس از اتصال ذخیره نمی‌شوند.</div>
@@ -370,7 +370,7 @@ $mp_nav = array(
 		<section class="view" id="view-attendance" data-view="attendance" hidden aria-label="حضور و مرخصی">
 			<div class="page-head">
 				<div><h1>حضور و مرخصی</h1><p>ثبت ورود و خروج، کارکرد و درخواست مرخصی</p></div>
-				<div class="page-actions"><button type="button" class="btn btn-secondary manager-only" data-action="payroll"><?php echo $mp_i( 'wallet' ); // phpcs:ignore ?>حقوق ماهانه</button><button type="button" class="btn btn-primary" id="leave-new"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>درخواست مرخصی</button></div>
+				<div class="page-actions"><button type="button" class="btn btn-secondary manager-only" data-action="presence"><?php echo $mp_i( 'clock' ); // phpcs:ignore ?>حضور خودکار</button><button type="button" class="btn btn-secondary manager-only" data-action="payroll"><?php echo $mp_i( 'wallet' ); // phpcs:ignore ?>حقوق ماهانه</button><button type="button" class="btn btn-primary" id="leave-new"><?php echo $mp_i( 'plus' ); // phpcs:ignore ?>درخواست مرخصی</button></div>
 			</div>
 			<div id="att-body"></div>
 		</section>

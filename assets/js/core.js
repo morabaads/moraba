@@ -847,6 +847,7 @@
     if (a === 'weekly-report') MP.weeklyReport();
     if (a === 'assistant') MP.assistant(true);
     if (a === 'payroll') MP.reportTab('payroll');
+    if (a === 'presence') MP.presenceSettings();
     else if (a === 'settings') openAppearance();
     else if (a === 'help') openHelp();
     else if (a === 'logout') logout();

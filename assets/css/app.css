@@ -3674,3 +3674,18 @@ html.mp-desktop .desk-only{display:flex!important}
   body.chat-app .topbar{top:10px}
   body.chat-app .chat-layout{height:calc(100vh - 82px);min-height:420px}
 }
+/* third column: the chat's info beside it (≥1200px, mouse) */
+.chat-side{display:none}
+@media (min-width:1200px){
+  .chat-layout.side-open{grid-template-columns:var(--chatlist-w,320px) minmax(0,1fr) 330px}
+  .chat-layout.side-open .chat-side{display:block;overflow:auto;padding:12px 14px;animation:fade-in .15s}
+}
+.chat-side .cs-top{display:flex;align-items:center;justify-content:space-between;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+.chat-side .ci-grid{grid-template-columns:repeat(3,1fr)}
+.chat-side .ci-acts{flex-wrap:wrap}
+/* a chat in its own window */
+body.chat-pop #view-messages .page-head,body.chat-pop .topbar,body.chat-pop .chat-list,body.chat-pop .cl-grip,body.chat-pop .chat-back,body.chat-pop .chat-side{display:none!important}
+body.chat-pop .app{padding:0!important}
+body.chat-pop .chat-layout{display:block!important;height:100vh!important;min-height:0}
+body.chat-pop .chat-pane{height:100vh;border-radius:0;display:flex;flex-direction:column}
+body.chat-pop .chat-pane .chat-messages{flex:1}

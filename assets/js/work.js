@@ -6,6 +6,20 @@
 
   /* ------------------------------------------------------------ Attendance state + top chip */
 
+  /** Supervisors: automatic attendance from «مربع چت» for Windows (on/off, idle minutes). */
+  MP.presenceSettings = function () {
+    var body = MP.dialog.open('حضور خودکار', MP.skeleton(2));
+    MP.api('presence/settings').then(function (st) {
+      var on = el('input', { type: 'checkbox', checked: st.on });
+      var idle = el('select', { class: 'select' }, [3, 5, 10, 15, 20, 30].map(function (m) { return el('option', { value: m, text: fa(m) + ' دقیقه', selected: m === st.idle }); }));
+      function save() { MP.api('presence/settings', { method: 'POST', body: { on: on.checked, idle: +idle.value } }).then(function () { MP.toast('ذخیره شد'); }).catch(MP.soft); }
+      on.onchange = save; idle.onchange = save;
+      body.replaceChildren(el('div', { class: 'desk-set' },
+        el('p', { class: 'hint', text: 'وقتی برنامه «مربع چت» روی ویندوز همکار باز است (کنار ساعت هم کافی است)، حضور خودش ثبت می‌شود: از اولین کار با موس و صفحه‌کلید تا آخرین کار. وقتی کامپیوتر خاموش، خواب یا قفل است، یا کسی با آن کار نمی‌کند، حضور حساب نمی‌شود. تماس تصویری و جلسه (وقتی صفحه روشن می‌ماند) حضور حساب می‌شود. «خروج» دستی، حضور خودکار را تا آخر همان روز متوقف می‌کند.' }),
+        el('label', { class: 'desk-row' }, el('span', null, el('strong', { text: 'حضور خودکار روشن باشد' }), el('small', { text: 'برای همه همکارانی که مربع چت ویندوز دارند' })), on),
+        el('label', { class: 'desk-row' }, el('span', null, el('strong', { text: 'بعد از چند دقیقه بی‌کاری، حضور قطع شود؟' }), el('small', { text: 'زمان بی‌کاری حساب نمی‌شود؛ پایان حضور همان آخرین کار است' })), idle)));
+    }).catch(function (e) { MP.dialog.close(); MP.soft(e); });
+  };
   MP.loadAttendance = function () {
     return MP.api('attendance', { query: { from: J.addDays(S.today, -30), to: S.today } }).then(function (a) { a.loadedAt = Date.now(); S.attendance = a; drawChip(); MP.emit('attendance'); return a; });
   };
@@ -107,7 +121,7 @@
       if (s.date !== lastDate) { lastDate = s.date; sessions.append(el('div', { class: 'group-title', text: J.formatLong(s.date) + ' · ' + MP.duration(perDay[s.date]) })); }
       sessions.append(el('div', { class: 'row-item' },
         el('span', { class: 'lock-ico', style: { background: 'var(--ok-soft)', color: 'var(--ok)' }, html: icon('clock') }),
-        el('span', { class: 'row-main' }, el('span', { class: 'row-title', text: MP.timeFa(s.check_in) + ' تا ' + (s.open ? 'اکنون' : MP.timeFa(s.check_out)) }), s.note ? el('span', { class: 'row-meta', text: s.note }) : null),
+        el('span', { class: 'row-main' }, el('span', { class: 'row-title' }, MP.timeFa(s.check_in) + ' تا ' + (s.open ? 'اکنون' : MP.timeFa(s.check_out)), s.auto ? el('span', { class: 'chip info att-auto', title: 'با فعالیت روی کامپیوتر (مربع چت ویندوز) ثبت شد', text: 'خودکار' }) : null), s.note && !s.auto ? el('span', { class: 'row-meta', text: s.note }) : null),
         el('span', { class: 'chip ' + (s.open ? 'ok' : ''), text: s.open ? 'در حال کار' : MP.duration(s.seconds) })));
     });
 

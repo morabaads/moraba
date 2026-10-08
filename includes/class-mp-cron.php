@@ -29,6 +29,7 @@ class MP_Cron {
 
 	public static function run() {
 		global $wpdb;
+		MP_Presence::sweep();
 		$now   = current_time( 'Y-m-d H:i' );
 		$table = MP_Install::table( 'reminders' );
 		$due   = $wpdb->get_results(
