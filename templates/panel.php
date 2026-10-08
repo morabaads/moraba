@@ -92,6 +92,7 @@ $mp_nav = array(
 							<button type="button" data-user-action="appearance"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?>ظاهر پنل</button>
 							<?php if ( $mp_chat_app ) : ?>
 							<button type="button" data-user-action="panel"><?php echo $mp_i( 'grid' ); // phpcs:ignore ?>باز کردن پنل مربع</button>
+							<button type="button" data-user-action="desktop" class="desk-only"><?php echo $mp_i( 'settings' ); // phpcs:ignore ?>تنظیمات برنامه ویندوز</button>
 							<?php else : ?>
 							<button type="button" data-user-action="widgets"><?php echo $mp_i( 'grid' ); // phpcs:ignore ?>ویجت‌ها روی صفحه اصلی</button>
 							<button type="button" data-user-action="chatapp"><?php echo $mp_i( 'chat' ); // phpcs:ignore ?>مربع چت (اپ جدای پیام‌ها)</button>

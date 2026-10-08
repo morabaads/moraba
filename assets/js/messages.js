@@ -2130,7 +2130,7 @@
       if (jb) { jb.classList.remove('wiggle'); void jb.offsetWidth; jb.classList.add('wiggle'); }
       if (e.target.closest('a, button, video, audio, .v-msg')) return;
       var now = Date.now();
-      if (now - lastTap < 320) { lastTap = 0; react(m, '❤️'); heartPop(b); } else lastTap = now;
+      if (now - lastTap < 320) { lastTap = 0; if (FINE && e.pointerType !== 'touch') { var sel = window.getSelection(); if (sel) sel.removeAllRanges(); startReply(first); } else { react(m, '❤️'); heartPop(b); } } else lastTap = now;
     });
     r.addEventListener('contextmenu', function (e) { e.preventDefault(); if (!selecting) msgMenu(first, list, r); });
     r.addEventListener('pointerdown', function (e) {
@@ -2158,6 +2158,33 @@
     }
     r.addEventListener('pointerup', end);
     r.addEventListener('pointercancel', function () { clearTimeout(timer); timer = 0; if (st && st.on) { b.style.transform = ''; r.classList.remove('rp-reveal', 'rp-armed'); } st = null; });
+    // Mouse and trackpad (desktop, like Telegram Desktop): a small toolbar beside the bubble on hover.
+    if (FINE) {
+      var c = chan(), tb = el('div', { class: 'msg-hover', role: 'toolbar', 'aria-label': 'کارهای پیام' },
+        el('button', { type: 'button', class: 'mh-react', title: 'واکنش', 'aria-label': 'واکنش', onclick: function (e) { e.stopPropagation(); reactStrip(m, tb); } }, MP.emojiImg('❤️')),
+        c && c.can_post !== false ? el('button', { type: 'button', title: 'پاسخ (دوبار کلیک)', 'aria-label': 'پاسخ', html: icon('reply'), onclick: function (e) { e.stopPropagation(); startReply(first); } }) : null,
+        el('button', { type: 'button', title: 'گزینه‌ها', 'aria-label': 'گزینه‌ها', html: icon('more'), onclick: function (e) { e.stopPropagation(); msgMenu(first, list, r); } }));
+      r.append(tb);
+    }
+  }
+  var FINE = window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches;
+  /** The hover toolbar's ❤️: the reaction strip right there (a click on one reacts and closes it). */
+  function reactStrip(m, anchor) {
+    var old = $('.mh-strip'); if (old) { old.remove(); if (old._for === m.id) return; }
+    var strip = el('div', { class: 'ctx-reacts mh-strip' }, REACTIONS.map(function (e) {
+      var on = (m.reactions || []).some(function (x) { return x.mine && x.emoji === e; });
+      return el('button', { type: 'button', class: on ? 'on' : '', 'aria-label': e, onclick: function (ev) { ev.stopPropagation(); strip.remove(); react(m, e); } }, MP.emojiImg(e));
+    }));
+    strip._for = m.id;
+    document.body.append(strip);
+    var rc = anchor.getBoundingClientRect(), w = strip.offsetWidth;
+    strip.style.top = Math.max(8, rc.top - strip.offsetHeight - 6) + 'px';
+    strip.style.left = Math.max(8, Math.min(innerWidth - w - 8, rc.left + rc.width / 2 - w / 2)) + 'px';
+    setTimeout(function () {
+      function out(e) { if (!strip.contains(e.target)) { strip.remove(); document.removeEventListener('pointerdown', out, true); } }
+      document.addEventListener('pointerdown', out, true);
+      box.addEventListener('scroll', function () { strip.remove(); }, { once: true });
+    }, 0);
   }
   /** A small burst of the emoji around the reaction (Telegram's reaction effect). */
   function burst(id, emoji) {
@@ -2704,6 +2731,15 @@
   $('#chat-back').onclick = closeChat;
 
   MP.openChannel = function () { return current; };
+  /** For the desktop extras (chat-desktop.js): open a chat, search in it, close it, the composer. */
+  MP.chatDesk = {
+    select: function (id) { MP.showView('messages'); select(id); },
+    find: function () { if (current) openFind(); },
+    close: function () { if (current) closeChat(); },
+    saved: openSaved,
+    text: function () { return text; },
+    list: function () { return $$('#chat-list .chat-item').map(function (b) { return +b.dataset.id; }).filter(Boolean); }
+  };
   MP.clientSettings = function (c) { clientSettings(c); };
   MP.startDirect = function (userId) {
     MP.api('channels', { method: 'POST', body: { type: 'direct', user_id: userId } }).then(function (ch) {

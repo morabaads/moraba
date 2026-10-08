@@ -33,6 +33,7 @@ class MP_App {
 			'name'  => get_bloginfo( 'name' ),
 			'entry' => self::url(),
 			'chat'  => MP_Frontend::chat_url(),
+			'desktop' => MP_Frontend::CHAT_EXE_VERSION,
 			'otp'   => MP_Auth::otp_enabled(),
 			'icon'  => MP_URL . 'assets/img/icon-192.png',
 			'app'   => 2,

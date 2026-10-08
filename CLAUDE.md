@@ -35,9 +35,18 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     Push: chat subscriptions live in user meta `mp_push_chat` and wake only for message notifications; the feed takes `&chat=1`.
   - Android: same sources built with `APP=chat apps/android/build.sh` (`Config.CHAT`, `AndroidManifest.chat.xml`, package renamed to
     `ir.moraba.chat`, no widgets) → `assets/app/moraba-chat.apk`; bump its own `versionCode` in `AndroidManifest.chat.xml`.
-  - Windows: `apps/windows/` (C, mingw-w64, `build.sh`) → `assets/app/MorabaChat.exe`: copies itself to %LOCALAPPDATA%\MorabaChat, adds
-    Start menu/desktop shortcuts, opens the chat as an Edge `--app` window (own profile). The site's chat URL is written into the
-    file on download (`?mp_chat_exe=1` replaces a UTF-16 placeholder). Checked under Wine with a fake msedge.exe.
+  - Windows: `apps/windows/moraba-chat.c` (C, mingw-w64, `build.sh` fetches the WebView2 SDK from NuGet into `.vendor/`) →
+    `assets/app/MorabaChat.exe`: a native window hosting the chat in WebView2 (WebView2Loader.dll embedded as resource 2, written
+    beside the exe), Telegram-Desktop-like: tray icon (close = tray), unread number on the taskbar + dot on the tray, Windows
+    notifications (via the tray icon; click opens that chat), Do-not-disturb, Ctrl+Shift+M global hotkey, start with Windows
+    (HKCU Run, `--tray`), jump list, single instance (`--open=saved|--switch|--panel|--quit` forwarded by WM_COPYDATA),
+    self-update (`app/info` → `desktop` = `MP_Frontend::CHAT_EXE_VERSION`; bump it together with APP_VERSION), settings in
+    HKCU\Software\MorabaChat, Edge `--app` fallback without WebView2. Installs itself to %LOCALAPPDATA%\MorabaChat on first run.
+    The site's chat URL is written into the file on download (`?mp_chat_exe=1` replaces a UTF-16 placeholder).
+    Page side: `assets/js/chat-desktop.js` (`window.__MP_DESKTOP`, `chrome.webview` messages: badge/notify/set/settings? ↔
+    tick/open/saved/switch/panel/focus/settings) plus desktop UX for everyone with a mouse: Ctrl+K quick switcher, Alt+↑/↓,
+    Ctrl+F/0, typing goes to the composer, hover toolbar on messages (react/reply/menu, double-click = reply), resizable chat list.
+    Tested under Wine + Xvfb with a stand-in WebView2Loader.dll that records calls and replays page messages (no real WebView2 in Wine).
 - Widgets (profile menu → «ویجت‌ها روی صفحه اصلی», `assets/js/widgets.js`):
   - Android: `apps/android/` plain-Java app (no Gradle/AndroidX), four widgets (tasks card, attendance with live Chronometer, messages, next meeting).
     Build with `apps/android/build.sh` (needs SDK at `/opt/android`: platforms;android-34 + build-tools;35.0.0 — d8 34 crashes) → `assets/app/moraba.apk`.

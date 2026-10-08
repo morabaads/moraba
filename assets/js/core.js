@@ -830,6 +830,7 @@
       window.scrollTo({ top: 0, behavior: 'auto' });
       document.title = C.chatApp ? 'مربع چت' : label + ' | MORABA';
     }
+    MP.emit('view', name);
   };
   MP.visible = function (name) { return S.view === name; };
   document.addEventListener('click', function (e) {
@@ -966,8 +967,10 @@
   });
   document.addEventListener('keydown', function (e) {
     var typing = e.target.closest('input,textarea,select,[contenteditable]');
-    if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) { e.preventDefault(); openSearch(); return; }
-    if (!typing && !MP.dialog.isOpen() && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // In the chats, Ctrl+K and plain keys belong to the chat (quick switcher, typing goes to the composer).
+    var inChats = MP.visible('messages') && MP.chatDesk;
+    if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey) && !inChats) { e.preventDefault(); openSearch(); return; }
+    if (!typing && !inChats && !MP.dialog.isOpen() && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (e.key === '/') { e.preventDefault(); openSearch(); return; }
       if (e.key === 'n' || e.key === 'ض') { e.preventDefault(); MP.taskForm(); return; }
       if (e.key === '?') { e.preventDefault(); openHelp(); return; }
@@ -1094,7 +1097,7 @@
   $$('[data-user-action]').forEach(function (b) {
     b.onclick = function () {
       closePopover();
-      ({ profile: function () { MP.openProfile(S.me.id); }, account: openAccount, appearance: openAppearance, logout: logout, install: MP.install, widgets: function () { MP.openWidgets(); }, chatapp: function () { MP.chatAppDialog(); }, panel: function () { window.open(C.panel, '_blank'); } })[b.dataset.userAction]();
+      ({ profile: function () { MP.openProfile(S.me.id); }, account: openAccount, appearance: openAppearance, logout: logout, install: MP.install, widgets: function () { MP.openWidgets(); }, chatapp: function () { MP.chatAppDialog(); }, panel: function () { window.open(C.panel, '_blank'); }, desktop: function () { if (MP.desktop) MP.desktop.settings(); } })[b.dataset.userAction]();
     };
   });
   MP.renderMe = function () {

@@ -7,8 +7,11 @@ defined( 'ABSPATH' ) || exit;
  */
 class MP_Frontend {
 
+	/** Version of the Windows app (apps/windows/moraba-chat.c APP_VERSION); installed copies update themselves to it. */
+	const CHAT_EXE_VERSION = '2.0.0';
+
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -562,7 +565,7 @@ JS;
 			'apk'    => self::apk_url(),
 			'chatApp' => self::is_chat(),
 			'panel'  => self::panel_url(),
-			'chat'   => array( 'url' => self::chat_url() ) + self::chat_downloads(),
+			'chat'   => array( 'url' => self::chat_url(), 'feed' => add_query_arg( array( 'mp_push_feed' => 1, 'chat' => 1 ), home_url( '/' ) ) ) + self::chat_downloads(),
 			'appEntry' => MP_App::url(),
 			'assets' => MP_URL . 'assets/',
 			'version' => MP_VERSION,

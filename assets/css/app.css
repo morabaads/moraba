@@ -3471,7 +3471,7 @@ html.reduced-motion .b-jumbo .emj{animation:none!important}
 .mp-ref .icon{width:16px;height:16px}
 /* long chats: rows off screen are not laid out or painted */
 .msg-row,.sys-msg{content-visibility:auto;contain-intrinsic-size:auto 64px}
-.msg-row.ctx-lifted,.msg-row.flash{content-visibility:visible}
+.msg-row.ctx-lifted,.msg-row.flash,.msg-row:hover,.msg-row:focus-within{content-visibility:visible}
 /* send button press */
 .composer .composer-send:active{transform:scale(.86)}
 .composer .composer-send{transition:transform .12s var(--ease)}
@@ -3603,3 +3603,74 @@ body.chat-app #view-messages .page-head h1::before{content:'';display:inline-blo
 .chat-app-box .pt-tile{text-decoration:none}
 .chat-app-box .hint{direction:ltr;text-align:left;font-size:12px;word-break:break-all}
 .ios-install-btn.ghost{margin-top:8px;background:transparent;border:1.5px solid var(--line-strong);color:var(--ink)}
+
+/* ================================================================ Chat on a computer (chat-desktop.js), Telegram Desktop-like */
+/* hover toolbar beside each message */
+.msg-hover{position:absolute;bottom:2px;z-index:3;display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface);box-shadow:0 2px 10px rgba(0,0,0,.18);border:1px solid var(--line);opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .12s,transform .12s}
+.msg-row.me .msg-hover{inset-inline-start:calc(100% + 6px)}
+.msg-row.other .msg-hover{inset-inline-end:calc(100% + 6px)}
+.msg-row:hover .msg-hover,.msg-hover:focus-within{opacity:1;pointer-events:auto;transform:none}
+.chat-layout.selecting .msg-hover,.msg-row.b-pending .msg-hover{display:none}
+.msg-hover button{width:30px;height:30px;border:0;border-radius:50%;background:none;color:var(--muted);display:grid;place-items:center;cursor:pointer;font-size:16px}
+.msg-hover button:hover{background:var(--surface-2);color:var(--ink)}
+.msg-hover .icon{width:17px;height:17px}
+.msg-hover .emj{width:18px;height:18px;margin:0;vertical-align:0}
+.mh-strip{position:fixed;z-index:125;border:1px solid var(--line);border-radius:999px;background:var(--surface);box-shadow:0 10px 30px rgba(0,0,0,.25);animation:pop-in .16s var(--ease)}
+.mh-strip .emj{width:26px;height:26px;margin:0;vertical-align:0}
+/* quick switcher (Ctrl+K) */
+.qs-shade{position:fixed;inset:0;z-index:130;display:flex;justify-content:center;align-items:flex-start;padding-top:12vh;background:rgba(0,0,0,.35);animation:fade-in .1s}
+.qs-box{width:min(560px,calc(100vw - 32px));border-radius:16px;background:var(--surface);box-shadow:0 30px 80px rgba(0,0,0,.4);border:1px solid var(--line);overflow:hidden;animation:pop-in .14s var(--ease)}
+.qs-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);color:var(--muted)}
+.qs-head .icon{width:20px;height:20px;flex:none}
+.qs-input{flex:1;border:0;background:none;font:inherit;font-size:16px;color:var(--ink);outline:none}
+.qs-list{max-height:min(420px,56vh);overflow:auto;padding:6px}
+.qs-row{display:flex;align-items:center;gap:12px;width:100%;padding:8px 10px;border:0;border-radius:10px;background:none;color:var(--ink);text-align:right;cursor:pointer;font:inherit}
+.qs-row.on{background:var(--brand-soft)}
+.qs-ico{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);color:var(--brand);flex:none}
+.qs-ico .icon{width:18px;height:18px}
+.qs-copy{flex:1;min-width:0;display:grid}
+.qs-copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qs-copy small{font-size:12px;color:var(--muted)}
+.qs-none{padding:18px;text-align:center;color:var(--muted)}
+.qs-foot{display:flex;gap:16px;padding:8px 16px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.qs-foot kbd,.keys-row kbd{font:11px/1.6 Dana,Tahoma,sans-serif;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:6px;padding:0 6px;margin:0 2px;background:var(--surface-2);color:var(--ink-2)}
+.keys-list{display:grid;gap:2px}
+.keys-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:14px}
+/* chat list: drag to resize; very narrow = pictures only */
+.chat-layout{position:relative}
+.chat-layout.list-sized{grid-template-columns:var(--chatlist-w,320px) minmax(0,1fr)}
+.cl-grip{position:absolute;top:0;bottom:0;width:10px;z-index:5;cursor:col-resize}
+.cl-grip::after{content:'';position:absolute;top:20%;bottom:20%;left:4px;width:2px;border-radius:2px;background:var(--brand);opacity:0;transition:opacity .15s}
+.cl-grip:hover::after,.chat-layout.resizing .cl-grip::after{opacity:.7}
+.chat-layout.resizing{user-select:none;cursor:col-resize}
+.chat-layout.list-narrow .chat-list .ci-copy,.chat-layout.list-narrow .chat-list .cl-search,.chat-layout.list-narrow .chat-list .chat-tabs,.chat-layout.list-narrow .chat-list .cl-foot,.chat-layout.list-narrow .chat-list>:not(.cs-wrap):not(.cl-items){display:none}
+.chat-layout.list-narrow .chat-list{padding:8px 4px}
+.chat-layout.list-narrow .chat-item{justify-content:center;padding:6px 0}
+.chat-layout.list-narrow .chat-item.has-unread::after{content:'';position:absolute;top:8px;inset-inline-start:10px;width:11px;height:11px;border-radius:50%;background:var(--brand);border:2px solid var(--surface)}
+@media (max-width:860px){.cl-grip{display:none}.chat-layout.list-sized{grid-template-columns:1fr}}
+/* the Windows app */
+html.mp-desktop{scrollbar-color:var(--line-strong) transparent}
+html.mp-desktop ::-webkit-scrollbar{width:10px;height:10px}
+html.mp-desktop ::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+html.mp-desktop ::-webkit-scrollbar-track{background:transparent}
+.desk-only{display:none!important}
+html.mp-desktop .desk-only{display:flex!important}
+.desk-set{display:grid;gap:4px}
+.desk-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.desk-row span{display:grid;gap:2px}
+.desk-row small{color:var(--muted);font-size:12.5px}
+.desk-row input{width:20px;height:20px;accent-color:var(--brand);flex:none}
+.desk-ctx{min-width:180px}
+.desk-ctx button:disabled{opacity:.4;cursor:default}
+
+/* «مربع چت» on a computer: a slim header, the chat fills the window */
+@media (min-width:861px){
+  body.chat-app .app{padding:10px 14px 14px}
+  body.chat-app .main{gap:10px}
+  body.chat-app #view-messages .page-head{padding:2px 4px 0;padding-inline-end:170px;align-items:center}
+  body.chat-app #view-messages .page-head h1{font-size:20px}
+  body.chat-app #view-messages .page-head p{display:none}
+  body.chat-app #view-messages .page-actions .btn{min-height:36px;padding-block:0}
+  body.chat-app .topbar{top:10px}
+  body.chat-app .chat-layout{height:calc(100vh - 82px);min-height:420px}
+}
