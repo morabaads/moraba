@@ -66,7 +66,7 @@
         el('div', { class: 'cl-avs' }, people.slice(0, 5).map(function (x) { return el('span', { class: 'cl-av', title: x.name + ' · ' + J.faDigits(x.mobile), text: initials(x.name) }); })),
         el('small', { class: 'muted', text: fa(people.length) + ' نفر از طرف مشتری' })) : null,
       el('footer', { class: 'cl-actions' },
-        el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('chat') + 'پیام خصوصی', title: 'گفت‌وگوی خصوصی با مشتری؛ همه همکاران می‌بینند و جواب می‌دهند', onclick: function () { openPv(c); } }),
+        el('button', { type: 'button', class: 'btn btn-primary btn-sm', html: icon('chat') + 'پیام خصوصی', title: 'گفت‌وگوی خصوصی با مشتری؛ همکاران پروژه‌های این مشتری می‌بینند و جواب می‌دهند', onclick: function () { openPv(c); } }),
         groups.length ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('chat') + 'گروه', onclick: function () { pickGroup(c, chat, true); } }) : null,
         el('button', { type: 'button', class: 'btn btn-ghost btn-sm', html: icon('plus') + 'ساخت گروه', onclick: function () { MP.newClientGroup({ client_id: c.id, project_id: c.project_list[0] ? c.project_list[0].id : 0 }); } }),
         manager ? el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('file') + 'فاکتور / قرارداد', onclick: function () { invoiceMenu(c); } }) : null,
@@ -81,7 +81,7 @@
     var box = el('div', { class: 'tio-history' }, gs.map(function (g) {
       var p = c.project_list.filter(function (x) { return x.id === g.project_id; })[0];
       return el('button', { type: 'button', class: 'tpl-card cl-pick', onclick: function () { MP.dialog.close(); fn(g); } },
-        el('div', { class: 'tpl-ico', html: icon('chat') }), el('div', { class: 'tpl-copy' }, el('strong', { text: g.pv ? 'گفت‌وگوی خصوصی' : g.title }), el('small', { text: g.pv ? 'پشتیبانی · همه همکاران' : p ? 'پروژه ' + p.name : 'بدون پروژه' })),
+        el('div', { class: 'tpl-ico', html: icon('chat') }), el('div', { class: 'tpl-copy' }, el('strong', { text: g.pv ? 'گفت‌وگوی خصوصی' : g.title }), el('small', { text: g.pv ? 'همکاران پروژه‌های مشتری' : p ? 'پروژه ' + p.name : 'بدون پروژه' })),
         g.unread ? el('span', { class: 'badge', text: fa(g.unread) }) : null);
     }));
     MP.dialog.open('کدام گروه «' + c.name + '»؟', box);

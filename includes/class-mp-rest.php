@@ -1202,12 +1202,12 @@ class MP_Rest {
 	public static function channels_for( $uid ) {
 		global $wpdb;
 		$projects = MP_Util::project_ids_for( $uid );
-		$in       = $projects ? implode( ',', array_map( 'intval', $projects ) ) : '0';
+		$in       = $projects ? implode( ',', array_map( 'intval', $projects ) ) : '-1'; // never 0: project-less client chats must not match
 		return $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT * FROM ' . self::t( 'channels' ) . " WHERE (type IN ('project','client') AND project_id IN ($in))
 				OR (type = 'client' AND project_id = 0 AND created_by = %d)
-				OR (type = 'client' AND settings LIKE '%%\"pv\":1%%')
+				OR (type = 'client' AND settings LIKE '%%\"pv\":1%%' AND (client_id IN (SELECT client_id FROM " . self::t( 'client_projects' ) . " WHERE project_id IN ($in)) OR client_id NOT IN (SELECT client_id FROM " . self::t( 'client_projects' ) . ")))
 				OR (type = 'direct' AND (user_a = %d OR user_b = %d))
 				OR (type = 'saved' AND user_a = %d)
 				OR (type IN ('group','client') AND id IN (SELECT channel_id FROM " . self::t( 'channel_members' ) . ' WHERE user_id = %d)) ORDER BY id',
@@ -1244,9 +1244,15 @@ class MP_Rest {
 			global $wpdb;
 			return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'channel_members' ) . ' WHERE channel_id = %d', $ch->id ) ) );
 		}
-		// A customer's private chat: the whole team (support).
+		// A customer's private chat: the colleagues of the customer's projects; with no project (or nobody on
+		// them) yet, the whole team, as support.
 		if ( MP_Client::is_pv( $ch ) ) {
-			return MP_Util::panel_users();
+			$ids = array();
+			foreach ( MP_Client::customer_projects( (int) $ch->client_id ) as $pid ) {
+				$ids = array_merge( $ids, MP_Util::project_members( $pid ) );
+			}
+			$ids = array_values( array_unique( array_intersect( $ids, MP_Util::panel_users() ) ) );
+			return $ids ? $ids : MP_Util::panel_users();
 		}
 		// Client groups: the project's members (or the maker) plus colleagues added to the group.
 		$base = $ch->project_id ? MP_Util::project_members( $ch->project_id ) : array( (int) $ch->created_by );

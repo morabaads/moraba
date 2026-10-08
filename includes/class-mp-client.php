@@ -1010,8 +1010,12 @@ class MP_Client {
 		if ( $mobile && ! $wpdb->get_var( $wpdb->prepare( 'SELECT id FROM ' . self::t( 'client_contacts' ) . ' WHERE channel_id = %d', $ch->id ) ) ) {
 			self::add_person( $ch, $cust->name, $mobile, false );
 		}
-		$uid = get_current_user_id();
-		return MP_Rest::channel_payload( MP_Rest::channel_for( $ch->id, $uid ), $uid );
+		$uid  = get_current_user_id();
+		$mine = MP_Rest::channel_for( $ch->id, $uid );
+		if ( ! $mine ) {
+			return self::err( 'این گفت‌وگو برای همکاران پروژه‌های این مشتری است.', 403 );
+		}
+		return MP_Rest::channel_payload( $mine, $uid );
 	}
 
 	/**

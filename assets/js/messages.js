@@ -341,7 +341,7 @@
   }
   /** Chat list preview: «شما: …» / «سارا: …» in groups, or an icon + label for voice, photo, poll, place… */
   function preview(c) {
-    if (!c.last && c.pv) return el('small', { text: 'گفت‌وگوی خصوصی با مشتری · همه همکاران' });
+    if (!c.last && c.pv) return el('small', { text: 'گفت‌وگوی خصوصی با مشتری · همکاران پروژه‌هایش' });
     if (!c.last) return el('small', { text: c.type === 'client' ? 'مشتری: ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : c.type === 'saved' ? 'پیام‌ها، فایل‌ها و یادداشت‌های خودتان' : 'هنوز پیامی نیست' });
     var l = c.last;
     if (l.archived && !l.body && !l.file) return el('small', { class: 'ci-kind' }, MP.iconEl('ban'), 'پیام آرشیو شد');
@@ -433,7 +433,7 @@
     var sub = $('#chat-sub');
     var ls = c.type === 'direct' ? lastSeen(Math.max(seenOf(c.other), c.last_seen || 0)) : '';
     sub.classList.toggle('online', ls === 'آنلاین' && navigator.onLine);
-    sub.textContent = !navigator.onLine ? 'در انتظار اتصال…' : c.type === 'direct' ? ls : c.settings && c.settings.mode === 'channel' ? 'کانال · ' + fa(c.members) + ' عضو' : c.type === 'saved' ? 'فقط خودتان می‌بینید' : c.pv ? 'خصوصی با مشتری · پشتیبانی (همه همکاران می‌بینند)' : c.type === 'client' ? 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : fa(c.members) + ' عضو';
+    sub.textContent = !navigator.onLine ? 'در انتظار اتصال…' : c.type === 'direct' ? ls : c.settings && c.settings.mode === 'channel' ? 'کانال · ' + fa(c.members) + ' عضو' : c.type === 'saved' ? 'فقط خودتان می‌بینید' : c.pv ? 'خصوصی با مشتری · همکاران پروژه‌های این مشتری می‌بینند' : c.type === 'client' ? 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : fa(c.members) + ' عضو';
     schedBar();
     var tools = $('#chat-tools'); tools.replaceChildren();
     if (c.type === 'client') {
@@ -2834,7 +2834,7 @@
             el('h2', { text: d.client || d.title }),
             el('div', { class: 'cs-hero-chips' },
               el('span', { class: 'chip', html: icon('chat') + ' ' + (d.pv ? 'گفت‌وگوی خصوصی' : esc(d.title)) }),
-              d.pv ? el('span', { class: 'chip brand', text: 'پشتیبانی · همه همکاران' }) : p ? el('span', { class: 'chip brand', html: icon('folder') + ' ' + esc(p.name) }) : el('span', { class: 'chip danger', text: 'بدون پروژه' }),
+              d.pv ? el('span', { class: 'chip brand', text: 'همکاران پروژه‌های مشتری (بدون پروژه: همه)' }) : p ? el('span', { class: 'chip brand', html: icon('folder') + ' ' + esc(p.name) }) : el('span', { class: 'chip danger', text: 'بدون پروژه' }),
               el('span', { class: 'chip ' + (locked ? 'ok' : 'danger'), html: icon('lock') + (locked ? ' ورود با کد پیامکی' : ' بدون ورود') }),
               el('span', { class: 'chip', html: icon('user') + ' ' + fa(d.contacts.length) + ' نفر' })),
             d.logo ? el('button', { type: 'button', class: 'cs-mini-link', text: 'حذف لوگو', onclick: function () { MP.api('channels/' + c.id + '/client', { method: 'POST', body: { logo_file_id: 0 } }).then(draw).catch(MP.soft); } }) : el('small', { class: 'cs-hint', text: 'روی مربع بزنید تا لوگوی مشتری بارگذاری شود؛ کنار لوگوی مربع در پرتال و صفحه ورود نمایش داده می‌شود.' })),
