@@ -3888,3 +3888,51 @@ html.mp-locked .app,html.mp-locked .tg-drawer,html.mp-locked .tg-shade{visibilit
 .tg-lock-box.shake{animation:tg-shake .4s}
 @keyframes tg-shake{20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
 .tg-pass{display:grid;gap:10px;padding:6px 22px 16px}
+
+/* ===================================================================== Glass: frosted, blurred panels («مربع چت») */
+html.glass body.chat-app{
+  --glass:color-mix(in srgb,var(--surface) 56%,transparent);
+  --glass-2:color-mix(in srgb,var(--surface) 34%,transparent);
+  --glass-3:color-mix(in srgb,var(--surface) 74%,transparent);
+  --glass-line:rgba(255,255,255,.08);
+  --glass-blur:blur(26px) saturate(170%);
+  --line:rgba(255,255,255,.07);
+  --bub-other:color-mix(in srgb,var(--surface) 62%,transparent);
+  background:
+    radial-gradient(48vw 58vh at 88% 6%,color-mix(in srgb,var(--brand) 62%,transparent),transparent 62%),
+    radial-gradient(44vw 52vh at 8% 92%,rgba(124,77,255,.5),transparent 62%),
+    radial-gradient(40vw 46vh at 30% 18%,rgba(0,170,210,.38),transparent 62%),
+    radial-gradient(36vw 40vh at 70% 80%,rgba(255,64,129,.28),transparent 62%),
+    var(--bg);
+  background-attachment:fixed
+}
+html.glass:not(.dark) body.chat-app{
+  --glass:rgba(255,255,255,.52);--glass-2:rgba(255,255,255,.3);--glass-3:rgba(255,255,255,.72);
+  --glass-line:rgba(255,255,255,.65);--line:rgba(20,20,40,.08);--bub-other:rgba(255,255,255,.66)
+}
+html.glass body.chat-app .card,html.glass body.chat-app .chat-list,html.glass body.chat-app .chat-pane{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+html.glass body.chat-app .chat-pane{background:transparent;backdrop-filter:none}
+html.glass body.chat-app .chat-messages{background-color:transparent}
+html.glass body.chat-app .chat-head,html.glass body.chat-app .composer,html.glass body.chat-app .chat-pinbar{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+html.glass body.chat-app .chat-list-top{background:transparent}
+html.glass body.chat-app .chat-list .chat-search,html.glass body.chat-app .composer textarea,html.glass body.chat-app .tg-msearch{background:var(--glass-2);border-color:var(--glass-line)}
+html.glass body.chat-app .msg-row .bubble{backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);border:1px solid var(--glass-line)}
+html.glass body.chat-app .msg-row.me .bubble{background:color-mix(in srgb,var(--bub-me) 84%,transparent)}
+html.glass body.chat-app .chat-item:not(.active):hover{background:var(--glass-2)}
+html.glass body.chat-app .chat-item.active{background:color-mix(in srgb,var(--brand) 82%,transparent)}
+html.glass body.tg .tg-rail{background:var(--glass-2);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+html.glass body.tg .chat-side{background:var(--glass)!important;backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+html.glass body.chat-app .tg-sec,html.glass body.chat-app .tg-ssec{border-top-color:color-mix(in srgb,var(--bg) 45%,transparent)}
+html.glass body.chat-app .tg-drawer,html.glass body.chat-app .tg-modal,html.glass body.chat-app .dialog,html.glass body.chat-app .ctx-menu,html.glass body.chat-app .popover{background:var(--glass-3);backdrop-filter:blur(34px) saturate(180%);-webkit-backdrop-filter:blur(34px) saturate(180%);border:1px solid var(--glass-line)}
+html.glass body.chat-app .tg-shade{background:rgba(0,0,0,.25);backdrop-filter:blur(3px)}
+html.glass body.chat-app .tg-modal::backdrop,html.glass body.chat-app .dialog::backdrop{background:rgba(0,0,0,.3);backdrop-filter:blur(6px)}
+html.glass body.chat-app .tg-dhead{background:linear-gradient(140deg,color-mix(in srgb,var(--brand) 80%,transparent),color-mix(in srgb,var(--brand) 40%,transparent))}
+html.glass body.chat-app .tg-lock{background:transparent;backdrop-filter:blur(40px) saturate(160%);-webkit-backdrop-filter:blur(40px) saturate(160%)}
+html.glass body.chat-app .toast{background:color-mix(in srgb,var(--dark) 70%,transparent);backdrop-filter:blur(20px)}
+html.glass body.chat-app .chat-none span{background:var(--glass-2);backdrop-filter:blur(16px);color:var(--ink)}
+html.glass.reduced-motion body.chat-app .msg-row .bubble{backdrop-filter:none}
+html.glass body.tg .cs-wrap>.chat-item:not(.active){background:transparent}
+html.glass body.tg .cs-wrap>.chat-item:not(.active):hover{background:var(--glass-2)}
+html.glass body.tg .cs-wrap>:not(.chat-item){visibility:hidden}
+html.glass body.tg .cs-wrap{border-radius:0}
+html.glass body.chat-app .tg-lock-in,html.glass body.chat-app .tg-pass .input{background:var(--glass-2);border-color:var(--glass-line)}

@@ -75,6 +75,9 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     auto-lock after idle (`after` minutes), Ctrl+L, opens locked; `mp_locked_at` syncs the lock across chat windows (storage
     event); while locked `.app` is inert/hidden, notifications go out as «مربع چت / پیام تازه» without reply. «فراموش کردن» = log out.
   - Chat header in the shell: client pills hidden (they are in the ⋯ menu), `.side-btn` toggles the info column.
+  - Glass (frosted) look: `prefs.glass` (default on, settings → تنظیمات گفت‌وگو) = html class `glass`; every rule is scoped
+    `html.glass body.chat-app` (the panel is untouched): coloured radial backdrop on body, panels `--glass*` + backdrop-filter
+    blur, translucent bubbles (blur off with reduced motion).
 - Automatic attendance (`class-mp-presence.php`, options `mp_presence_on` / `mp_presence_idle`, «حضور خودکار» in the
   attendance page for supervisors): sessions with `attendance.source = 'auto'` from first to last real input, closed at the last
   report when reports stop (sleep/shutdown), cut at midnight, merged across gaps < 2 min, < 1 min dropped; manual «خروج» pauses

@@ -254,6 +254,7 @@
         themes.append(el('div', { class: 'tg-accents', role: 'radiogroup', 'aria-label': 'رنگ اصلی' }, ACC.map(function (a) {
           return el('button', { type: 'button', role: 'radio', class: 'tg-acc' + ((p.accent || '') === a ? ' on' : ''), 'aria-checked': String((p.accent || '') === a), title: a ? a : 'نارنجی مربع (پیش‌فرض)', style: { background: a || '#f28a24' }, onclick: function () { p.accent = a; MP.savePrefs(); PAGES.chat(); } });
         })));
+        themes.append(row('palette', 'شیشه‌ای (مات و محو)', 'ستون‌ها و پنجره‌ها نیمه‌شفاف با پس‌زمینه محو؛ خاموش برای کامپیوترهای کند', { end: sw(p.glass !== false, function (on) { p.glass = on; MP.savePrefs(); }) }));
         b.append(themes);
         var L = MP.chatLooks;
         if (L) {
