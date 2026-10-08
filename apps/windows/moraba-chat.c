@@ -43,7 +43,7 @@
 #endif
 #include "WebView2.h"
 
-#define APP_VERSION L"2.1.0"
+#define APP_VERSION L"2.2.0"
 #define APP_ID L"Moraba.Chat"
 #define APP_NAME L"\x0645\x0631\x0628\x0639 \x0686\x062A" /* مربع چت */
 #define WND_CLASS L"MorabaChatWnd"
@@ -55,7 +55,7 @@
 static volatile const wchar_t SITE_URL[300] = L"@@MORABA_CHAT_URL@@";
 
 enum { WM_TRAY = WM_APP + 1, WM_UPDATED, WM_HOSTMSG, WM_TOAST };
-enum { T_TICK = 1, T_RETRY, T_UPDATE, T_PRESENCE };
+enum { T_TICK = 1, T_RETRY, T_UPDATE, T_PRESENCE, T_MEMORY };
 enum { ID_OPEN = 100, ID_DND_1H, ID_DND_8H, ID_DND_TOMORROW, ID_DND_OFF, ID_NOTIFY, ID_AUTOSTART, ID_SETTINGS, ID_RESTART, ID_EXIT };
 
 static HINSTANCE g_inst;
@@ -73,6 +73,11 @@ static ULONGLONG g_dnd_until; /* GetTickCount64 */
 static wchar_t g_new_version[32];
 static wchar_t g_device[40], g_presence[64]; /* this computer's id for attendance; «حاضر از ۰۹:۱۲» */
 static int g_locked, g_presence_on = 1;
+/* the page's theme (title bar, the colour behind the page) and interface scale, kept for the next start */
+static COLORREF g_bg = RGB(0x16, 0x16, 0x16), g_ink = RGB(0xEE, 0xEE, 0xEE);
+static int g_dark = 1;
+static double g_zoom = 1.0;
+static HBRUSH g_bg_brush;
 
 /* ------------------------------------------------------------------ small helpers */
 
@@ -164,6 +169,10 @@ static const wchar_t *json_find(const wchar_t *j, const wchar_t *key) {
 static long json_num(const wchar_t *j, const wchar_t *key, long def) {
     const wchar_t *p = json_find(j, key);
     return p ? wcstol(p, NULL, 10) : def;
+}
+static double json_dbl(const wchar_t *j, const wchar_t *key, double def) {
+    const wchar_t *p = json_find(j, key);
+    return p ? wcstod(p, NULL) : def;
 }
 static void json_str(const wchar_t *j, const wchar_t *key, wchar_t *out, size_t n) {
     const wchar_t *p = json_find(j, key);
@@ -507,11 +516,23 @@ static void notify(const wchar_t *title, const wchar_t *body, int channel, int r
 
 static void set_visible(int on) { if (g_ctl) ICoreWebView2Controller_put_IsVisible(g_ctl, on ? TRUE : FALSE); }
 
+/* Hidden beside the clock for a while: the browser may drop caches and free memory (it keeps running, so
+   notifications still arrive); back to normal the moment the window shows. */
+static void memory_level(int low) {
+    ICoreWebView2_19 *w19 = NULL;
+    if (g_web && SUCCEEDED(ICoreWebView2_QueryInterface(g_web, &IID_ICoreWebView2_19, (void **)&w19)) && w19) {
+        ICoreWebView2_19_put_MemoryUsageTargetLevel(w19, low ? COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW : COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL);
+        ICoreWebView2_19_Release(w19);
+    }
+}
+
 static void show_window(void) {
     if (IsIconic(g_wnd)) ShowWindow(g_wnd, SW_RESTORE); else ShowWindow(g_wnd, SW_SHOW);
     SetForegroundWindow(g_wnd);
     set_visible(1);
     if (g_ctl) ICoreWebView2Controller_MoveFocus(g_ctl, COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+    KillTimer(g_wnd, T_MEMORY);
+    memory_level(0);
     post_json(L"{\"t\":\"shown\"}");
 }
 
@@ -529,6 +550,7 @@ static void hide_window(void) {
     save_placement();
     ShowWindow(g_wnd, SW_HIDE);
     set_visible(0);
+    SetTimer(g_wnd, T_MEMORY, 5 * 60000, NULL);
     if (!reg_get(L"tray_told", 0)) {
         reg_set(L"tray_told", 1);
         g_last_channel = 0;
@@ -750,6 +772,9 @@ static void open_outside(const wchar_t *uri) { ShellExecuteW(NULL, L"open", uri,
 
 static void open_pop(int channel, const wchar_t *title);
 static HWND pop_window(ICoreWebView2 *web);
+static void apply_theme(const wchar_t *j);
+static void apply_zoom(double z);
+static void web_colour(ICoreWebView2Controller *ctl);
 
 /* page → host (the main window and the separate chat windows alike) */
 static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
@@ -776,6 +801,10 @@ static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, I
     } else if (!wcscmp(t, L"settings?")) settings_to_page();
     else if (!wcscmp(t, L"show")) show_window();
     else if (!wcscmp(t, L"presence")) presence_state(j);
+    else if (!wcscmp(t, L"theme")) apply_theme(j);
+    else if (!wcscmp(t, L"zoom")) apply_zoom(json_dbl(j, L"v", 1.0));
+    else if (!wcscmp(t, L"hide")) { HWND pw = pop_window(sender); if (pw) DestroyWindow(pw); else if (reg_get(L"tray", 1)) hide_window(); else ShowWindow(g_wnd, SW_MINIMIZE); } /* Ctrl+W */
+    else if (!wcscmp(t, L"quit")) { g_quitting = 1; save_placement(); DestroyWindow(g_wnd); } /* Ctrl+Q */
     else if (!wcscmp(t, L"popout")) {
         wchar_t title[128];
         json_str(j, L"title", title, 128);
@@ -872,19 +901,15 @@ static void resize_web(void) {
 
 /** The same browser settings and handlers for the main window and every separate chat window. */
 static void setup_web(ICoreWebView2Controller *ctl, ICoreWebView2 *web) {
-    /* the window's colour behind the page: no white flash */
-    ICoreWebView2Controller2 *c2 = NULL;
-    if (SUCCEEDED(ICoreWebView2Controller_QueryInterface(ctl, &IID_ICoreWebView2Controller2, (void **)&c2))) {
-        COREWEBVIEW2_COLOR bg = { 255, 0x16, 0x16, 0x16 };
-        ICoreWebView2Controller2_put_DefaultBackgroundColor(c2, bg);
-        ICoreWebView2Controller2_Release(c2);
-    }
+    /* the theme's colour behind the page (no white flash) and the chosen interface scale */
+    web_colour(ctl);
+    ICoreWebView2Controller_put_ZoomFactor(ctl, g_zoom);
     ICoreWebView2Settings *s = NULL;
     if (SUCCEEDED(ICoreWebView2_get_Settings(web, &s))) {
         ICoreWebView2Settings_put_AreDevToolsEnabled(s, FALSE);
         ICoreWebView2Settings_put_AreDefaultContextMenusEnabled(s, FALSE); /* the page has its own menus */
         ICoreWebView2Settings_put_IsStatusBarEnabled(s, FALSE);
-        ICoreWebView2Settings_put_IsZoomControlEnabled(s, TRUE);
+        ICoreWebView2Settings_put_IsZoomControlEnabled(s, FALSE); /* the page's own scale (Ctrl+= / Ctrl+−) */
         ICoreWebView2Settings3 *s3 = NULL;
         if (SUCCEEDED(ICoreWebView2Settings_QueryInterface(s, &IID_ICoreWebView2Settings3, (void **)&s3))) {
             ICoreWebView2Settings3_put_AreBrowserAcceleratorKeysEnabled(s3, FALSE); /* no F5, Ctrl+P, browser find… */
@@ -948,12 +973,55 @@ static HRESULT STDMETHODCALLTYPE on_pop_controller(void *self, HRESULT err, ICor
 static HandlerVtbl pop_ctl_vtbl = { (void *)h_qi, (void *)h_addref, (void *)h_release, (void *)on_pop_controller };
 static PopHandler g_pop_handlers[16];
 
+/** The title bar in the page's colours (Windows 11 paints the caption; Windows 10 gets dark or light). */
 static void dark_frame(HWND w) {
-    BOOL dark = TRUE;
+    BOOL dark = g_dark ? TRUE : FALSE;
     DwmSetWindowAttribute(w, 20 /* DWMWA_USE_IMMERSIVE_DARK_MODE */, &dark, sizeof(dark));
-    COLORREF cap = RGB(0x16, 0x16, 0x16), txt = RGB(0xEE, 0xEE, 0xEE);
-    DwmSetWindowAttribute(w, 35 /* DWMWA_CAPTION_COLOR (Windows 11) */, &cap, sizeof(cap));
-    DwmSetWindowAttribute(w, 36 /* DWMWA_TEXT_COLOR */, &txt, sizeof(txt));
+    DwmSetWindowAttribute(w, 35 /* DWMWA_CAPTION_COLOR (Windows 11) */, &g_bg, sizeof(g_bg));
+    DwmSetWindowAttribute(w, 36 /* DWMWA_TEXT_COLOR */, &g_ink, sizeof(g_ink));
+}
+
+static void web_colour(ICoreWebView2Controller *ctl) {
+    ICoreWebView2Controller2 *c2 = NULL;
+    if (ctl && SUCCEEDED(ICoreWebView2Controller_QueryInterface(ctl, &IID_ICoreWebView2Controller2, (void **)&c2))) {
+        COREWEBVIEW2_COLOR bg = { 255, GetRValue(g_bg), GetGValue(g_bg), GetBValue(g_bg) };
+        ICoreWebView2Controller2_put_DefaultBackgroundColor(c2, bg);
+        ICoreWebView2Controller2_Release(c2);
+    }
+}
+
+static int parse_hex(const wchar_t *h, COLORREF *out) {
+    unsigned r, g, b;
+    while (*h == L' ') h++;
+    if (*h != L'#' || wcslen(h) < 7 || swscanf(h + 1, L"%2x%2x%2x", &r, &g, &b) != 3) return 0;
+    *out = RGB(r, g, b);
+    return 1;
+}
+
+/* {"t":"theme","dark":1,"bg":"#17212b","ink":"#f5f5f5"} from the page */
+static void apply_theme(const wchar_t *j) {
+    wchar_t bg[16], ink[16];
+    json_str(j, L"bg", bg, 16);
+    json_str(j, L"ink", ink, 16);
+    COLORREF b = g_bg, i = g_ink;
+    if (!parse_hex(bg, &b)) return;
+    parse_hex(ink, &i);
+    g_bg = b; g_ink = i; g_dark = (int)json_num(j, L"dark", 1) != 0;
+    reg_set(L"bg", (DWORD)g_bg); reg_set(L"ink", (DWORD)g_ink); reg_set(L"dark", (DWORD)g_dark);
+    if (g_bg_brush) DeleteObject(g_bg_brush);
+    g_bg_brush = CreateSolidBrush(g_bg);
+    dark_frame(g_wnd);
+    web_colour(g_ctl);
+    for (int k = 0; k < 16; k++) if (g_pops[k].wnd) { dark_frame(g_pops[k].wnd); web_colour(g_pops[k].ctl); }
+}
+
+/* {"t":"zoom","v":1.25}: the whole window scales, like Telegram's interface scale */
+static void apply_zoom(double z) {
+    if (z < 0.8 || z > 2.0) return;
+    g_zoom = z;
+    reg_set(L"zoom", (DWORD)(z * 100 + 0.5));
+    if (g_ctl) ICoreWebView2Controller_put_ZoomFactor(g_ctl, z);
+    for (int k = 0; k < 16; k++) if (g_pops[k].ctl) ICoreWebView2Controller_put_ZoomFactor(g_pops[k].ctl, z);
 }
 
 static void open_pop(int channel, const wchar_t *title) {
@@ -999,6 +1067,11 @@ static void open_pop(int channel, const wchar_t *title) {
 static LRESULT CALLBACK pop_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     Pop *p = pop_of(h);
     switch (msg) {
+    case WM_ERASEBKGND: {
+        RECT rc; GetClientRect(h, &rc);
+        FillRect((HDC)wp, &rc, g_bg_brush ? g_bg_brush : (HBRUSH)GetStockObject(BLACK_BRUSH));
+        return 1;
+    }
     case WM_SIZE:
         if (p && p->ctl) {
             RECT rc;
@@ -1062,6 +1135,8 @@ static int start_webview(void) {
     CreateEnvFn create = (CreateEnvFn)(void *)GetProcAddress(m, "CreateCoreWebView2EnvironmentWithOptions");
     if (!create) return 0;
     swprintf(data, MAX_PATH, L"%ls\\WebView2", g_home);
+    /* the chat keeps full speed while hidden beside the clock (news and notifications at once, like Telegram) */
+    SetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", L"--disable-background-timer-throttling --disable-renderer-backgrounding");
     return SUCCEEDED(create(NULL, data, NULL, (ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *)&h_environment));
 }
 
@@ -1133,6 +1208,11 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     switch (msg) {
+    case WM_ERASEBKGND: { /* the theme's colour while the page is not drawn yet */
+        RECT rc; GetClientRect(h, &rc);
+        FillRect((HDC)wp, &rc, g_bg_brush ? g_bg_brush : (HBRUSH)GetStockObject(BLACK_BRUSH));
+        return 1;
+    }
     case WM_SIZE:
         resize_web();
         set_visible(wp != SIZE_MINIMIZED && IsWindowVisible(h));
@@ -1157,6 +1237,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_TIMER:
         if (wp == T_TICK) post_json(L"{\"t\":\"tick\"}");
         else if (wp == T_PRESENCE) activity(L"tick");
+        else if (wp == T_MEMORY) { KillTimer(h, T_MEMORY); if (!IsWindowVisible(h)) memory_level(1); }
         else if (wp == T_RETRY) { KillTimer(h, T_RETRY); if (g_web) ICoreWebView2_Navigate(g_web, g_url); }
         else if (wp == T_UPDATE) CloseHandle(CreateThread(NULL, 0, update_thread, NULL, 0, NULL));
         return 0;
@@ -1400,6 +1481,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     }
     jump_list();
 
+    g_bg = (COLORREF)reg_get(L"bg", RGB(0x16, 0x16, 0x16));
+    g_ink = (COLORREF)reg_get(L"ink", RGB(0xEE, 0xEE, 0xEE));
+    g_dark = (int)reg_get(L"dark", 1);
+    g_zoom = reg_get(L"zoom", 100) / 100.0;
+    if (g_zoom < 0.8 || g_zoom > 2.0) g_zoom = 1.0;
+    g_bg_brush = CreateSolidBrush(g_bg);
     g_icon = (HICON)LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), 0);
     g_icon_sm = (HICON)LoadImageW(inst, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), 0);
     WNDCLASSEXW wc = { sizeof(wc) };
@@ -1408,7 +1495,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     wc.hIcon = g_icon;
     wc.hIconSm = g_icon_sm;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = CreateSolidBrush(RGB(0x16, 0x16, 0x16));
+    wc.hbrBackground = g_bg_brush;
     wc.lpszClassName = WND_CLASS;
     RegisterClassExW(&wc);
     wc.lpfnWndProc = pop_proc;

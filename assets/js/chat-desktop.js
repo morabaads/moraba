@@ -84,6 +84,9 @@
     ['Shift + Enter', 'خط جدید'],
     ['Esc', 'لغو پاسخ/ویرایش، یا بستن گفت‌وگو'],
     ['Ctrl + Shift + M', 'نمایش/پنهان کردن مربع چت از هر جای ویندوز (اپ ویندوز)'],
+    ['Ctrl + 1 … 9', 'رفتن به پوشه اول تا نهم (نمای دسکتاپ)'],
+    ['Ctrl + =  /  Ctrl + −', 'بزرگ‌تر / کوچک‌تر کردن کل رابط'],
+    ['Ctrl + W  /  Ctrl + Q', 'رفتن کنار ساعت / خروج کامل (اپ ویندوز)'],
     ['Ctrl + /', 'همین فهرست']
   ];
   function keysHelp() {
@@ -91,6 +94,7 @@
       return el('div', { class: 'keys-row' }, el('span', { text: k[1] }), el('kbd', { text: k[0], dir: 'ltr' }));
     })));
   }
+  MP.keysHelp = keysHelp;
   if (fine) document.addEventListener('keydown', function (e) {
     if (!chatsView() && !C.chatApp) return;
     var k = e.key, ctrl = e.ctrlKey || e.metaKey;
@@ -101,7 +105,7 @@
     if (ctrl && k === 'Tab') { e.preventDefault(); step(e.shiftKey ? -1 : 1); return; }
     if (ctrl && !e.shiftKey && (k === 'f' || k === 'F' || k === 'ب') && MP.openChannel()) { e.preventDefault(); MP.chatDesk.find(); return; }
     if (ctrl && k === '0') { e.preventDefault(); MP.chatDesk.saved(); return; }
-    if (k === 'Escape' && !inField(e.target) && MP.openChannel()) { MP.chatDesk.close(); return; }
+    if (k === 'Escape' && !inField(e.target) && MP.openChannel() && !document.querySelector('dialog[open], .tg-drawer, .qs-shade, .mpv, .ctx-menu')) { MP.chatDesk.close(); return; }
     // Typing anywhere in an open chat goes to the composer (like Telegram Desktop).
     if (!ctrl && !e.altKey && k.length === 1 && !inField(e.target) && MP.openChannel()) {
       var t = MP.chatDesk.text();
@@ -183,7 +187,7 @@
     else if (d.t === 'open' && d.channel) MP.chatDesk.select(+d.channel);
     else if (d.t === 'saved') MP.chatDesk.saved();
     else if (d.t === 'switch') quickSwitch();
-    else if (d.t === 'settings') settingsDialog(d.v || {});
+    else if (d.t === 'settings') { if (asking.length) asking.splice(0).forEach(function (f) { f(d.v || {}); }); else if (MP.tgSettings) MP.tgSettings('advanced'); else settingsDialog(d.v || {}); }
     else if (d.t === 'shown') MP.refreshCounts();
     else if (d.t === 'focus') { focused = !!d.on; if (focused) MP.refreshCounts(); }
     else if (d.t === 'panel') window.open(C.panel, '_blank');
@@ -194,7 +198,7 @@
 
   /* Answers typed into a Windows notification and its «خوانده شد» button: done here, the window stays hidden. */
   function toastRead(ch) {
-    return MP.api('channels/' + ch + '/messages', { noCache: true }).then(function () { MP.refreshCounts(); check(); }).catch(function () {});
+    return MP.api('channels/' + ch + '/read', { method: 'POST' }).then(function () { MP.refreshCounts(); MP.loadChannels(); check(); }).catch(function () {});
   }
   function toastReply(ch, text) {
     if (!text.trim()) return;
@@ -235,7 +239,11 @@
       row('hotkey', 'میانبر Ctrl + Shift + M', 'از هر برنامه‌ای مربع چت را جلو می‌آورد یا پنهان می‌کند'),
       el('p', { class: 'hint', text: 'نسخه برنامه ویندوز: ' + (window.__MP_DESKTOP.v || '') })));
   }
-  MP.desktop.settings = function () { post({ t: 'settings?' }); };
+  var asking = [];
+  MP.desktop.settings = function () { if (MP.tgSettings) MP.tgSettings('advanced'); else post({ t: 'settings?' }); };
+  /** The app's own settings (registry) for the settings pages: {autostart, tray, notify, sound, preview, hotkey}. */
+  MP.desktop.ask = function (fn) { asking.push(fn); post({ t: 'settings?' }); };
+  MP.desktop.set = function (k, v) { post({ t: 'set', k: k, v: v ? 1 : 0 }); };
 
   /* The browser's own right-click menu is off in the app; this one covers text and links. */
   document.addEventListener('contextmenu', function (e) {

@@ -10,6 +10,7 @@
   function closeChat() { finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx(); closeAttach();
     layout.classList.remove('open'); document.body.classList.remove('chat-full');
     current = 0; stop(); renderList(); liveRestart(); if (sideEl) drawSide();
+    if (!MP.isMobile()) noChat();
     if (chatLayer) { var l = chatLayer; chatLayer = null; MP.popLayer(l); }
   }
   var box = $('#chat-messages'), layout = $('#chat-layout'), text = $('#composer-text');
@@ -312,6 +313,7 @@
     MP.emojify(list);
     list.scrollTop = scroll;
     paintActivity();
+    MP.emit('chatlist');
   }
   function findMessages() {
     clearTimeout(findTimer);
@@ -425,8 +427,16 @@
 
   /* ------------------------------------------------------------ Header */
 
+  /** Nothing open (Esc, or no chats yet): Telegram's «یک گفت‌وگو را انتخاب کنید» on the wallpaper. */
+  function noChat() {
+    $('#composer').hidden = true;
+    var pin = $('#chat-pinbar'); if (pin) pin.hidden = true;
+    layout.classList.add('no-chat');
+    box.replaceChildren(el('div', { class: 'chat-none' }, el('span', { text: 'برای شروع، یک گفت‌وگو را انتخاب کنید' })));
+  }
   function drawHead() {
     var c = chan(); if (!c) return;
+    layout.classList.remove('no-chat');
     $('#chat-avatar').replaceChildren(channelIcon(c, 'sm'));
     $('#chat-title').replaceChildren(document.createTextNode(c.title));
     if (c.muted) $('#chat-title').append(el('i', { class: 'ci-mute', html: icon('bell-off') }));
@@ -471,7 +481,7 @@
   function drawSide() {
     if (!sideEl) { sideEl = el('aside', { class: 'card chat-side', id: 'chat-side', 'aria-label': 'اطلاعات گفت‌وگو' }); layout.append(sideEl); }
     layout.classList.toggle('side-open', sideOn());
-    if (sideOn() && chan()) chatInfo(chan(), sideEl); else sideEl.replaceChildren();
+    if (sideOn() && chan()) sideInfo(chan(), sideEl); else sideEl.replaceChildren();
   }
   function toggleSide() {
     try { localStorage.setItem('mp_chat_side', sidePref() ? '0' : '1'); } catch (e) { /* private */ }
@@ -538,12 +548,20 @@
   var ACCENTS = ['', '#3a8ee6', '#2fa36b', '#8e5be8', '#e0559b', '#e5484d', '#6b7280'];
   var FONTS = [[0, 'پیش‌فرض', ''], [1, 'کوچک', '13.5px'], [2, 'معمولی', '14.5px'], [3, 'بزرگ', '16px'], [4, 'خیلی بزرگ', '18px']];
   function globalFont() { try { return +localStorage.getItem('mp_chat_font') || 0; } catch (e) { return 0; } }
+  function globalWall() { try { return localStorage.getItem('mp_chat_wall') || ''; } catch (e) { return ''; } }
+  function globalAccent() { try { return localStorage.getItem('mp_chat_bub') || ''; } catch (e) { return ''; } }
+  /** For the settings: the wallpapers, text sizes and the defaults every chat without its own look uses. */
+  MP.chatLooks = {
+    walls: WALLS, fonts: FONTS, accents: ACCENTS,
+    wall: globalWall, font: globalFont, accent: globalAccent,
+    set: function (k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* private */ } if (current) applyLook(chan()); }
+  };
   function applyLook(c) {
-    var lk = (c && c.look) || {}, w = WALLS.filter(function (x) { return x[0] === (lk.bg || ''); })[0] || WALLS[0], pane = box.parentNode;
+    var lk = (c && c.look) || {}, w = WALLS.filter(function (x) { return x[0] === (lk.bg || globalWall()); })[0] || WALLS[0], pane = box.parentNode;
     box.style.background = w[2] ? w[2] : '';
     if (w[0] === 'dots') box.style.backgroundColor = 'var(--chat-bg)';
-    pane.style.setProperty('--bub-me', lk.accent || '');
-    if (!lk.accent) pane.style.removeProperty('--bub-me');
+    pane.style.setProperty('--bub-me', lk.accent || globalAccent());
+    if (!lk.accent && !globalAccent()) pane.style.removeProperty('--bub-me');
     var f = FONTS[lk.font || globalFont()] || FONTS[0];
     if (f[2]) pane.style.setProperty('--msg-fs', f[2]); else pane.style.removeProperty('--msg-fs');
     pane.classList.toggle('dark-wall', w[0] === 'night' || w[0] === 'ocean');
@@ -2660,6 +2678,119 @@
     load();
   }
 
+  /**
+   * The info column like Telegram Desktop's «Group Info»: who/what, notifications switch, counts of photos, videos,
+   * files, links and voice messages (each opens its list in the column), the members with search, and actions.
+   */
+  var MEDIA_ROWS = [['photos', 'image', 'عکس', 'عکس‌ها'], ['videos', 'video', 'ویدیو', 'ویدیوها'], ['files', 'file', 'فایل', 'فایل‌ها'], ['links', 'link', 'لینک', 'لینک‌های فرستاده‌شده'], ['voice', 'mic', 'پیام صوتی', 'پیام‌های صوتی']];
+  function sideInfo(c, side) {
+    var kind = c.type === 'direct' ? 'اطلاعات کاربر' : c.type === 'saved' ? 'پیام‌های ذخیره‌شده' : (c.settings || {}).mode === 'channel' ? 'اطلاعات کانال' : 'اطلاعات گروه';
+    function top(title, back) {
+      return el('div', { class: 'cs-top' },
+        back ? el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'بازگشت', html: icon('right'), onclick: back }) : null,
+        el('strong', { text: title }),
+        el('button', { type: 'button', class: 'icon-btn sm', title: 'بستن ستون', 'aria-label': 'بستن ستون اطلاعات', html: icon('close'), onclick: toggleSide }));
+    }
+    function row(ico, main, sub, opts) {
+      opts = opts || {};
+      var r = el(opts.onclick ? 'button' : 'div', { type: opts.onclick ? 'button' : null, class: 'tg-row' + (opts.danger ? ' danger' : ''), onclick: opts.onclick || null },
+        el('span', { class: 'tg-row-ico', html: icon(ico) }),
+        el('span', { class: 'tg-row-copy' }, el('b', { text: main, dir: opts.dir || 'auto' }), sub ? el('small', { text: sub }) : null),
+        opts.end || null);
+      return r;
+    }
+    function sw(on, fn) {
+      var cb = el('input', { type: 'checkbox', role: 'switch', checked: !!on, 'aria-label': 'اعلان‌ها' });
+      cb.onchange = function () { fn(cb.checked); };
+      return el('label', { class: 'switch tg-switch', onclick: function (e) { e.stopPropagation(); } }, cb, el('i'));
+    }
+    function home() {
+      var st = c.settings || {}, sub, online = false;
+      if (c.type === 'direct') { online = isOnline(c.other); sub = online ? 'آنلاین' : lastSeen(Math.max(seenOf(c.other), c.last_seen || 0)); }
+      else sub = c.type === 'saved' ? 'فقط خودتان می‌بینید' : fa(c.members) + ((st.mode === 'channel') ? ' مشترک' : ' عضو');
+      var hero = el('div', { class: 'tg-hero' }, channelIcon(c, 'xl'), el('div', null, el('h3', { text: c.title }), el('small', { class: online ? 'online' : '', text: sub })));
+      var about = el('section', { class: 'tg-sec' });
+      if (st.desc) about.append(row('help', st.desc, 'توضیحات'));
+      if (c.type === 'direct') {
+        var u = MP.user(c.other);
+        if (u.title) about.append(row('user', u.title, 'سمت'));
+        if (u.phone) about.append(row('send', MP.fa(u.phone), 'موبایل', { dir: 'ltr' }));
+        about.append(row('user', 'نمایش پروفایل', '', { onclick: function () { MP.openProfile(c.other); } }));
+      }
+      if (c.client_name) about.append(row('user', c.client_name, 'مشتری'));
+      if (c.project_id && MP.project(c.project_id)) about.append(row('folder', MP.project(c.project_id).title || MP.project(c.project_id).name, 'پروژه', { onclick: function () { MP.showView('projects'); } }));
+      if (st.invite) about.append(row('link', st.invite.replace(/^https?:\/\//, ''), 'لینک دعوت · برای کپی کلیک کنید', { dir: 'ltr', onclick: function () { copyText(st.invite); } }));
+      if (c.type !== 'saved') about.append(row(c.muted ? 'bell-off' : 'bell', 'اعلان‌ها', c.muted ? 'بی‌صدا' : 'روشن', { end: sw(!c.muted, function (on) { setMute(c, !on); }) }));
+      var media = el('section', { class: 'tg-sec tg-media' }, el('div', { class: 'tg-row tg-sk' }, el('span', { class: 'sk sk-text', style: { width: '60%' } })));
+      MP.api('channels/' + c.id + '/media-counts', { noCache: true }).then(function (n) {
+        var rows = MEDIA_ROWS.filter(function (m) { return n[m[0]]; }).map(function (m) {
+          return row(m[1], fa(n[m[0]]) + ' ' + m[2], '', { onclick: function () { list(m); } });
+        });
+        media.replaceChildren.apply(media, rows.length ? rows : [el('p', { class: 'tg-none', text: 'هنوز عکس، فایل یا لینکی فرستاده نشده' })]);
+      }).catch(function () { media.remove(); });
+      var members = null;
+      if (isGroup(c) && c.member_ids && c.member_ids.length) {
+        var q = el('input', { type: 'search', class: 'tg-msearch', placeholder: 'جستجوی اعضا', hidden: true, 'aria-label': 'جستجوی اعضا' });
+        var people = el('div', { class: 'tg-people' });
+        var drawPeople = function () {
+          var v = MP.norm(q.value);
+          people.replaceChildren.apply(people, c.member_ids.map(function (id) { return MP.user(id); }).filter(function (u) { return !v || MP.norm(u.name + ' ' + (u.title || '')).indexOf(v) >= 0; })
+            .sort(function (a, b) { return (isOnline(b.id) ? 1 : 0) - (isOnline(a.id) ? 1 : 0); }).map(function (u) {
+              var on = isOnline(u.id);
+              return el('button', { type: 'button', class: 'tg-person', onclick: function () { if (u.id !== S.me.id) MP.startDirect(u.id); } }, MP.avatar(u, 'sm'),
+                el('span', null, el('b', { text: u.name + (u.id === S.me.id ? ' (شما)' : '') }), el('small', { class: on ? 'online' : '', text: on ? 'آنلاین' : lastSeen(seenOf(u.id)) })));
+            }));
+        };
+        q.oninput = drawPeople;
+        members = el('section', { class: 'tg-sec' },
+          el('div', { class: 'tg-memhead' }, el('span', { class: 'tg-row-ico', html: icon('users') }), el('b', { text: fa(c.members) + ' عضو' }),
+            el('button', { type: 'button', class: 'icon-btn sm', title: 'جستجوی اعضا', 'aria-label': 'جستجوی اعضا', html: icon('search'), onclick: function () { q.hidden = !q.hidden; if (!q.hidden) q.focus(); else { q.value = ''; drawPeople(); } } }),
+            S.manager && c.type === 'group' ? el('button', { type: 'button', class: 'icon-btn sm', title: 'افزودن عضو', 'aria-label': 'افزودن عضو', html: icon('plus'), onclick: function () { groupForm(c); } }) : null),
+          q, people);
+        drawPeople();
+      }
+      var acts = el('section', { class: 'tg-sec' },
+        row('search', 'جستجو در گفت‌وگو', '', { onclick: function () { openFind(); } }),
+        c.type !== 'saved' ? row('video', 'جلسه تصویری', '', { onclick: function () { startMeeting(c); } }) : null,
+        FINE && !MP_CONFIG_POP() ? row('grid', 'باز کردن در پنجره جدا', '', { onclick: function () { popOut(c); } }) : null,
+        row('image', 'ظاهر گفت‌وگو', 'پس‌زمینه، رنگ و اندازه متن', { onclick: function () { chatLook(c); } }),
+        isGroup(c) && c.role === 'admin' ? row('settings', 'مدیریت گروه', 'توضیح، نقش‌ها، لینک دعوت، حالت آهسته', { onclick: function () { groupAdmin(c); } }) : null,
+        isGroup(c) && st.topics ? row('list', 'تاپیک‌ها', '', { onclick: function () { select(c.id, 0, { topics: true }); } }) : null);
+      side.replaceChildren(top(kind), el('div', { class: 'tg-scroll' }, hero, about.childNodes.length ? about : null, media, members, acts));
+      MP.emojify(side);
+    }
+    function list(m) {
+      var pane = el('div', { class: 'tg-scroll tg-list' }, MP.skeleton(2));
+      side.replaceChildren(top(m[3], home), pane);
+      var k = m[0] === 'photos' || m[0] === 'videos' ? 'media' : m[0];
+      MP.api('channels/' + c.id + '/media', { query: { kind: k } }).then(function (l) {
+        if (k === 'media') {
+          l = l.filter(function (x) { return (m[0] === 'videos') === /^video\//.test(x.file.mime || ''); });
+          pane.replaceChildren(el('div', { class: 'ci-grid tg-grid' }, l.map(function (x) {
+            var v = /^video\//.test(x.file.mime || '');
+            return el('button', { type: 'button', onclick: function () { if (!msgs[x.id]) jumpTo(x.id); else gallery(x.id); } },
+              v ? (x.x && x.x.thumb_url ? el('img', { src: x.x.thumb_url, alt: '', loading: 'lazy' }) : el('video', { src: x.file.url + '#t=0.5', muted: true, preload: 'metadata' })) : el('img', { src: x.file.url, alt: '', loading: 'lazy' }),
+              v ? el('span', { class: 'bv-play', html: icon('play') }) : null);
+          })));
+        } else if (k === 'links') {
+          pane.replaceChildren.apply(pane, l.map(function (x) {
+            return el('div', { class: 'tg-row' }, el('span', { class: 'tg-row-ico', html: icon('link') }), el('span', { class: 'tg-row-copy' }, el('a', { href: x.url, target: '_blank', rel: 'noopener', dir: 'ltr', text: x.url }), el('small', { text: x.author + ' · ' + listTime(x.created_at) })),
+              el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'رفتن به پیام', html: icon('chat'), onclick: function () { jumpTo(x.id); } }));
+          }));
+        } else {
+          pane.replaceChildren.apply(pane, l.map(function (x) {
+            var f = x.file;
+            return el('div', { class: 'tg-row' }, el('span', { class: 'tg-row-ico file', html: icon(k === 'voice' ? 'mic' : 'file') }),
+              el('span', { class: 'tg-row-copy' }, el('a', { href: f.url + (f.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1', target: '_blank', rel: 'noopener', text: k === 'voice' ? 'پیام صوتی ' + x.author : f.name, dir: 'auto' }), el('small', { text: MP.fileSize(f.size) + ' · ' + x.author + ' · ' + listTime(x.created_at) })),
+              el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'رفتن به پیام', html: icon('chat'), onclick: function () { jumpTo(x.id); } }));
+          }));
+        }
+        if (!pane.childNodes.length || (k === 'media' && !pane.querySelector('button'))) pane.replaceChildren(el('p', { class: 'tg-none', text: 'چیزی نیست' }));
+      }).catch(function (e) { pane.replaceChildren(el('p', { class: 'tg-none', text: e.message })); });
+    }
+    home();
+  }
+
   var SLOW = [[0, 'خاموش'], [10, '۱۰ ثانیه'], [30, '۳۰ ثانیه'], [60, '۱ دقیقه'], [300, '۵ دقیقه'], [900, '۱۵ دقیقه'], [3600, '۱ ساعت']];
   function slowLabel(v) { var x = SLOW.filter(function (s2) { return s2[0] === v; })[0]; return x ? x[1] : fa(v) + ' ثانیه'; }
   /** Group settings for its admins: description, channel mode, slow mode, topics, invite link and roles. */
@@ -2768,7 +2899,17 @@
     close: function () { if (current) closeChat(); },
     saved: openSaved,
     text: function () { return text; },
-    list: function () { return $$('#chat-list .chat-item').map(function (b) { return +b.dataset.id; }).filter(Boolean); }
+    list: function () { return $$('#chat-list .chat-item').map(function (b) { return +b.dataset.id; }).filter(Boolean); },
+    current: function () { return current; },
+    info: function () { if (current) { if (sideWide()) toggleSide(); else chatInfo(chan()); } },
+    /** Folders for the Telegram-style rail: [{id, title, unread}] (unread = chats with unread messages, not muted). */
+    folders: function () {
+      var main = S.channels.filter(function (c) { return !c.arch_me; });
+      return tabsFor(main).map(function (t) { return { id: t[0], title: t[1], unread: main.filter(function (c) { return inTab(c, t[0]) && isUnread(c) && !c.muted; }).length }; });
+    },
+    folder: function (id) { if (id === undefined) return listTab; listTab = id; listArch = false; try { localStorage.setItem('mp_chat_tab', listTab); } catch (e) { /* private mode */ } renderList(); },
+    archive: function () { listArch = true; renderList(); },
+    newDirect: function () { newDirect(); }
   };
   MP.clientSettings = function (c) { clientSettings(c); };
   MP.startDirect = function (userId) {
@@ -3256,7 +3397,7 @@
       var target = opts.channel || current || (window.innerWidth > 860 && S.channels[0] && S.channels[0].id);
       if (opts.channel && !chan(opts.channel)) { MP.toast('این گفت‌وگو پیدا نشد یا به آن دسترسی ندارید.'); target = 0; }
       if (target) select(target, opts.msg || 0, { topic: opts.topic || 0, reply: opts.reply });
-      else { layout.classList.remove('open'); $('#composer').hidden = true; box.replaceChildren(MP.empty('chat', 'یک گفت‌وگو را انتخاب کنید', null, null, true)); }
+      else { layout.classList.remove('open'); noChat(); }
     });
   }
   MP.view('messages', { open: open });

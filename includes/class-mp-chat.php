@@ -52,6 +52,7 @@ class MP_Chat {
 			array( 'messages/search', 'GET', 'search_all' ),
 			array( "channels/$id/search", 'GET', 'search' ),
 			array( "channels/$id/media", 'GET', 'media' ),
+			array( "channels/$id/media-counts", 'GET', 'media_counts' ),
 			array( "channels/$id/mute", 'POST', 'mute' ),
 			array( "channels/$id/read", 'POST', 'read' ),
 			array( 'channels/saved', 'POST', 'saved' ),
@@ -758,6 +759,34 @@ class MP_Chat {
 		return array_map( function ( $x ) {
 			return array( 'id' => (int) $x->id, 'file' => MP_Files::payload( MP_Files::get( $x->file_id ) ), 'author' => self::author( $x ), 'created_at' => $x->created_at, 'transcript' => (string) $x->transcript, 'x' => self::x( $x ) ? self::x( $x ) : null );
 		}, $rows );
+	}
+
+	/** GET channels/{id}/media-counts — how many photos, videos, files, voice messages and links (the info column). */
+	public static function media_counts( WP_REST_Request $r ) {
+		global $wpdb;
+		$uid = self::uid();
+		$ch  = MP_Rest::channel_for( (int) $r['id'], $uid );
+		if ( ! $ch ) {
+			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
+		}
+		$m    = self::t( 'messages' );
+		$f    = self::t( 'files' );
+		$base = "FROM $m m JOIN $f f ON f.id = m.file_id WHERE m.channel_id = %d AND m.deleted_at IS NULL AND m.file_id > 0" . self::not_hidden( $uid, 'm' );
+		$pic  = " AND m.as_file = 0 AND (m.extra IS NULL OR (m.extra NOT LIKE '%%sticker%%' AND m.extra NOT LIKE '%%\"gif\"%%'))";
+		$n    = function ( $where ) use ( $wpdb, $base, $ch ) {
+			return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) ' . $base . $where, $ch->id ) ); // phpcs:ignore
+		};
+		$links = 0;
+		foreach ( $wpdb->get_col( $wpdb->prepare( "SELECT body FROM $m WHERE channel_id = %d AND deleted_at IS NULL AND body LIKE %s ORDER BY id DESC LIMIT 1000", $ch->id, '%http%' ) ) as $b ) { // phpcs:ignore
+			$links += preg_match_all( '#https?://[^\s<>"\']+#u', $b );
+		}
+		return array(
+			'photos' => $n( " AND f.mime LIKE 'image/%%'" . $pic ),
+			'videos' => $n( " AND f.mime LIKE 'video/%%'" . $pic ),
+			'files'  => $n( " AND f.mime NOT LIKE 'audio/%%' AND ((f.mime NOT LIKE 'image/%%' AND f.mime NOT LIKE 'video/%%') OR m.as_file = 1)" ),
+			'voice'  => $n( " AND f.mime LIKE 'audio/%%'" ),
+			'links'  => $links,
+		);
 	}
 
 	/* ------------------------------------------------------------------ Mute, read, saved */

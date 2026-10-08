@@ -52,8 +52,20 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     (page `{t:'popout'}` → window class `MorabaChatPop` + own controller, page `?pop=ID` = body `chat-pop`, just that chat),
     attendance activity (`{t:'activity', idle, locked, busy, ev, device}` every 60 s + lock/unlock/sleep/wake/end; device id in
     registry `device`; the page POSTs `presence` and answers `{t:'presence'}` for the tray tooltip).
-  - Third column beside an open chat (≥1200px with a mouse): `#chat-side` = `chatInfo(c, side)` (info, members, media/files),
-    toggled by the chat header, remembered in localStorage `mp_chat_side`.
+  - Third column beside an open chat (≥1200px with a mouse): `#chat-side` = `sideInfo(c, side)` in messages.js, Telegram's
+    «Group Info» (hero, about rows, notifications switch, counts from `GET channels/{id}/media-counts` that open lists in the
+    column, members with search/add, actions), toggled by the chat header, remembered in localStorage `mp_chat_side`.
+  - Telegram-Desktop shell, `assets/js/chat-shell.js` (body `tg`: chat app, ≥861px, mouse): folder rail `#tg-rail` (from
+    `MP.chatDesk.folders()`/`folder(id)`, Ctrl+1…9), ☰ drawer, settings in pages `MP.tgSettings(page)` (`notify` | `chat` |
+    `advanced`; a native `<dialog class="tg-modal">`), interface scale `MP.setScale` (localStorage `mp_scale`; in the app the
+    host zooms the WebView, in browsers CSS `zoom` + `--z`), Ctrl+W/Ctrl+Q in the app. Themes in `S.boot.prefs`
+    (`dark`, `tint` = Telegram «Tinted» blue night, `auto` = follow Windows, `accent` #rrggbb) applied by `MP.applyPrefs`
+    (html classes `dark` / `tinted` / `accent`), saved by `MP.savePrefs`; chat defaults in localStorage `mp_chat_wall`,
+    `mp_chat_bub`, `mp_chat_font` (`MP.chatLooks`). «ظاهر پنل» opens the same theme page.
+  - Instant start: in the chat app `app.js` boots from the IndexedDB copy (`MP.kv`: bootstrap, channels, projects) and
+    refreshes from the server behind it. 2.2 host: page `{t:'theme', dark, bg, ink}` colours the title bar + WebView
+    background (registry `bg`/`ink`/`dark`), `{t:'zoom', v}` (registry `zoom` %), `{t:'hide'|'quit'}`, memory target
+    LOW after 5 min hidden, `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` without background throttling.
 - Automatic attendance (`class-mp-presence.php`, options `mp_presence_on` / `mp_presence_idle`, «حضور خودکار» in the
   attendance page for supervisors): sessions with `attendance.source = 'auto'` from first to last real input, closed at the last
   report when reports stop (sleep/shutdown), cut at midnight, merged across gaps < 2 min, < 1 min dropped; manual «خروج» pauses

@@ -1254,6 +1254,7 @@
       el('span', { class: 'switch' }, el('input', { id: id, type: 'checkbox', role: 'switch', checked: !!checked }), el('i')));
   }
   function openAppearance() {
+    if (MP.tgSettings) { MP.tgSettings('chat'); return; }
     var p = S.boot.prefs;
     var box = el('div', null,
       switchRow('dark-setting', 'حالت تیره', 'رنگ‌های تیره برای کار در شب', p.dark),
@@ -1267,13 +1268,29 @@
       };
     });
   }
+  /*
+   * Themes (like Telegram Desktop): day, night, tinted night (blue-grey), or following Windows' own light/dark
+   * setting; any accent colour on top. Kept on the server (prefs) and on this device for the first paint.
+   */
+  var darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  MP.isDarkTheme = function (p) { p = p || S.boot.prefs; return p.auto && darkMQ ? darkMQ.matches : !!p.dark; };
   MP.applyPrefs = function () {
-    var p = S.boot.prefs;
-    document.documentElement.classList.toggle('dark', !!p.dark);
-    document.documentElement.classList.toggle('reduced-motion', !!p.motion);
-    try { localStorage.setItem('mp-prefs', JSON.stringify({ dark: !!p.dark, motion: !!p.motion })); } catch (e) { /* ignore */ }
-    var meta = $('meta[name=theme-color]'); if (meta) meta.content = p.dark ? '#0e0f10' : '#161616';
+    var p = S.boot.prefs, root = document.documentElement, dark = MP.isDarkTheme(p);
+    root.classList.toggle('dark', dark);
+    root.classList.toggle('tinted', dark && !!p.tint);
+    root.classList.toggle('reduced-motion', !!p.motion);
+    if (p.accent) { root.style.setProperty('--brand', p.accent); root.style.setProperty('--brand-strong', p.accent); root.classList.add('accent'); }
+    else { root.style.removeProperty('--brand'); root.style.removeProperty('--brand-strong'); root.classList.remove('accent'); }
+    try { localStorage.setItem('mp-prefs', JSON.stringify({ dark: !!p.dark, motion: !!p.motion, tint: !!p.tint, auto: !!p.auto, accent: p.accent || '' })); } catch (e) { /* ignore */ }
+    var meta = $('meta[name=theme-color]'); if (meta) meta.content = dark ? (p.tint ? '#17212b' : '#0e0f10') : '#161616';
+    MP.emit('theme', { dark: dark, tint: dark && !!p.tint });
   };
+  /** Saves the look (S.boot.prefs) on the server after applying it here. */
+  MP.savePrefs = function () {
+    MP.applyPrefs();
+    return MP.api('me', { method: 'POST', body: { prefs: S.boot.prefs } }).catch(MP.soft);
+  };
+  if (darkMQ && darkMQ.addEventListener) darkMQ.addEventListener('change', function () { if (S.boot && S.boot.prefs && S.boot.prefs.auto) MP.applyPrefs(); });
   function openHelp() {
     var items = [
       ['calendar', 'تقویم', 'تسک‌هایی که ناظر تعیین کرده با قفل بنفش مشخص‌اند؛ عنوان، تاریخ و ساعتشان قابل تغییر نیست ولی وضعیت، تیک چک‌لیست، تایمر و نظر روی آن‌ها کار می‌کند. با «دیدم» دریافت تسک را تأیید کنید.'],
