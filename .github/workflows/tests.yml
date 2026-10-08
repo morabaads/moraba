@@ -1,0 +1,61 @@
+# Runs the plugin's tests on every push: PHP syntax, the automatic-attendance scenarios, the browser tests on a
+# throwaway WordPress (SQLite), and a build of the Windows app (signature checked). Nothing is published.
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_sqlite, sqlite3, mbstring, gd
+          tools: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: PHP syntax
+        run: find . -name '*.php' -not -path './apps/*' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: JS syntax
+        run: for f in assets/js/*.js; do node -e "new Function(require('fs').readFileSync('$f','utf8'))"; done
+      - name: Playwright
+        run: |
+          npm init -y > /dev/null
+          npm i playwright@1.56.1 > /dev/null
+          npx playwright install --with-deps chromium
+      - name: Test WordPress
+        run: tests/e2e/setup.sh /tmp/mpwp 8080
+      - name: Automatic attendance scenarios
+        run: php tests/presence-test.php /tmp/mpwp/wp-load.php
+      - name: Browser tests
+        run: node tests/e2e/run.js
+      - name: Server log on failure
+        if: failure()
+        run: tail -100 /tmp/mpwp/server.log || true
+  windows-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: mingw-w64
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mingw-w64 > /dev/null
+      - name: Build (and sign) MorabaChat.exe
+        run: apps/windows/build.sh
+      - name: Signature verifies
+        run: |
+          cd apps/windows
+          openssl ec -in update-key.pem -pubout -out /tmp/pub.pem
+          python3 - <<'PY'
+          r = bytes.fromhex(open('../../assets/app/MorabaChat.exe.sig').read().strip())
+          def i(b):
+              b = b.lstrip(b'\0')
+              if b[0] & 0x80: b = b'\0' + b
+              return b'\x02' + bytes([len(b)]) + b
+          d = i(r[:32]) + i(r[32:])
+          open('/tmp/sig.der', 'wb').write(b'\x30' + bytes([len(d)]) + d)
+          PY
+          openssl dgst -sha256 -verify /tmp/pub.pem -signature /tmp/sig.der ../../assets/app/MorabaChat.exe

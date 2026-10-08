@@ -121,7 +121,7 @@
       if (s.date !== lastDate) { lastDate = s.date; sessions.append(el('div', { class: 'group-title', text: J.formatLong(s.date) + ' · ' + MP.duration(perDay[s.date]) })); }
       sessions.append(el('div', { class: 'row-item' },
         el('span', { class: 'lock-ico', style: { background: 'var(--ok-soft)', color: 'var(--ok)' }, html: icon('clock') }),
-        el('span', { class: 'row-main' }, el('span', { class: 'row-title' }, MP.timeFa(s.check_in) + ' تا ' + (s.open ? 'اکنون' : MP.timeFa(s.check_out)), s.auto ? el('span', { class: 'chip info att-auto', title: 'با فعالیت روی کامپیوتر (مربع چت ویندوز) ثبت شد', text: 'خودکار' }) : null), s.note && !s.auto ? el('span', { class: 'row-meta', text: s.note }) : null),
+        el('span', { class: 'row-main' }, el('span', { class: 'row-title' }, MP.timeFa(s.check_in) + ' تا ' + (s.open ? 'اکنون' : MP.timeFa(s.check_out)), s.auto ? el('span', { class: 'chip info att-auto', title: 'با فعالیت روی کامپیوتر (مربع چت ویندوز) ثبت شد', text: 'خودکار' }) : null, s.flags && s.flags.length ? el('span', { class: 'chip warn', title: flagText(s.flags), text: 'در انتظار بررسی ناظر' }) : null), s.note && !s.auto ? el('span', { class: 'row-meta', text: s.note }) : null),
         el('span', { class: 'chip ' + (s.open ? 'ok' : ''), text: s.open ? 'در حال کار' : MP.duration(s.seconds) })));
     });
 
@@ -181,6 +181,30 @@
     };
     MP.dialog.open(status === 'approved' ? 'تأیید مرخصی' : 'رد مرخصی', f);
   }
+  var FLAGS = {
+    idle0: 'موس و کیبورد بیش از ۲ ساعت هیچ لحظه‌ای آرام نبوده (الگوی ماشینی)',
+    nobreak: 'بیش از ۵ ساعت بدون حتی ۲ دقیقه مکث',
+    night: 'بیش از نیم ساعت کار بین نیمه‌شب تا ۶ صبح',
+    device: 'گزارش از جایی جز برنامه ویندوز مربع چت',
+    browser: 'گزارش از مرورگری جز برنامه ویندوز'
+  };
+  function flagText(f) { return (f || []).map(function (k) { return FLAGS[k] || k; }).join('، '); }
+  /** Supervisors: automatic sessions that look odd, to accept or delete. */
+  function reviewDialog(u, list) {
+    var body = el('div', { class: 'form' });
+    function draw() {
+      body.replaceChildren(el('p', { class: 'hint', text: 'این جلسه‌ها خودکار ثبت شده‌اند ولی الگوی آن‌ها عادی نیست. اگر درست است تأیید کنید؛ اگر نه، حذف کنید (در گزارش‌ها ثبت می‌شود).' }));
+      list.forEach(function (s) {
+        body.append(el('div', { class: 'row-item' },
+          el('span', { class: 'row-main', style: { cursor: 'default' } }, el('span', { class: 'row-title', text: J.formatLong(s.date) + ' · ' + MP.timeFa(s.check_in) + ' تا ' + (s.open ? 'اکنون' : MP.timeFa(s.check_out)) + ' (' + MP.duration(s.seconds) + ')' }), el('span', { class: 'row-meta', text: flagText(s.flags) })),
+          el('span', { class: 'row-side' },
+            el('button', { type: 'button', class: 'btn btn-ok btn-sm', text: 'تأیید', onclick: function () { MP.api('attendance/' + s.id + '/review', { method: 'POST' }).then(function () { list.splice(list.indexOf(s), 1); MP.toast('تأیید شد'); if (list.length) draw(); else MP.dialog.close(); loadTeamToday(); }).catch(MP.soft); } }),
+            el('button', { type: 'button', class: 'btn btn-danger btn-sm', text: 'حذف', onclick: function () { MP.confirm('حذف جلسه حضور', 'این جلسه از کارکرد ' + u.name + ' حذف می‌شود.', 'حذف', true).then(function (ok) { if (!ok) return; MP.api('attendance/' + s.id, { method: 'DELETE' }).then(function () { list.splice(list.indexOf(s), 1); if (list.length) draw(); else MP.dialog.close(); loadTeamToday(); }).catch(MP.soft); }); } }))));
+      });
+    }
+    draw();
+    MP.dialog.open('بررسی حضور خودکار ' + u.name, body, { wide: true });
+  }
   function loadTeamToday() {
     MP.api('attendance', { query: { user_id: 'all', from: S.today, to: S.today } }).then(function (a) {
       var box = $('#att-team'); if (!box) return;
@@ -194,6 +218,17 @@
           el('span', { class: 'chip ' + (open ? 'ok' : total ? '' : 'warn'), text: open ? 'حاضر' : total ? 'رفته' : 'غایب' })));
       });
       box.append(grid);
+      // flagged automatic sessions of the last 30 days, per person
+      MP.api('attendance', { query: { user_id: 'all', from: J.addDays(S.today, -30), to: S.today }, noCache: true }).then(function (m) {
+        var by = {};
+        m.sessions.forEach(function (s) { if (s.flags && s.flags.length) (by[s.user_id] = by[s.user_id] || []).push(s); });
+        var ids = Object.keys(by);
+        if (!ids.length) return;
+        box.prepend(el('div', { class: 'att-review' }, el('strong', { text: 'حضور خودکار نیازمند بررسی' }), ids.map(function (id) {
+          var u = MP.user(+id);
+          return el('button', { type: 'button', class: 'chip warn', text: u.name + ' · ' + fa(by[id].length), onclick: function () { reviewDialog(u, by[id]); } });
+        })));
+      }).catch(function () {});
     }).catch(function () {});
   }
   function leaveForm() {

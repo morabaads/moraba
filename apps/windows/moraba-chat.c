@@ -247,6 +247,16 @@ static void tray_tip(void) {
     if (g_presence[0] && wcslen(g_nid.szTip) + wcslen(g_presence) + 2 < 128) { lstrcatW(g_nid.szTip, L"\n"); lstrcatW(g_nid.szTip, g_presence); }
 }
 
+/* «(3) مربع چت — در انتظار شبکه…» (the page sends the network state) */
+static wchar_t g_status[64];
+static void set_title(void) {
+    wchar_t t[160] = L"";
+    if (g_unread > 0) swprintf(t, 160, L"(%d) ", g_unread);
+    lstrcatW(t, APP_NAME);
+    if (g_status[0]) { lstrcatW(t, L" \x2014 "); lstrcatW(t, g_status); }
+    SetWindowTextW(g_wnd, t);
+}
+
 static void set_unread(int n) {
     if (n < 0) n = 0;
     if (n == g_unread) return;
@@ -265,10 +275,7 @@ static void set_unread(int n) {
     g_nid.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     tray_tip();
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
-    /* «(3) مربع چت» */
-    wchar_t t[80];
-    if (n) swprintf(t, 80, L"(%d) %ls", n, APP_NAME); else wcscpy(t, APP_NAME);
-    SetWindowTextW(g_wnd, t);
+    set_title();
 }
 
 
@@ -810,6 +817,7 @@ static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, I
     else if (!wcscmp(t, L"show")) show_window();
     else if (!wcscmp(t, L"presence")) presence_state(j);
     else if (!wcscmp(t, L"theme")) apply_theme(j);
+    else if (!wcscmp(t, L"status")) { json_str(j, L"text", g_status, 64); set_title(); }
     else if (!wcscmp(t, L"zoom")) apply_zoom(json_dbl(j, L"v", 1.0));
     else if (!wcscmp(t, L"hide")) { HWND pw = pop_window(sender); if (pw) DestroyWindow(pw); else if (reg_get(L"tray", 1)) hide_window(); else ShowWindow(g_wnd, SW_MINIMIZE); } /* Ctrl+W */
     else if (!wcscmp(t, L"quit")) { g_quitting = 1; save_placement(); DestroyWindow(g_wnd); } /* Ctrl+Q */

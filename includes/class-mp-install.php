@@ -734,6 +734,8 @@ class MP_Install {
 			note varchar(200) NOT NULL DEFAULT '',
 			source varchar(10) NOT NULL DEFAULT 'manual',
 			last_beat datetime DEFAULT NULL,
+			stats varchar(190) NOT NULL DEFAULT '',
+			flags varchar(120) NOT NULL DEFAULT '',
 			PRIMARY KEY  (id),
 			KEY user_date (user_id,work_date),
 			KEY open_auto (source,check_out)

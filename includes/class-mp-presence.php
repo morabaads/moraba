@@ -38,6 +38,15 @@ class MP_Presence {
 		);
 		register_rest_route(
 			MP_Rest::NS,
+			'/attendance/(?P<id>\\d+)/review',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'review' ),
+				'permission_callback' => array( 'MP_Rest', 'can_manage' ),
+			)
+		);
+		register_rest_route(
+			MP_Rest::NS,
 			'/presence/settings',
 			array(
 				'methods'             => 'GET, POST',
@@ -85,7 +94,9 @@ class MP_Presence {
 	public static function beat_route( WP_REST_Request $r ) {
 		$device = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) $r['device'] );
 		$ev     = MP_Util::pick( (string) $r['ev'], array( 'tick', 'lock', 'unlock', 'sleep', 'wake', 'end', 'start' ), 'tick' );
-		$state  = self::beat( get_current_user_id(), substr( '' !== $device ? $device : 'web', 0, 40 ), max( 0, (int) $r['idle'] ), ! empty( $r['locked'] ) && 'false' !== $r['locked'], ! empty( $r['busy'] ) && 'false' !== $r['busy'], $ev );
+		// The Windows app runs on WebView2, whose browser name says «Edg/»; anything else is noted for review.
+		$ua     = isset( $_SERVER['HTTP_USER_AGENT'] ) ? (string) $_SERVER['HTTP_USER_AGENT'] : ''; // phpcs:ignore
+		$state  = self::beat( get_current_user_id(), substr( '' !== $device ? $device : 'web', 0, 40 ), max( 0, (int) $r['idle'] ), ! empty( $r['locked'] ) && 'false' !== $r['locked'], ! empty( $r['busy'] ) && 'false' !== $r['busy'], $ev, 0, false !== stripos( $ua, 'Edg/' ) );
 		return $state;
 	}
 
@@ -100,7 +111,7 @@ class MP_Presence {
 	 * @param string $ev     tick | lock | unlock | sleep | wake | end | start.
 	 * @param int    $now    Local time as a timestamp (tests); default now.
 	 */
-	public static function beat( $uid, $device, $idle, $locked, $busy, $ev = 'tick', $now = 0 ) {
+	public static function beat( $uid, $device, $idle, $locked, $busy, $ev = 'tick', $now = 0, $app_ua = true ) {
 		global $wpdb;
 		$now = $now ? (int) $now : self::now_ts();
 		if ( ! self::enabled() || ! $uid ) {
@@ -151,6 +162,7 @@ class MP_Presence {
 			if ( $open ) {
 				$open = self::split_midnight( $open, $now );
 				$wpdb->update( self::t(), array( 'last_beat' => self::fmt( $now ) ), array( 'id' => $open->id ) );
+				self::track( $open->id, $now, $idle, $busy, $device, $app_ua );
 				return array( 'enabled' => true, 'present' => true, 'since' => $open->check_in );
 			}
 			$start = max( $input, $now - self::GAP ); // when this stretch of work began (not before the device came back)
@@ -159,6 +171,7 @@ class MP_Presence {
 			$last = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t() . " WHERE user_id = %d AND source = 'auto' AND check_out IS NOT NULL AND work_date = %s ORDER BY check_out DESC LIMIT 1", $uid, gmdate( 'Y-m-d', $now ) ) );
 			if ( $last && $start - strtotime( $last->check_out ) <= self::MERGE && $start >= strtotime( $last->check_out ) ) {
 				$wpdb->update( self::t(), array( 'check_out' => null, 'last_beat' => self::fmt( $now ) ), array( 'id' => $last->id ) );
+				self::track( $last->id, $now, $idle, $busy, $device, $app_ua );
 				return array( 'enabled' => true, 'present' => true, 'since' => $last->check_in );
 			}
 			if ( gmdate( 'Y-m-d', $start ) !== gmdate( 'Y-m-d', $now ) ) {
@@ -175,6 +188,7 @@ class MP_Presence {
 					'last_beat' => self::fmt( $now ),
 				)
 			);
+			self::track( $wpdb->insert_id, $now, $idle, $busy, $device, $app_ua );
 			MP_Live::bump();
 			return array( 'enabled' => true, 'present' => true, 'since' => self::fmt( $start ) );
 		}
@@ -184,6 +198,69 @@ class MP_Presence {
 			self::close( self::split_midnight( $open, $now ), max( strtotime( $open->check_in ), min( $now, $last_input ) ) );
 		}
 		return array( 'enabled' => true, 'present' => false, 'since' => '', 'paused' => $paused );
+	}
+
+	/**
+	 * Signs that a session may not be real work, for a supervisor to look at (attendance.flags; «ok» once reviewed):
+	 * idle0   — over 2 hours the report always says «input this very second» (a script, not a person);
+	 * nobreak — more than 5 hours without even a 2-minute pause;
+	 * night   — more than half an hour between midnight and 6 in the morning;
+	 * device  — reports not from the Windows app's own device id;
+	 * browser — reports not from the Windows app's browser (WebView2).
+	 * Counters live in attendance.stats: b beats, z beats with idle ≤ 1 s, k last pause, n night beats.
+	 */
+	const FLAGS = array( 'idle0', 'nobreak', 'night', 'device', 'browser' );
+	private static function track( $id, $now, $idle, $busy, $device, $app_ua ) {
+		global $wpdb;
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT check_in, stats, flags FROM ' . self::t() . ' WHERE id = %d', $id ) );
+		if ( ! $row ) {
+			return;
+		}
+		$st = json_decode( (string) $row->stats, true );
+		$st = is_array( $st ) ? $st : array( 'b' => 0, 'z' => 0, 'k' => strtotime( $row->check_in ), 'n' => 0 );
+		$st['b']++;
+		if ( $idle <= 1 && ! $busy ) {
+			$st['z']++;
+		}
+		if ( $idle >= 120 ) {
+			$st['k'] = $now;
+		}
+		if ( (int) gmdate( 'G', $now ) < 6 ) {
+			$st['n']++;
+		}
+		$flags = 'ok' === $row->flags ? array() : array_filter( explode( ',', (string) $row->flags ) );
+		if ( 'ok' !== $row->flags ) {
+			if ( $st['b'] >= 120 && $st['z'] / $st['b'] >= 0.95 ) {
+				$flags[] = 'idle0';
+			}
+			if ( $now - (int) $st['k'] > 5 * HOUR_IN_SECONDS ) {
+				$flags[] = 'nobreak';
+			}
+			if ( $st['n'] >= 30 ) {
+				$flags[] = 'night';
+			}
+			if ( ! preg_match( '/^w[0-9a-f]{20,}$/', (string) $device ) ) {
+				$flags[] = 'device';
+			}
+			if ( ! $app_ua ) {
+				$flags[] = 'browser';
+			}
+		}
+		$flags = 'ok' === $row->flags ? 'ok' : implode( ',', array_values( array_unique( array_intersect( $flags, self::FLAGS ) ) ) );
+		$wpdb->update( self::t(), array( 'stats' => wp_json_encode( $st ), 'flags' => $flags ), array( 'id' => $id ) );
+	}
+
+	/** POST attendance/{id}/review — a supervisor looked at a flagged automatic session and accepts it. */
+	public static function review( WP_REST_Request $r ) {
+		global $wpdb;
+		$s = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t() . ' WHERE id = %d', (int) $r['id'] ) );
+		if ( ! $s ) {
+			return new WP_Error( 'mp_not_found', 'پیدا نشد.', array( 'status' => 404 ) );
+		}
+		$wpdb->update( self::t(), array( 'flags' => 'ok' ), array( 'id' => $s->id ) );
+		$u = get_userdata( $s->user_id );
+		MP_Audit::log( 'update', 'attendance', (int) $s->id, 'تأیید حضور خودکار ' . ( $u ? $u->display_name : '' ) . ' (' . MP_Jalali::digits( substr( $s->check_in, 0, 16 ) ) . ')' );
+		return array( 'ok' => true );
 	}
 
 	/** Ends an automatic session at $end (never before its start, never after its last report or its day). */

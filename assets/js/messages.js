@@ -31,7 +31,10 @@
     if (c.type === 'direct') return MP.avatar(MP.user(c.other), size);
     if (c.type === 'saved') return el('span', { class: 'ci-ico saved', html: icon('bookmark') });
     if (c.logo) return el('span', { class: 'ci-ico ci-logo' }, el('img', { src: c.logo, alt: '' }));
-    return el('span', { class: 'ci-ico' + (c.type === 'client' ? ' client' : c.type === 'group' ? ' group' : ''), html: icon(c.type === 'client' ? 'user' : c.type === 'group' ? 'chat' : 'folder') });
+    // Like Telegram: the name's first letters on a colour of their own, a small sign for the kind of chat.
+    var name = String(c.title || '').replace(/^(گروه|پروژه|کانال)\s+/, '') || c.title;
+    return el('span', { class: 'ci-av' + (size ? ' ' + size : '') }, MP.initials({ name: name }, size),
+      el('i', { class: 'ci-kind ' + c.type, title: c.type === 'client' ? 'مشتری' : c.type === 'group' ? 'گروه تیم' : 'پروژه', html: icon(c.type === 'client' ? 'user' : c.type === 'group' ? 'users' : 'folder') }));
   }
 
   /* ------------------------------------------------------------ Small helpers */
@@ -432,7 +435,8 @@
     $('#composer').hidden = true;
     var pin = $('#chat-pinbar'); if (pin) pin.hidden = true;
     layout.classList.add('no-chat');
-    box.replaceChildren(el('div', { class: 'chat-none' }, el('span', { text: 'برای شروع، یک گفت‌وگو را انتخاب کنید' })));
+    var keys = FINE ? el('div', { class: 'cn-keys' }, el('span', null, el('kbd', { text: 'Ctrl K', dir: 'ltr' }), 'رفتن سریع'), el('span', null, el('kbd', { text: 'Ctrl 0', dir: 'ltr' }), 'ذخیره‌شده‌ها'), el('span', null, el('kbd', { text: 'Ctrl /', dir: 'ltr' }), 'همه میانبرها')) : null;
+    box.replaceChildren(el('div', { class: 'chat-none' }, el('div', { class: 'cn-box' }, el('img', { src: (window.MP_CONFIG || {}).assets + 'img/chat-192.png', alt: '' }), el('span', { text: 'برای شروع، یک گفت‌وگو را انتخاب کنید' }), keys)));
   }
   function drawHead() {
     var c = chan(); if (!c) return;

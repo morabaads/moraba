@@ -386,6 +386,17 @@
     }
   });
 
+  /* ------------------------------------------------------------ The title bar says when the network is gone */
+
+  function netState() {
+    var off = !navigator.onLine;
+    post({ t: 'status', text: off ? 'در انتظار شبکه…' : '' });
+    document.documentElement.classList.toggle('mp-offline', off);
+  }
+  window.addEventListener('online', netState);
+  window.addEventListener('offline', netState);
+  if (!navigator.onLine) netState();
+
   /* ------------------------------------------------------------ Local passcode (Telegram's «رمز محلی») */
 
   var LKEY = 'mp_lock_' + (C.user || 'u');

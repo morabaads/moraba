@@ -410,6 +410,9 @@ class MP_Rest_Work {
 			'seconds'   => max( 0, $end - $start ),
 			'note'      => $s->note,
 			'auto'      => isset( $s->source ) && 'auto' === $s->source,
+			// automatic sessions that look odd (MP_Presence::track), until a supervisor reviews them
+			'flags'     => isset( $s->flags ) && '' !== $s->flags && 'ok' !== $s->flags ? explode( ',', $s->flags ) : array(),
+			'reviewed'  => isset( $s->flags ) && 'ok' === $s->flags,
 		);
 	}
 

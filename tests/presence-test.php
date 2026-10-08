@@ -16,6 +16,7 @@ function fresh_user() {
 	global $uid, $wpdb, $T;
 	$login = 'presence_' . wp_generate_password( 6, false, false );
 	$uid   = wp_insert_user( array( 'user_login' => $login, 'user_pass' => wp_generate_password(), 'role' => 'moraba_employee' ) );
+	$GLOBALS['made'][] = $uid;
 	update_option( 'mp_presence_on', 1 );
 	update_option( 'mp_presence_idle', 5 );
 	return $uid;
@@ -145,5 +146,53 @@ MP_Presence::beat( $uid, 'pc1', 0, false, false, 'wake', at( '11:30' ) );
 play( at( '11:31' ), at( '11:40' ) );
 check( 'two sessions', '03-10 09:00→03-10 10:00 | 03-10 11:30→open' );
 
+function flags() { global $wpdb, $T, $uid; return implode( '|', $wpdb->get_col( $wpdb->prepare( "SELECT flags FROM $T WHERE user_id = %d ORDER BY check_in", $uid ) ) ); }
+function want_flags( $name, $want ) {
+	global $fail, $pass;
+	$got = flags();
+	if ( $got === $want ) { $pass++; echo "  ok   $name\n"; } else { $fail++; echo "  FAIL $name\n       want: $want\n       got:  $got\n"; }
+}
+$app = 'w0123456789abcdef0123456789';
+
+echo "16. a real person in the app (pauses now and then): nothing to review\n";
+fresh_user();
+play( at( '09:00' ), at( '12:30' ), function ( $t ) { return ( $t / 60 ) % 7 ? ( $t / 60 ) % 23 : 150; }, $app );
+want_flags( 'no flags', '' );
+
+echo "17. a script: input «this very second» on every report for 3 hours\n";
+fresh_user();
+play( at( '09:00' ), at( '12:00' ), null, $app );
+want_flags( 'idle0', 'idle0' );
+
+echo "18. reports from somewhere else than the Windows app\n";
+fresh_user();
+play( at( '09:00' ), at( '09:10' ), function () { return 7; }, 'web' );
+want_flags( 'device', 'device' );
+fresh_user();
+for ( $t = at( '09:00' ); $t <= at( '09:10' ); $t += 60 ) { MP_Presence::beat( $uid, $app, 7, false, false, 'tick', $t, false ); }
+want_flags( 'browser', 'browser' );
+
+echo "19. six hours without a 2-minute pause, and night work\n";
+fresh_user();
+play( at( '08:00' ), at( '14:10' ), function ( $t ) { return 20; }, $app );
+want_flags( 'nobreak', 'nobreak' );
+fresh_user();
+play( at( '01:00' ), at( '01:40' ), function ( $t ) { return 30; }, $app );
+want_flags( 'night', 'night' );
+
+echo "20. reviewed by a supervisor: stays accepted\n";
+fresh_user();
+play( at( '09:00' ), at( '09:10' ), function () { return 7; }, 'web' );
+$sid = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $T WHERE user_id = %d", $uid ) );
+$rv = new WP_REST_Request( 'POST' ); $rv->set_param( 'id', $sid ); MP_Presence::review( $rv );
+play( at( '09:11' ), at( '09:20' ), function () { return 7; }, 'web' );
+want_flags( 'ok kept', 'ok' );
+
+// the throwaway people and their sessions go again
+require_once ABSPATH . 'wp-admin/includes/user.php';
+foreach ( $GLOBALS['made'] as $m ) {
+	$wpdb->delete( $T, array( 'user_id' => $m ) );
+	wp_delete_user( $m );
+}
 echo "\n$pass passed, $fail failed\n";
 exit( $fail ? 1 : 0 );
