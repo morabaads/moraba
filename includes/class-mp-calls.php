@@ -91,6 +91,8 @@ class MP_Calls {
 		update_user_meta( $other, 'mp_ring', array( 'id' => $id, 'from' => $uid, 'name' => $me->display_name, 'video' => $video ? 1 : 0, 'url' => $url, 'at' => time(), 'channel' => $channel ) );
 		delete_user_meta( $uid, 'mp_call_state' );
 		MP_Client::system( $channel, 0, ( $video ? '📹 تماس تصویری' : '📞 تماس صوتی' ) . ' از ' . $me->display_name, array( 't' => 'call', 'id' => $id ) );
+		// Phones whose chat app is closed hear about it by push (the page rings when it opens within 45 s).
+		MP_Notify::send( $other, 'call', ( $video ? '📹 تماس تصویری از ' : '📞 تماس از ' ) . $me->display_name, 'برای پاسخ دادن بزنید', 'messages', $channel );
 		MP_Live::bump();
 		return array( 'id' => $id, 'url' => $url, 'channel' => $channel, 'ring' => self::RING );
 	}

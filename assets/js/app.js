@@ -63,7 +63,7 @@
   }
 
   quick().then(function (fast) {
-    if (!fast) { load().then(begin).catch(failed); return; }
+    if (!fast) { load().then(function () { begin(); MP.emit('booted'); }).catch(failed); return; }
     begin();
     load().then(function () {
       MP.emit('channels');

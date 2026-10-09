@@ -33,6 +33,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -51,7 +52,9 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The app: the studio's panel (colleagues) or project portal (clients) in a full-screen web view, with the
@@ -83,6 +86,7 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         root.setBackgroundColor(getColor(R.color.bg));
         setContentView(root);
+        takeShare(getIntent());
         if (!handleLink(getIntent()) && App.site(this).isEmpty()) { setup(null); return; }
         showWeb(startUrl(getIntent()));
         if (b != null && web != null) web.restoreState(b);
@@ -92,9 +96,10 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
         setIntent(i);
+        boolean shared = takeShare(i);
+        if (shared && web != null && ours(Uri.parse(currentUrl()))) { js("window.__mpShared&&window.__mpShared()"); return; }
         if (handleLink(i)) { showWeb(App.entry(this)); return; }
-        String url = i.getStringExtra("url");
-        if (url != null && !url.isEmpty() && web != null) web.loadUrl(url);
+        if (web != null && (i.getStringExtra("url") != null || shared || page(i) != null)) web.loadUrl(startUrl(i));
     }
 
     @Override protected void onResume() {
@@ -129,7 +134,145 @@ public class MainActivity extends Activity {
 
     private String startUrl(Intent i) {
         String url = i == null ? null : i.getStringExtra("url");
-        return url != null && !url.isEmpty() ? url : App.entry(this);
+        if (url != null && !url.isEmpty()) return url;
+        if (i != null && (Intent.ACTION_SEND.equals(i.getAction()) || Intent.ACTION_SEND_MULTIPLE.equals(i.getAction())) && share != null) return App.entry(this) + "#share";
+        String to = page(i);
+        return to != null ? App.entry(this) + "#" + to : App.entry(this);
+    }
+
+    /** Home-screen shortcuts: morabachat://open?to=saved | new-dm | contacts. */
+    private static String page(Intent i) {
+        Uri u = i == null ? null : i.getData();
+        String to = u == null || !"open".equals(u.getHost()) ? null : u.getQueryParameter("to");
+        return to != null && to.matches("saved|new-dm|contacts") ? to : null;
+    }
+
+    /* ------------------------------------------------------------ Shared from other apps (Android's share sheet) */
+
+    /** What was shared: the page asks MorabaApp.shared() and fetches each file from /__mp_share/N (served below). */
+    static final class Shared {
+        final List<Uri> uris = new ArrayList<>();
+        final List<String> names = new ArrayList<>(), types = new ArrayList<>();
+        String text = "";
+    }
+    static volatile Shared share;
+
+    private boolean takeShare(Intent i) {
+        if (i == null || !(Intent.ACTION_SEND.equals(i.getAction()) || Intent.ACTION_SEND_MULTIPLE.equals(i.getAction()))) return false;
+        Shared s = new Shared();
+        List<Uri> list = new ArrayList<>();
+        if (Intent.ACTION_SEND_MULTIPLE.equals(i.getAction())) {
+            ArrayList<Uri> l = i.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (l != null) list.addAll(l);
+        } else {
+            Uri u = i.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (u != null) list.add(u);
+        }
+        for (Uri u : list) {
+            if (u == null || "file".equals(u.getScheme())) continue; // only content shared by an app, never our own files
+            String name = "file", type = getContentResolver().getType(u);
+            try (android.database.Cursor c = getContentResolver().query(u, new String[] { android.provider.OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+                if (c != null && c.moveToFirst() && c.getString(0) != null) name = c.getString(0);
+            } catch (Exception ignored) { /* no name */ }
+            s.uris.add(u); s.names.add(name); s.types.add(type == null ? (i.getType() == null ? "application/octet-stream" : i.getType()) : type);
+        }
+        CharSequence t = i.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        String subject = i.getStringExtra(Intent.EXTRA_SUBJECT);
+        s.text = (subject != null && t != null && !t.toString().contains(subject) ? subject + "\n" : "") + (t == null ? "" : t.toString());
+        if (s.uris.isEmpty() && s.text.isEmpty()) return false;
+        share = s;
+        return true;
+    }
+
+    String sharedJson() {
+        Shared s = share;
+        if (s == null) return "null";
+        try {
+            org.json.JSONArray files = new org.json.JSONArray();
+            for (int k = 0; k < s.uris.size(); k++) files.put(new JSONObject().put("name", s.names.get(k)).put("type", s.types.get(k)));
+            return new JSONObject().put("text", s.text).put("files", files).toString();
+        } catch (Exception e) { return "null"; }
+    }
+
+    void clearShared() { share = null; }
+
+    private WebResourceResponse sharedFile(Uri u) {
+        Shared s = share;
+        String p = u.getPath();
+        if (s == null || p == null || !ours(u)) return null;
+        try {
+            int k = Integer.parseInt(p.substring(p.lastIndexOf('/') + 1));
+            InputStream in = getContentResolver().openInputStream(s.uris.get(k));
+            Map<String, String> h = new HashMap<>();
+            h.put("Cache-Control", "no-store");
+            return new WebResourceResponse(s.types.get(k), null, 200, "OK", h, in);
+        } catch (Exception e) {
+            return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", new HashMap<String, String>(), null);
+        }
+    }
+
+    void js(final String code) {
+        runOnUiThread(new Runnable() { @Override public void run() { if (web != null) web.evaluateJavascript(code, null); } });
+    }
+
+    /* ------------------------------------------------------------ The page's theme on the system bars, privacy */
+
+    void theme(String color, boolean dark) {
+        int c;
+        try { c = android.graphics.Color.parseColor(color.trim()); } catch (Exception e) { return; }
+        android.view.Window w = getWindow();
+        w.setStatusBarColor(c);
+        w.setNavigationBarColor(c);
+        View d = w.getDecorView();
+        int f = d.getSystemUiVisibility();
+        f = dark ? f & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR : f | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (Build.VERSION.SDK_INT >= 26) f = dark ? f & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : f | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        d.setSystemUiVisibility(f);
+        if (web != null) web.setBackgroundColor(c);
+        root.setBackgroundColor(c);
+    }
+
+    /** With a passcode the chat stays out of the recent-apps list and screenshots (Telegram does the same). */
+    void secure(boolean on) {
+        if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+    }
+
+    boolean canBiometric() {
+        if (Build.VERSION.SDK_INT >= 29) {
+            android.hardware.biometrics.BiometricManager bm = getSystemService(android.hardware.biometrics.BiometricManager.class);
+            return bm != null && bm.canAuthenticate() == android.hardware.biometrics.BiometricManager.BIOMETRIC_SUCCESS;
+        }
+        if (Build.VERSION.SDK_INT >= 28) {
+            @SuppressWarnings("deprecation")
+            android.hardware.fingerprint.FingerprintManager fm = getSystemService(android.hardware.fingerprint.FingerprintManager.class);
+            try { return fm != null && fm.isHardwareDetected() && fm.hasEnrolledFingerprints(); } catch (SecurityException e) { return false; }
+        }
+        return false;
+    }
+
+    /** Fingerprint / face → window.__mpBio(true|false) in the page. */
+    void biometric(String title) {
+        if (Build.VERSION.SDK_INT < 28 || !canBiometric()) { js("window.__mpBio&&window.__mpBio(false)"); return; }
+        final android.os.CancellationSignal cancel = new android.os.CancellationSignal();
+        android.hardware.biometrics.BiometricPrompt p = new android.hardware.biometrics.BiometricPrompt.Builder(this)
+            .setTitle(title == null || title.isEmpty() ? App.name() : title)
+            .setSubtitle("با اثر انگشت باز کنید")
+            .setNegativeButton("رمز محلی", getMainExecutor(), new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) { js("window.__mpBio&&window.__mpBio(false)"); }
+            })
+            .build();
+        p.authenticate(cancel, getMainExecutor(), new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+            @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult r) { js("window.__mpBio&&window.__mpBio(true)"); }
+            @Override public void onAuthenticationError(int code, CharSequence msg) { js("window.__mpBio&&window.__mpBio(false)"); }
+        });
+    }
+
+    void notifySettings() {
+        Intent i = Build.VERSION.SDK_INT >= 26
+            ? new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, getPackageName())
+            : new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+        try { startActivity(i); } catch (ActivityNotFoundException ignored) { /* no settings screen */ }
     }
 
     /* ------------------------------------------------------------ First run: which site */
@@ -293,6 +436,13 @@ public class MainActivity extends Activity {
     private class Client extends WebViewClient {
         @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
             return route(r.getUrl());
+        }
+
+        @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+            Uri u = r.getUrl();
+            String p = u.getPath();
+            if (p != null && p.startsWith("/__mp_share/")) return sharedFile(u);
+            return null;
         }
 
         @Override public void onPageStarted(WebView v, String url, Bitmap icon) {

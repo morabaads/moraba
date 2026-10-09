@@ -52,6 +52,9 @@
   /** «در تماس» / «دور از سیستم» from the person's computer (automatic attendance), before the usual last seen. */
   function statusOf(uid) { var st = (S.st || {})[uid]; return st === 'busy' ? 'در تماس یا جلسه' : st === 'away' ? 'دور از سیستم' : ''; }
   MP.statusOf = statusOf;
+  /** «در تماس…» / «آنلاین» / «آخرین بازدید …» of a colleague (contacts list). */
+  MP.lastSeenOf = function (uid) { return statusOf(uid) || lastSeen(seenOf(uid)); };
+  MP.isOnline = function (uid) { return !!isOnline(uid); };
   function lastSeen(ts) {
     if (!ts) return 'آخرین بازدید خیلی وقت پیش';
     var ago = Date.now() / 1000 - ts;
@@ -855,9 +858,10 @@
     var hello = false;
     // A host that holds streamed output back never says hello in time: the held request takes over.
     live.helloT = setTimeout(function () { if (!hello) { liveStop(); live.mode = 'poll'; liveStart(); } }, 6000);
-    es.addEventListener('hello', function (e) { hello = true; clearTimeout(live.helloT); live.fails = 0; onLive(JSON.parse(e.data)); });
+    es.addEventListener('hello', function (e) { hello = true; clearTimeout(live.helloT); live.fails = 0; conn('ok'); onLive(JSON.parse(e.data)); });
     es.addEventListener('state', function (e) { onLive(JSON.parse(e.data)); });
     es.onerror = function () {
+      conn('connecting');
       if (es.readyState === 2) { // closed for good (an error page, a lost session): try again a bit later
         liveStop(); live.fails++;
         if (live.fails > 3) live.mode = 'poll';
@@ -871,10 +875,13 @@
       if (live.polling !== my || document.hidden) { if (live.polling === my) live.polling = 0; return; }
       MP.api('live', { query: { mode: 'poll', v: live.v, open: current || '' }, noCache: true }).then(function (d) {
         if (live.polling !== my) return;
-        onLive(d); go();
-      }).catch(function () { if (live.polling === my) setTimeout(go, 4000); });
+        conn('ok'); onLive(d); go();
+      }).catch(function () { if (live.polling === my) { conn('connecting'); setTimeout(go, 4000); } });
     })();
   }
+  /** Telegram's «در حال اتصال…» in the title: 'ok' | 'connecting' (MP.connState, event 'conn'). */
+  MP.connState = 'ok';
+  function conn(st) { if (MP.connState !== st) { MP.connState = st; MP.emit('conn', st); } }
   function liveStop() { clearTimeout(live.helloT); if (live.es) { live.es.close(); live.es = null; } live.polling = 0; }
   function liveRestart() { if (live.open === current && (live.es || live.polling)) return; liveStop(); liveStart(); }
   MP.liveStart = liveStart;
@@ -3571,6 +3578,10 @@
     if ((m = /^msg-(\d+)$/.exec(h))) { MP.openMessage(+m[1]); return true; }
     if ((m = /^join-([A-Za-z0-9]{10,})$/.exec(h))) { joinGroup(m[1]); return true; }
     if (h === 'saved') { MP.showView('messages'); openSaved(); return true; }
+    // home-screen shortcuts and «اشتراک‌گذاری» from other apps (chat-mobile.js)
+    if (h === 'new-dm') { MP.showView('messages'); setTimeout(newDirect, 300); return true; }
+    if (h === 'contacts' && MP.contacts) { MP.showView('messages'); setTimeout(MP.contacts, 300); return true; }
+    if (h === 'share' && MP.takeShared) { MP.showView('messages'); setTimeout(MP.takeShared, 600); return true; }
     return false;
   };
   MP.openMessage = function (id) {

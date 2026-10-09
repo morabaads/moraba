@@ -3899,14 +3899,17 @@ html.glass body.chat-app,html.glass body.chat-login{
   --glass-blur:blur(26px) saturate(170%);
   --line:rgba(255,255,255,.07);
   --bub-other:color-mix(in srgb,var(--surface) 62%,transparent);
-  background:
+  --glass-bg:
     radial-gradient(48vw 58vh at 88% 6%,color-mix(in srgb,var(--brand) 62%,transparent),transparent 62%),
     radial-gradient(44vw 52vh at 8% 92%,rgba(124,77,255,.5),transparent 62%),
     radial-gradient(40vw 46vh at 30% 18%,rgba(0,170,210,.38),transparent 62%),
     radial-gradient(36vw 40vh at 70% 80%,rgba(255,64,129,.28),transparent 62%),
     var(--bg);
+  background:var(--glass-bg);
   background-attachment:fixed
 }
+/* a phone's full-screen chat covers the list under it: it takes the same backdrop */
+@media (max-width:860px){html.glass body.chat-app .chat-layout.open .chat-pane{background:var(--glass-bg);background-attachment:fixed}}
 html.glass:not(.dark) body.chat-app,html.glass:not(.dark) body.chat-login{
   --glass:rgba(255,255,255,.52);--glass-2:rgba(255,255,255,.3);--glass-3:rgba(255,255,255,.72);
   --glass-line:rgba(255,255,255,.65);--line:rgba(20,20,40,.08);--bub-other:rgba(255,255,255,.66)
@@ -3975,3 +3978,102 @@ html.mica body.chat-app .chat-messages{background-image:none}
 .msg-row.flash .bubble{box-shadow:0 0 0 2px var(--brand)}
 .chat-at{bottom:calc(var(--down-b, 84px) + 56px)!important;font-weight:800;font-size:18px;color:var(--brand)}
 .diag-list{display:grid;gap:8px}.diag-row{display:grid;gap:2px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}.diag-row b{font:600 13px/1.5 ui-monospace,Consolas,monospace;word-break:break-word}.diag-row small{color:var(--muted);font-size:12px}
+
+/* ===================================================================== «مربع چت» on phones (chat-mobile.js, body.tgm) */
+body:not(.tgm) .tgm-fab,body:not(.tgm) .tgm-tabs,body:not(.tgm) .tgm-head{display:none!important}
+body.tgm .topbar,body.tgm #view-messages .page-head,body.tgm .chat-saved-btn{display:none!important}
+body.tgm{padding-bottom:0}
+body.tgm .app{padding:0!important}
+body.tgm .main{gap:0;padding:0}
+body.tgm .chat-layout{display:block;height:auto;min-height:0}
+body.tgm .chat-layout .chat-list{margin:0}
+body.tgm .chat-list{overflow:visible;padding:0 0 90px;border-radius:0;border:0;box-shadow:none;background:transparent}
+html.tgm-ios body.tgm .chat-list{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+.tgm-head{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:2px;min-height:56px;padding:calc(4px + env(safe-area-inset-top)) 4px 4px;background:var(--surface);box-shadow:0 1px 0 var(--line)}
+.tgm-title{flex:1;display:flex;align-items:center;gap:8px;min-width:0;padding-inline:8px}
+.tgm-title strong{font-size:19px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tgm-title.busy strong{font-size:16px;font-weight:700;color:var(--ink-2)}
+html.tgm-ios .tgm-title{justify-content:center}
+html.tgm-ios .tgm-title strong{font-size:17px}
+.tgm-spin{flex:none;width:14px;height:14px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:tgm-rot .8s linear infinite}
+@keyframes tgm-rot{to{transform:rotate(360deg)}}
+.tgm-hbtn{width:44px;height:44px;flex:none}
+.tgm-hbtn .icon{width:22px;height:22px}
+.tgm-hgap{width:44px;flex:none}
+html.tgm-ios .tgm-hbtn{color:var(--brand)}
+html.tgm-and body.tgm:not(.tgm-find) .chat-list-top:not(.chat-arch-top){display:none}
+body.tgm .chat-list-top{padding:8px 12px 6px;margin:0}
+body.tgm.tgm-find .chat-tabs{display:none}
+body.tgm .chat-tabs{position:sticky;top:calc(56px + env(safe-area-inset-top));z-index:39;gap:0;padding:0 6px;margin:0 0 4px;background:var(--surface);border-bottom:1px solid var(--line)}
+body.tgm .chat-tabs button{position:relative;border:0;border-radius:0;padding:13px 14px 11px;background:none;color:var(--muted);font-size:14px}
+body.tgm .chat-tabs button[aria-selected=true]{background:none;color:var(--brand)}
+body.tgm .chat-tabs button[aria-selected=true]::after{content:'';position:absolute;inset-inline:8px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--brand)}
+body.tgm .chat-tabs button[aria-selected=true] i{background:var(--brand)}
+body.tgm .chat-tabs button i{background:var(--muted)}
+body.tgm .cs-wrap,body.tgm .chat-list .chat-item{border-radius:0}
+body.tgm .chat-list .chat-item{padding:9px 14px}
+body.tgm .chat-item .ci-av .initials,body.tgm .chat-item .avatar.md{width:54px;height:54px;font-size:19px}
+/* Android: the round ✎ button */
+.tgm-fab{position:fixed;z-index:44;bottom:calc(20px + env(safe-area-inset-bottom));inset-inline-end:18px;width:58px;height:58px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.28);transition:transform .22s var(--ease)}
+.tgm-fab .icon{width:24px;height:24px}
+.tgm-fab:active{transform:scale(.92)}
+.tgm-fab.away{transform:translateY(120px)}
+body.chat-full .tgm-fab,body.keyboard .tgm-fab,body.tgm-find .tgm-fab,html.dialog-open .tgm-fab{display:none}
+/* iPhone: the tab bar */
+.tgm-tabs{position:fixed;z-index:44;inset-inline:0;bottom:0;display:flex;padding:6px 0 calc(4px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 84%,transparent);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:.5px solid var(--line-strong)}
+.tgm-tab{flex:1;display:grid;justify-items:center;gap:1px;padding:2px 0;background:none;border:0;color:var(--muted);font:inherit;font-size:10.5px;font-weight:600}
+.tgm-tab.on{color:var(--brand)}
+.tgm-tico{position:relative;display:grid}
+.tgm-tico .icon{width:27px;height:27px}
+.tgm-tbadge{position:absolute;top:-5px;inset-inline-end:-14px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font:700 11px/19px Dana,Tahoma,sans-serif;font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+body.chat-full .tgm-tabs,body.keyboard .tgm-tabs{display:none}
+/* full-screen pages (contacts) */
+.tgm-page{position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;background:var(--bg);animation:slide-fwd .26s var(--ease)}
+.tgm-page.out{transition:opacity .2s,transform .2s;opacity:0;transform:translateX(-28px)}
+.tgm-phead{display:flex;align-items:center;gap:4px;min-height:56px;padding:calc(4px + env(safe-area-inset-top)) 4px 4px;background:var(--surface);box-shadow:0 1px 0 var(--line)}
+.tgm-phead strong{flex:1;font-size:18px;padding-inline:6px}
+html.tgm-ios .tgm-phead strong{text-align:center;font-size:17px}
+.tgm-pbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px 0 calc(20px + env(safe-area-inset-bottom))}
+.tgm-psearch{display:block;width:calc(100% - 24px);margin:4px 12px 10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--ink);font:inherit;font-size:16px}
+.tgm-crow{display:flex;align-items:center;padding-inline-end:8px}
+.tgm-cmain{flex:1;display:flex;align-items:center;gap:12px;min-width:0;padding:8px 14px;background:none;border:0;color:inherit;font:inherit;text-align:start}
+.tgm-cmain:active{background:var(--surface-2)}
+.tgm-cav{position:relative;display:grid;flex:none}
+.tgm-cav .avatar{width:48px;height:48px}
+.tgm-cav.on::after{content:'';position:absolute;bottom:1px;inset-inline-start:1px;width:12px;height:12px;border-radius:50%;background:var(--success,#2fa36b);box-shadow:0 0 0 2px var(--bg)}
+.tgm-ccopy{display:grid;gap:2px;min-width:0}
+.tgm-ccopy strong{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tgm-ccopy small{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tgm-ccopy small.hot{color:var(--brand)}
+.tgm-ccall{color:var(--brand)}
+/* settings, drawer and tour on a phone */
+body.tgm .tg-modal{inset:0;margin:0;width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+body.tgm .tg-modal[open]{animation:slide-fwd .24s var(--ease)}
+body.tgm .tg-drawer{padding-bottom:env(safe-area-inset-bottom)}
+body.tgm .tg-dhead{padding-top:calc(18px + env(safe-area-inset-top))}
+.tgm-tip{position:fixed;left:12px!important;right:12px!important;top:auto!important;bottom:calc(96px + env(safe-area-inset-bottom));width:auto!important;max-width:none!important;z-index:95}
+.tg-lock-bio{margin-top:6px}
+.tg-lock-bio .icon{width:18px;height:18px;margin-inline-end:6px}
+/* glass on a phone */
+html.glass body.tgm .tgm-head,html.glass body.tgm .chat-tabs,html.glass body.tgm .tgm-phead{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+html.glass body.tgm .tgm-page{background:var(--glass-bg);background-attachment:fixed}
+html.glass body.tgm .chat-list .chat-item:not(.active){background:transparent}
+html.glass body.tgm .cs-wrap>.chat-item:not(.active){background:transparent}
+html.glass body.tgm .cs-wrap{background:transparent}
+/* see-through rows: the swipe actions behind a row show only while it is pulled aside */
+html.glass body.tgm .cs-wrap:not(:has(>.chat-item[style*="translate"]))>.cs-acts{visibility:hidden}
+html.glass body.tgm .cs-wrap:has(>.chat-item[style*="translate"])>.chat-item{background:var(--surface)}
+/* first-run tour, settings search, attendance review banner */
+.tour-on{position:relative;z-index:96;box-shadow:0 0 0 3px var(--brand),0 0 0 9999px rgba(0,0,0,.45)!important;border-radius:12px}
+.tour-tip{position:fixed;z-index:97;width:300px;max-width:calc(100vw - 16px);display:grid;gap:6px;padding:16px 16px 12px;border-radius:16px;background:var(--surface);color:var(--ink);box-shadow:var(--sh-3);animation:dialog-in var(--t) var(--ease)}
+.tour-tip strong{font-size:15.5px}
+.tour-tip p{margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.8}
+.tour-acts{display:flex;align-items:center;gap:10px;margin-top:4px}
+.tour-acts small{flex:1;color:var(--muted)}
+.tg-ssearch{display:block;width:calc(100% - 32px);margin:12px 16px 4px;padding:9px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);font:inherit}
+.tg-found{padding:4px 0}
+.att-review{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 14px;margin-bottom:12px;border-radius:14px;background:color-mix(in srgb,var(--warn,#d79b1b) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--warn,#d79b1b) 40%,transparent)}
+.att-review strong{margin-inline-end:6px}
+.att-review .chip{cursor:pointer}
+body.tgm:has(.tgm-page) .ios-install,body.tgm:has(.tg-modal[open]) .ios-install,body.tgm:has(.tg-drawer) .ios-install{display:none}
+html.tgm-and body.tgm .ios-install{bottom:calc(92px + env(safe-area-inset-bottom,0px))}

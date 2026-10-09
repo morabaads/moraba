@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the «مربع چت» icon: new message, contacts, saved messages (MainActivity.page()). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="new" android:enabled="true" android:icon="@drawable/ic_plus"
+        android:shortcutShortLabel="@string/sc_new" android:shortcutLongLabel="@string/sc_new">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="ir.moraba.chat"
+            android:targetClass="ir.moraba.panel.MainActivity" android:data="morabachat://open?to=new-dm" />
+    </shortcut>
+    <shortcut android:shortcutId="contacts" android:enabled="true" android:icon="@drawable/ic_list"
+        android:shortcutShortLabel="@string/sc_contacts" android:shortcutLongLabel="@string/sc_contacts">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="ir.moraba.chat"
+            android:targetClass="ir.moraba.panel.MainActivity" android:data="morabachat://open?to=contacts" />
+    </shortcut>
+    <shortcut android:shortcutId="saved" android:enabled="true" android:icon="@drawable/ic_chat"
+        android:shortcutShortLabel="@string/sc_saved" android:shortcutLongLabel="@string/sc_saved">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="ir.moraba.chat"
+            android:targetClass="ir.moraba.panel.MainActivity" android:data="morabachat://open?to=saved" />
+    </shortcut>
+</shortcuts>

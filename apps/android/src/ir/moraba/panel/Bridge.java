@@ -89,6 +89,43 @@ final class Bridge {
         }
     }
 
+    /* ------------------------------------------------------------ «مربع چت» on the phone (chat-shell.js, chat-mobile.js) */
+
+    private void ui(Runnable r) { a.runOnUiThread(r); }
+
+    /** The page's theme colour on the status and navigation bars. */
+    @JavascriptInterface public void theme(final String color, final boolean dark) {
+        if (!ours()) return;
+        ui(new Runnable() { @Override public void run() { a.theme(color, dark); } });
+    }
+
+    /** A passcode is set: no previews in the recent-apps list, no screenshots. */
+    @JavascriptInterface public void secure(final boolean on) {
+        if (!ours()) return;
+        ui(new Runnable() { @Override public void run() { a.secure(on); } });
+    }
+
+    @JavascriptInterface public boolean canBiometric() { return a.canBiometric(); }
+
+    @JavascriptInterface public void biometric(final String title) {
+        if (!ours()) return;
+        ui(new Runnable() { @Override public void run() { a.biometric(title); } });
+    }
+
+    @JavascriptInterface public void notifySettings() {
+        if (!ours()) return;
+        ui(new Runnable() { @Override public void run() { a.notifySettings(); } });
+    }
+
+    /** What another app shared: {text, files:[{name,type}]}; the files are read from /__mp_share/N. */
+    @JavascriptInterface public String shared() { return ours() ? a.sharedJson() : "null"; }
+
+    @JavascriptInterface public void clearShared() { if (ours()) a.clearShared(); }
+
+    @JavascriptInterface public void haptic() {
+        ui(new Runnable() { @Override public void run() { a.getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); } });
+    }
+
     private void toast(final String s) {
         a.runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(a, s, Toast.LENGTH_SHORT).show(); } });
     }

@@ -121,9 +121,107 @@ async function presence(b) {
   await ctx.close();
 }
 
+/* «مربع چت» on phones: the Android app (window.MorabaApp stood in for) and the iPhone home-screen app. */
+const appStub = () => {
+  window.__app = { calls: [], shared: null };
+  const log = (n, a) => window.__app.calls.push([n].concat([].slice.call(a)));
+  window.MorabaApp = {
+    version: () => 'chat-1.1',
+    theme: function () { log('theme', arguments); }, secure: function () { log('secure', arguments); },
+    canBiometric: () => true, biometric: function () { log('biometric', arguments); setTimeout(() => window.__mpBio(true), 50); },
+    notifySettings: function () { log('notifySettings', arguments); }, haptic: () => {},
+    shared: () => JSON.stringify(window.__app.shared), clearShared: () => { window.__app.shared = null; }
+  };
+  try { localStorage.setItem('mp_tour_done', '1'); } catch (e) { /* private */ }
+};
+async function openPhone(b, user, ios) {
+  const { devices } = require('playwright');
+  const { defaultBrowserType, ...d } = devices[ios ? 'iPhone 13' : 'Pixel 7'];
+  const ctx = await b.newContext(d);
+  if (!ios) await ctx.addInitScript(appStub);
+  else await ctx.addInitScript(() => { try { localStorage.setItem('mp_tour_done', '1'); } catch (e) { /* private */ } });
+  const p = await ctx.newPage();
+  p.errors = [];
+  p.on('pageerror', e => { if (!/wp is not/.test(e.message)) p.errors.push(e.message); });
+  await p.goto(BASE + '/chat/');
+  await p.fill('#user_login', user); await p.fill('#user_pass', user); await p.press('#user_pass', 'Enter');
+  await p.waitForSelector('body:not(.is-loading)', { timeout: 15000 });
+  await wait(2000);
+  return { ctx, p };
+}
+
+async function android(b) {
+  console.log('phone: Android app');
+  const { ctx, p } = await openPhone(b, 'admin', false);
+  ok(await p.evaluate(() => document.body.classList.contains('tgm') && document.documentElement.classList.contains('tgm-and') && !!document.querySelector('#tgm-fab') && document.documentElement.scrollWidth <= innerWidth), 'phone shell: top bar, ✎ button, no sideways scroll');
+  ok(await p.evaluate(() => /مربع چت/.test(document.querySelector('.tgm-title').textContent)), 'title once loaded');
+  ok(await p.evaluate(() => window.__app.calls.some(c => c[0] === 'theme' && /^#|rgb/.test(c[1]))), 'theme colour → system bars');
+  await p.click('.tgm-burger'); await wait(400);
+  ok(await p.evaluate(() => !!document.querySelector('.tg-drawer.in') && /اندروید/.test(document.querySelector('.tg-dfoot').textContent)), 'drawer');
+  await p.goBack(); await wait(500);
+  ok(await p.evaluate(() => !document.querySelector('.tg-drawer')), 'back button closes the drawer');
+  await p.evaluate(() => MP.contacts()); await wait(400);
+  ok(await p.evaluate(() => document.querySelectorAll('.tgm-crow').length >= 1), 'contacts page');
+  await p.goBack(); await wait(400);
+  await p.evaluate(() => MP.tgSettings('privacy')); await wait(300);
+  await p.evaluate(() => [...document.querySelectorAll('.tg-srow')][0].click()); await wait(300);
+  const ins = await p.$$('.tg-pass input');
+  await ins[0].fill('1234'); await ins[1].fill('1234'); await p.click('.tg-pass button'); await wait(600);
+  ok(await p.evaluate(() => window.__app.calls.some(c => c[0] === 'secure' && c[1] === true)), 'passcode → no screenshots / recents preview');
+  await p.evaluate(() => [...document.querySelectorAll('.tg-srow input[role=switch]')].find(x => /اثر انگشت/.test(x.closest('.tg-srow').textContent)).click()); await wait(600);
+  ok(await p.evaluate(() => JSON.parse(localStorage.getItem('mp_lock_' + MP_CONFIG.user)).bio === 'app'), 'fingerprint unlock turned on');
+  await p.evaluate(() => { document.querySelector('.tg-modal').close(); MP.lockNow(); }); await wait(900);
+  ok(await p.evaluate(() => !MP.isLocked() && window.__app.calls.some(c => c[0] === 'biometric')), 'locked → fingerprint asked by itself → open');
+  await p.evaluate(() => { localStorage.removeItem('mp_lock_' + MP_CONFIG.user); localStorage.removeItem('mp_locked_at'); });
+  // a photo shared from the gallery
+  await p.route('**/__mp_share/0', r => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') }));
+  await p.evaluate(() => { window.__app.shared = { text: '', files: [{ name: 'shot.png', type: 'image/png' }] }; window.__mpShared(); }); await wait(800);
+  ok(await p.evaluate(() => /ارسال/.test((document.querySelector('.dialog') || {}).textContent || '')), 'shared photo → «ارسال به…» a chat');
+  await p.evaluate(() => MP.dialog.close());
+  ok(await p.evaluate(() => window.__app.shared === null), 'share taken once');
+  // «پاسخ» typed in an Android notification
+  const id = await chatId(p);
+  const cookie = (await ctx.cookies()).map(c => c.name + '=' + c.value).join('; ');
+  const r1 = await ctx.request.post(BASE + '/?mp_push_feed=1&chat=1&reply=' + id, { headers: { 'X-MP-Push': '1', Cookie: cookie }, form: { text: 'پاسخ از اعلان اندروید' } });
+  ok(r1.status() === 200 && await p.evaluate(i => MP.api('channels/' + i + '/messages', { noCache: true }).then(d => d.messages.some(m => m.body === 'پاسخ از اعلان اندروید')), id), 'reply from an Android notification is posted');
+  const r2 = await ctx.request.post(BASE + '/?mp_push_feed=1&chat=1&reply=' + id, { headers: { Cookie: cookie }, form: { text: 'بدون سرآیند' } });
+  ok(!(await p.evaluate(i => MP.api('channels/' + i + '/messages', { noCache: true }).then(d => d.messages.some(m => m.body === 'بدون سرآیند')), id)) && r2.status() !== 500, 'no reply without the app header');
+  ok(!p.errors.length, 'no page errors ' + p.errors.join(' | '));
+  await ctx.close();
+}
+
+async function iphone(b) {
+  console.log('phone: iPhone web app');
+  const { ctx, p } = await openPhone(b, 'admin', true);
+  ok(await p.evaluate(() => document.documentElement.classList.contains('tgm-ios') && document.querySelectorAll('#tgm-tabs .tgm-tab').length === 3), 'tab bar: contacts · chats · settings');
+  await p.click('#tgm-tabs .tgm-tab:last-child'); await wait(500);
+  ok(await p.evaluate(() => { const m = document.querySelector('.tg-modal'); return m && m.getBoundingClientRect().width >= innerWidth - 1; }), 'settings full screen');
+  await p.goBack(); await wait(400);
+  ok(await p.evaluate(() => !document.querySelector('.tg-modal')), 'back closes settings');
+  await p.click('#tgm-tabs .tgm-tab:first-child'); await wait(400);
+  ok(await p.evaluate(() => !!document.querySelector('.tgm-page')), 'contacts from the tab bar');
+  await p.evaluate(() => document.querySelector('.tgm-page .tgm-phead button').click()); await wait(400);
+  const id = await chatId(p);
+  await p.evaluate(i => MP.chatDesk.select(i), id); await wait(1200);
+  ok(await p.evaluate(() => document.body.classList.contains('chat-full') && getComputedStyle(document.querySelector('#tgm-tabs')).display === 'none'), 'open chat hides the tab bar');
+  ok(!p.errors.length, 'no page errors ' + p.errors.join(' | '));
+  await ctx.close();
+}
+
+async function callPush(b) {
+  console.log('call while the phone app is closed');
+  const { ctx, p } = await open(b, 'admin', { app: false });
+  const emp = await p.evaluate(() => MP.S.users.find(u => u.id !== MP.S.me.id && /سارا/.test(u.name)).id);
+  const c = await p.evaluate(u => MP.api('calls', { method: 'POST', body: { user_id: u, video: false } }), emp);
+  const q = await open(b, 'emp', { app: false });
+  ok(await q.p.evaluate(() => MP.api('notifications', { noCache: true }).then(l => l.some(n => /تماس/.test(n.title)))), 'the callee gets a notification (push wakes the phone)');
+  await q.p.evaluate(i => MP.api('calls/' + i, { method: 'POST', body: { action: 'decline' } }), c.id);
+  await q.ctx.close(); await ctx.close();
+}
+
 (async () => {
   const b = await chromium.launch();
-  for (const t of [session, shell, lock, presence]) {
+  for (const t of [session, shell, lock, presence, android, iphone, callPush]) {
     try { await t(b); } catch (e) { ok(false, t.name + ': ' + e.message.split('\n')[0]); }
     await wait(1000);
   }

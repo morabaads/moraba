@@ -135,6 +135,19 @@ class MP_Push {
 			}
 			exit( '{"ok":true}' );
 		}
+		// A reply typed in an Android notification (the app sends this header, so no other site can post it).
+		if ( isset( $_GET['reply'] ) && ! empty( $_SERVER['HTTP_X_MP_PUSH'] ) && isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) { // phpcs:ignore WordPress.Security.NonceVerification
+			$ch   = MP_Rest::channel_for( (int) $_GET['reply'], $uid ); // phpcs:ignore WordPress.Security.NonceVerification
+			$text = isset( $_POST['text'] ) ? MP_Util::long_text( wp_unslash( $_POST['text'] ), 4000 ) : ''; // phpcs:ignore WordPress.Security.NonceVerification,WordPress.Security.ValidatedSanitizedInput
+			if ( ! $ch || '' === trim( $text ) || is_wp_error( MP_Chat::can_post( $ch, $uid ) ) ) {
+				status_header( 400 );
+				exit( '{"ok":false}' );
+			}
+			MP_Rest::post_message( $ch, $uid, array( 'channel_id' => $ch->id, 'user_id' => $uid, 'body' => $text, 'created_at' => MP_Util::now() ) );
+			MP_Chat::mark_read( $ch, $uid, MP_Chat::last_id( $ch->id ) );
+			$wpdb->query( $wpdb->prepare( 'UPDATE ' . MP_Install::table( 'notifications' ) . " SET is_read = 1 WHERE user_id = %d AND target = 'messages' AND ref_id = %d", $uid, $ch->id ) );
+			exit( '{"ok":true}' );
+		}
 		// &chat=1: «مربع چت» (service worker and Android app) — only chat messages, opened in the chat app.
 		$only  = isset( $_GET['chat'] ) ? " AND target IN ('messages','chatmsg')" : ''; // phpcs:ignore WordPress.Security.NonceVerification
 		$n     = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . MP_Install::table( 'notifications' ) . ' WHERE user_id = %d AND is_read = 0' . $only . ' ORDER BY id DESC LIMIT 1', $uid ) ); // phpcs:ignore

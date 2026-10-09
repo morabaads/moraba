@@ -4,4 +4,7 @@
     <string name="desc_attendance">حاضر با ساعت زنده؛ با یک لمس ورود یا خروج</string>
     <string name="desc_messages">پیام‌های نخوانده</string>
     <string name="desc_meeting">جلسه بعدی و ورود به آن</string>
+    <string name="sc_new">پیام جدید</string>
+    <string name="sc_contacts">مخاطبین</string>
+    <string name="sc_saved">پیام‌های ذخیره‌شده</string>
 </resources>

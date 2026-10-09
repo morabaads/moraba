@@ -329,7 +329,12 @@
 
   var dialog = $('#dialog'), restoreFocus = null, onClose = null, closeTimer = null, root = document.documentElement, dialogLayer = null;
   MP.isMobile = function () { return window.matchMedia('(max-width: 760px)').matches; };
-  MP.haptic = function (pattern) { try { if (navigator.vibrate && !root.classList.contains('reduced-motion')) navigator.vibrate(pattern || 10); } catch (e) { /* unsupported */ } };
+  MP.haptic = function (pattern) {
+    if (root.classList.contains('reduced-motion')) return;
+    // the Android app: the phone's own tap feedback (a web view may not vibrate)
+    if (window.MorabaApp && typeof window.MorabaApp.haptic === 'function') { try { window.MorabaApp.haptic(); return; } catch (e) { /* older app */ } }
+    try { if (navigator.vibrate) navigator.vibrate(pattern || 10); } catch (e) { /* unsupported */ }
+  };
   function finishClose() {
     clearTimeout(closeTimer); closeTimer = null;
     dialog.classList.remove('closing'); dialog.style.transform = ''; dialog.style.transition = '';

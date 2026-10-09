@@ -11,7 +11,7 @@ class MP_Frontend {
 	const CHAT_EXE_VERSION = '2.5.0';
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'chat-shell.js', 'chat-calls.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'chat-shell.js', 'chat-calls.js', 'chat-mobile.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );
@@ -347,7 +347,21 @@ class MP_Frontend {
 				'background_color' => '#161616',
 				'theme_color'      => '#161616',
 				'icons'            => $icons,
+				// «اشتراک‌گذاری» on Android sends photos, files and text straight into a chat (the service worker takes the POST).
+				'share_target'     => array(
+					'action'  => add_query_arg( 'mp_share', 1, self::chat_url() ),
+					'method'  => 'POST',
+					'enctype' => 'multipart/form-data',
+					'params'  => array(
+						'title' => 'title',
+						'text'  => 'text',
+						'url'   => 'url',
+						'files' => array( array( 'name' => 'files', 'accept' => array( '*/*' ) ) ),
+					),
+				),
 				'shortcuts'        => array(
+					array( 'name' => 'پیام جدید', 'url' => self::chat_url() . '#new-dm', 'icons' => array( $icons[0] ) ),
+					array( 'name' => 'مخاطبین', 'url' => self::chat_url() . '#contacts', 'icons' => array( $icons[0] ) ),
 					array( 'name' => 'پیام‌های ذخیره‌شده', 'url' => self::chat_url() . '#saved', 'icons' => array( $icons[0] ) ),
 					array( 'name' => 'پنل مربع', 'url' => self::panel_url(), 'icons' => array( array( 'src' => MP_URL . 'assets/img/icon-192.png', 'sizes' => '192x192' ) ) ),
 				),
@@ -377,7 +391,17 @@ class MP_Frontend {
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>/^mp-(chat-)?[\d.]+$/.test(n)&&n.startsWith('mp-chat-')===CACHE.startsWith('mp-chat-')&&n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
-  const r=e.request; if(r.method!=='GET')return;
+  const r=e.request;
+  // Shared from another app (manifest share_target): the files wait in a cache until the chat app takes them.
+  if(r.method==='POST'&&new URL(r.url).searchParams.has('mp_share')){e.respondWith((async()=>{
+    const fd=await r.formData(),c=await caches.open('mp-share');
+    for(const k of await c.keys())await c.delete(k);
+    const files=fd.getAll('files').filter(f=>f&&f.size!==undefined);
+    for(let i=0;i<files.length;i++)await c.put('/__mp_share/'+i,new Response(files[i],{headers:{'Content-Type':files[i].type||'application/octet-stream','X-Name':encodeURIComponent(files[i].name||'file')}}));
+    await c.put('/__mp_share/meta',new Response(JSON.stringify({n:files.length,text:[fd.get('title'),fd.get('text'),fd.get('url')].filter(Boolean).join('\n')})));
+    return Response.redirect(START.split('#')[0]+'#share',303);
+  })());return;}
+  if(r.method!=='GET')return;
   const u=new URL(r.url);
   if(u.pathname.includes('/wp-json/')||u.search.includes('mp_file')||u.search.includes('rest_route'))return;
   if(ASSETS.includes(r.url)){e.respondWith(caches.match(r).then(m=>m||fetch(r)));return;}

@@ -92,7 +92,7 @@ public class NotifyJob extends JobService {
             App.setLast(this, key, Math.max(id, last));
             // The first look only sets the starting point: nothing old pops up after installing.
             if (last < 0 || id <= last) return;
-            show(o.optString("title", App.name()), o.optString("body", ""), o.optString("url", ""), o.optString("tag", key + id), slot);
+            show(o.optString("title", App.name()), o.optString("body", ""), o.optString("url", ""), o.optString("tag", key + id), slot, o.optLong("channel", 0));
         } catch (Exception ignored) {
             // offline, signed out, or not this kind of account: nothing to show
         } finally {
@@ -100,7 +100,7 @@ public class NotifyJob extends JobService {
         }
     }
 
-    private void show(String title, String body, String url, String tag, int slot) {
+    private void show(String title, String body, String url, String tag, int slot, long channel) {
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
         if (android.os.Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
@@ -119,6 +119,17 @@ public class NotifyJob extends JobService {
             .setAutoCancel(true)
             .setContentIntent(pi)
             .setCategory(Notification.CATEGORY_MESSAGE);
+        // A chat message: answer or mark it read from the notification itself (Telegram), handled by ReplyReceiver.
+        if (channel > 0) {
+            android.app.RemoteInput ri = new android.app.RemoteInput.Builder(ReplyReceiver.KEY).setLabel("پاسخ…").build();
+            Intent reply = new Intent(this, ReplyReceiver.class).setAction("reply").putExtra("channel", channel).putExtra("tag", tag).putExtra("slot", slot);
+            int mutable = android.os.Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+            PendingIntent rp = PendingIntent.getBroadcast(this, (int) (channel * 2), reply, PendingIntent.FLAG_UPDATE_CURRENT | mutable);
+            nb.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_stat), "پاسخ", rp).addRemoteInput(ri).build());
+            Intent read = new Intent(this, ReplyReceiver.class).setAction("read").putExtra("channel", channel).putExtra("tag", tag).putExtra("slot", slot);
+            PendingIntent mp = PendingIntent.getBroadcast(this, (int) (channel * 2 + 1), read, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            nb.addAction(new Notification.Action.Builder(android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_stat), "خوانده شد", mp).build());
+        }
         if (android.os.Build.VERSION.SDK_INT < 26) nb.setPriority(Notification.PRIORITY_HIGH).setDefaults(Notification.DEFAULT_ALL);
         nm.notify(tag, slot, nb.build());
     }

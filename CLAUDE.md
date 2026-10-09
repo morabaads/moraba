@@ -102,6 +102,20 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
   - Scripts are served as one bundle (`MP_Frontend::script_urls`, uploads/moraba-panel/bundle-VER-HASH.js; separate files
     with `?mp_debug=1` or MP_NO_BUNDLE). Browser errors go to `client-errors` (MP_Diag, option `mp_js_errors`, supervisors:
     settings → advanced → «خطاهای برنامه»).
+  - Phones (`assets/js/chat-mobile.js`, body `tgm` = chat app below the desktop shell; html `tgm-and` / `tgm-ios`):
+    Android: top bar `#tgm-head` (☰ → `MP.tgDrawer`, title «در حال اتصال…» from `MP.connState`/event `conn`, search),
+    underline folder tabs, ✎ `#tgm-fab`, edge swipe opens the drawer; iPhone: centred title + ✎, bottom `#tgm-tabs`
+    (مخاطبین · گفت‌وگوها · تنظیمات, unread badge, `navigator.setAppBadge`). `MP.contacts()` full-screen page
+    (`MP.lastSeenOf`, call button). Drawer/settings/pages close with the back button (`MP.pushLayer`). Settings are
+    full screen. Passcode on phones: lock after `after` minutes in the background, fingerprint / Face ID
+    (Android app `MorabaApp.biometric` → `window.__mpBio`; web app WebAuthn platform key, `cfg.cred`), Android
+    FLAG_SECURE while a passcode is set. Shared files/text: `#share` → `MP.takeShared()` (Android app:
+    `MorabaApp.shared()` + `/__mp_share/N` served by `shouldInterceptRequest`; web app: manifest `share_target`
+    → service worker cache `mp-share`). Home-screen shortcuts `#new-dm`, `#contacts`, `#saved`
+    (Android: `morabachat://open?to=…`, `res/xml/shortcuts_chat.xml`). Theme → `meta theme-color` and
+    `MorabaApp.theme` (status/navigation bars). Android notifications: «پاسخ» (RemoteInput) and «خوانده شد» →
+    `ReplyReceiver` → `?mp_push_feed=1&reply=CH` (POST, header `X-MP-Push`) / `&read=CH`. A call also makes a
+    notification (push) for the callee.
 - Tests: `tests/README.md` — `tests/e2e/setup.sh` (throwaway WordPress + SQLite + sample data), `node tests/e2e/run.js`,
   `php tests/presence-test.php`; CI `.github/workflows/tests.yml` runs them and builds + verifies the signed EXE.
 - Automatic attendance review: `attendance.stats` / `attendance.flags` (idle0, nobreak, night, device, browser) from

@@ -18,6 +18,10 @@
   function post(o) { if (host) { try { host.postMessage(o); } catch (e) { /* host gone */ } } }
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
   function read(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  // Phones: the Android app's bridge (window.MorabaApp) and touch screens without keyboard shortcuts.
+  var APP = window.MorabaApp || null, TOUCH = !FINE;
+  var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  function appCall(fn) { if (!APP || typeof APP[fn] !== 'function') return undefined; try { return APP[fn].apply(APP, [].slice.call(arguments, 1)); } catch (e) { return undefined; } }
 
   if (host && window.__MP_DESKTOP.mica) document.documentElement.classList.add('mica');
 
@@ -46,11 +50,18 @@
   /* ------------------------------------------------------------ Theme → the Windows title bar */
 
   function themeToHost() {
+    var cs0 = getComputedStyle(document.documentElement), bar = (document.body && document.body.classList.contains('tgm') ? cs0.getPropertyValue('--surface') : cs0.getPropertyValue('--bg')).trim();
+    // phones: the status bar (browser / installed app) and the Android app's system bars follow the theme
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta && bar) meta.setAttribute('content', bar);
+    if (bar) appCall('theme', bar, document.documentElement.classList.contains('dark'));
     if (!host) return;
     var cs = getComputedStyle(document.documentElement);
     post({ t: 'theme', dark: document.documentElement.classList.contains('dark') ? 1 : 0, bg: cs.getPropertyValue('--surface').trim(), ink: cs.getPropertyValue('--ink').trim() });
   }
   MP.on('theme', function () { setTimeout(themeToHost, 0); });
+  MP.on('booted', function () { setTimeout(themeToHost, 0); });
+  MP.themeToHost = themeToHost;
 
   /* ------------------------------------------------------------ The Telegram-style shell */
 
@@ -92,10 +103,12 @@
 
   /* ------------------------------------------------------------ The ☰ drawer */
 
-  var drawer = null;
-  function closeDrawer() {
+  var drawer = null, drawerLayer = null;
+  function closeDrawer(fromHistory) {
     if (!drawer) return;
     var d = drawer; drawer = null;
+    if (drawerLayer && fromHistory !== true) MP.popLayer(drawerLayer);
+    drawerLayer = null;
     d[0].classList.remove('in'); d[1].classList.remove('in');
     document.removeEventListener('keydown', drawerKey, true);
     setTimeout(function () { d[0].remove(); d[1].remove(); }, 200);
@@ -106,7 +119,26 @@
     if (!o) return '';
     return (o.auto ? 'حاضر (خودکار) از ' : 'حاضر از ') + MP.timeFa(o.check_in || '');
   }
-  function version() { return host ? (window.__MP_DESKTOP.v || '') : (C.version || ''); }
+  function version() { return host ? (window.__MP_DESKTOP.v || '') : APP && appCall('version') ? String(appCall('version')).replace(/^chat-/, '') : (C.version || ''); }
+  function platformName() { return host ? 'مربع چت برای ویندوز' : APP ? 'مربع چت برای اندروید' : IOS ? 'مربع چت برای آیفون' : 'مربع چت'; }
+  /** Phones: drag the drawer back toward its edge to close it (Telegram Android). */
+  function swipeClose(d, close) {
+    if (!TOUCH) return;
+    var st = null;
+    d.addEventListener('touchstart', function (e) { var t = e.touches[0]; st = { x: t.clientX, y: t.clientY, dx: 0, on: false }; }, { passive: true });
+    d.addEventListener('touchmove', function (e) {
+      if (!st) return;
+      var t = e.touches[0], dx = t.clientX - st.x, dy = t.clientY - st.y;
+      if (!st.on) { if (Math.abs(dy) > 12 || dx < 8) { if (Math.abs(dy) > 12) st = null; return; } st.on = true; d.style.transition = 'none'; }
+      st.dx = Math.max(0, dx); d.style.transform = 'translateX(' + st.dx + 'px)';
+    }, { passive: true });
+    d.addEventListener('touchend', function () {
+      if (!st) return;
+      var s0 = st; st = null; d.style.transition = ''; d.style.transform = '';
+      if (s0.on && s0.dx > d.offsetWidth * 0.3) close();
+    });
+  }
+  MP.platformName = platformName;
   function openDrawer() {
     if (drawer) { closeDrawer(); return; }
     var me = S.me;
@@ -123,6 +155,7 @@
         el('span', { class: 'tg-dwho' }, el('strong', { text: me.name }), el('small', { text: me.title || S.boot.email || '' }), pres ? el('small', { class: 'tg-pres', text: pres }) : null)),
       el('nav', { class: 'tg-dmenu' },
         item('chat', 'پیام جدید', function () { click('#new-dm'); }),
+        MP.contacts ? item('user', 'مخاطبین', function () { MP.contacts(); }) : null,
         S.manager ? item('users', 'گروه تیم جدید', function () { click('#new-team-group'); }) : null,
         item('user', 'گروه مشتری جدید', function () { click('#new-client-group'); }),
         item('bookmark', 'پیام‌های ذخیره‌شده', function () { MP.chatDesk.saved(); }, 'Ctrl+0'),
@@ -134,12 +167,15 @@
         el('hr'),
         lockCfg() ? item('lock-key', 'قفل کردن', lock, 'Ctrl+L') : null,
         item('settings', 'تنظیمات', function () { MP.tgSettings(); }),
-        item('help', 'میان‌برهای صفحه‌کلید', function () { if (MP.keysHelp) MP.keysHelp(); }, 'Ctrl+/'),
+        TOUCH ? null : item('help', 'میان‌برهای صفحه‌کلید', function () { if (MP.keysHelp) MP.keysHelp(); }, 'Ctrl+/'),
         el('label', { class: 'tg-ditem tg-dswitch' }, el('span', { class: 'tg-dico', html: icon('moon') }), el('span', { text: 'حالت شب' }), el('span', { class: 'switch' }, night, el('i')))),
-      el('div', { class: 'tg-dfoot' }, el('b', { text: host ? 'مربع چت برای ویندوز' : 'مربع چت' }),
+      el('div', { class: 'tg-dfoot' }, el('b', { text: platformName() }),
         el('button', { type: 'button', class: 'link', text: 'نسخه ' + MP.faDigits(version()) + ' – درباره', onclick: function () { closeDrawer(); about(); } })));
+    if (TOUCH) Array.prototype.forEach.call(d.querySelectorAll('kbd'), function (k) { k.remove(); });
     document.body.append(shade, d);
     drawer = [shade, d];
+    drawerLayer = MP.pushLayer(function () { closeDrawer(true); });
+    swipeClose(d, closeDrawer);
     document.addEventListener('keydown', drawerKey, true);
     requestAnimationFrame(function () { shade.classList.add('in'); d.classList.add('in'); });
     var first = d.querySelector('.tg-ditem'); if (first) first.focus({ preventScroll: true });
@@ -149,14 +185,16 @@
     MP.dialog.open('درباره مربع چت', el('div', { class: 'tg-about' },
       el('img', { src: C.assets + 'img/chat-192.png', alt: '' }),
       el('strong', { text: 'مربع چت' }),
-      el('small', { text: (host ? 'برنامه ویندوز نسخه ' + MP.faDigits(version()) + ' · ' : '') + 'پنل مربع نسخه ' + MP.faDigits(C.version || '') }),
-      el('p', { text: 'گفت‌وگوی تیم، پروژه‌ها و مشتری‌های استودیو مربع؛ با اعلان، پاسخ از داخل اعلان، پنجره جدا برای هر گفت‌وگو و حضور خودکار.' }),
-      el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('help') + 'میان‌برهای صفحه‌کلید', onclick: function () { MP.dialog.close(); if (MP.keysHelp) MP.keysHelp(); } }))), { focus: false });
+      el('small', { text: (host ? 'برنامه ویندوز نسخه ' + MP.faDigits(version()) + ' · ' : APP ? 'برنامه اندروید نسخه ' + MP.faDigits(version()) + ' · ' : '') + 'پنل مربع نسخه ' + MP.faDigits(C.version || '') }),
+      el('p', { text: TOUCH ? 'گفت‌وگوی تیم، پروژه‌ها و مشتری‌های استودیو مربع؛ با اعلان، تماس، رمز محلی و اثر انگشت، و اشتراک‌گذاری مستقیم از برنامه‌های دیگر.' : 'گفت‌وگوی تیم، پروژه‌ها و مشتری‌های استودیو مربع؛ با اعلان، پاسخ از داخل اعلان، پنجره جدا برای هر گفت‌وگو و حضور خودکار.' }),
+      TOUCH ? null : el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', html: icon('help') + 'میان‌برهای صفحه‌کلید', onclick: function () { MP.dialog.close(); if (MP.keysHelp) MP.keysHelp(); } }))), { focus: false });
   }
 
   /* ------------------------------------------------------------ Settings, in pages (Telegram Desktop) */
 
-  var modal = null, stack = [];
+  var modal = null, stack = [], modalLayer = null;
+  // Phones: the back button (Android, or a swipe in the installed iPhone app) goes back one settings page.
+  function onModalBack() { modalLayer = null; if (!modal) return; if (stack.length > 1) { back(); modalLayer = MP.pushLayer(onModalBack); } else modal.close(); }
   function sw(on, fn, label) {
     var cb = el('input', { type: 'checkbox', role: 'switch', checked: !!on, 'aria-label': label || '' });
     cb.onchange = function () { fn(cb.checked); };
@@ -174,10 +212,11 @@
   function show(title, build) {
     if (!modal) {
       modal = el('dialog', { class: 'tg-modal', 'aria-label': 'تنظیمات' });
-      modal.addEventListener('close', function () { modal.remove(); modal = null; stack = []; });
+      modal.addEventListener('close', function () { modal.remove(); modal = null; stack = []; if (modalLayer) { var l = modalLayer; modalLayer = null; MP.popLayer(l); } });
       modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
       document.body.append(modal);
       modal.showModal();
+      modalLayer = MP.pushLayer(onModalBack);
     }
     var body = el('div', { class: 'tg-mbody' });
     modal.replaceChildren(
@@ -196,7 +235,7 @@
   var PAGES = {
     home: function () {
       show('تنظیمات', function (b) {
-        var me = S.me;
+        var me = S.me, quick = null;
         // search across every page (Telegram has it too)
         var found = el('div', { class: 'tg-found', hidden: true });
         var q = el('input', { type: 'search', class: 'tg-ssearch', placeholder: 'جستجو در تنظیمات…', 'aria-label': 'جستجو در تنظیمات' });
@@ -216,19 +255,29 @@
             el('span', null, el('strong', { text: me.name }), el('small', { class: 'online', text: presenceLine() || 'آنلاین' }), el('small', { text: me.title || S.boot.email || '' }))),
           (function () {
             var s = sec();
+            var phone = document.body.classList.contains('tgm');
+            if (phone) quick = ((function () {
+              var q2 = sec();
+              q2.append(row('bookmark', 'پیام‌های ذخیره‌شده', '', { onclick: closeFor(function () { MP.chatDesk.saved(); }) }),
+                MP.contacts ? row('user', 'مخاطبین', 'همکاران، وضعیت و تماس', { onclick: closeFor(function () { MP.contacts(); }) }) : null,
+                row('folder', 'بایگانی', '', { onclick: closeFor(function () { MP.chatDesk.archive(); }) }));
+              return q2;
+            })());
             s.append(
               row('user', 'ویرایش پروفایل', 'عکس، نام، سمت', { onclick: closeFor(function () { MP.openProfile(me.id); }) }),
-              row('bell', 'اعلان‌ها و صداها', host ? 'اعلان ویندوز، صدا، پیش‌نمایش' : 'اعلان مرورگر', { onclick: function () { go('notify'); } }),
-              row('lock-key', 'حریم خصوصی و امنیت', lockCfg() ? 'رمز محلی روشن است' : 'رمز محلی، قفل خودکار', { onclick: function () { go('privacy'); } }),
+              row('bell', 'اعلان‌ها و صداها', host ? 'اعلان ویندوز، صدا، پیش‌نمایش' : APP ? 'اعلان گوشی، پاسخ از اعلان' : TOUCH ? 'اعلان گوشی' : 'اعلان مرورگر', { onclick: function () { go('notify'); } }),
+              row('lock-key', 'حریم خصوصی و امنیت', lockCfg() ? 'رمز محلی روشن است' : TOUCH ? 'رمز محلی، اثر انگشت، قفل خودکار' : 'رمز محلی، قفل خودکار', { onclick: function () { go('privacy'); } }),
               row('folder', 'پوشه‌های گفت‌وگو', (S.chatFolders || []).length ? MP.fa((S.chatFolders || []).length) + ' پوشه' : 'گفت‌وگوها را دسته‌بندی کنید', { onclick: function () { go('folders'); } }),
               row('palette', 'تنظیمات گفت‌وگو', 'تم، رنگ، پس‌زمینه، اندازه متن', { onclick: function () { go('chat'); } }),
               row('monitor', 'پیشرفته', host ? 'یکپارچگی با ویندوز، کارایی' : 'کارایی', { onclick: function () { go('advanced'); } }),
               row('edit', 'حساب کاربری', 'ایمیل، تلگرام، بله، پیامک', { onclick: closeFor(function () { MP.openAccount(); }) }),
-              row('help', 'میان‌برهای صفحه‌کلید', '', { onclick: closeFor(function () { if (MP.keysHelp) MP.keysHelp(); }) }),
+              TOUCH ? null : row('help', 'میان‌برهای صفحه‌کلید', '', { onclick: closeFor(function () { if (MP.keysHelp) MP.keysHelp(); }) }),
               row('info', 'درباره مربع چت', '', { onclick: closeFor(about), value: MP.faDigits(version()) }));
             return s;
           })(),
           scaleSec());
+        // phones: saved, contacts and archive right under «me», as in Telegram's own settings
+        if (quick) b.insertBefore(quick, b.querySelector('.tg-me').nextSibling);
       });
     },
     notify: function () {
@@ -244,6 +293,11 @@
               row('eye', 'نشان دادن متن پیام', 'خاموش: فقط «پیام تازه از …»', { end: sw(v.preview, function (on) { MP.desktop.set('preview', on); }) }),
               el('p', { class: 'tg-hint', text: 'در خود اعلان می‌توانید پاسخ بنویسید یا «خوانده شد» بزنید. «مزاحم نشو» (یک ساعت، هشت ساعت، تا فردا صبح) در منوی آیکون کنار ساعت است.' }));
           });
+        } else if (APP) {
+          s.append(row('bell', 'اعلان پیام‌های تازه', 'وقتی برنامه بسته است هم می‌آید؛ در خود اعلان «پاسخ» و «خوانده شد» هست', { onclick: function () { appCall('notifySettings'); }, value: 'تنظیمات گوشی' }),
+            el('p', { class: 'tg-hint', text: 'صدا، لرزش و نمایش روی صفحه قفل را در تنظیمات اعلان گوشی برای «مربع چت» انتخاب کنید.' }));
+        } else if (IOS && !(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches))) {
+          s.append(row('bell', 'اعلان در آیفون', 'اول مربع چت را به صفحه اصلی اضافه کنید: دکمه اشتراک‌گذاری سافاری ← «Add to Home Screen»؛ بعد از همان آیکون باز کنید و اعلان را روشن کنید.', {}));
         } else {
           var perm = window.Notification ? Notification.permission : 'unsupported';
           s.append(row('bell', 'اعلان مرورگر', perm === 'granted' ? 'روشن است' : perm === 'denied' ? 'در تنظیمات مرورگر بسته شده' : 'هنوز اجازه داده نشده',
@@ -260,7 +314,7 @@
           ['day', 'روز', { dark: false, tint: false, auto: false }],
           ['night', 'شب', { dark: true, tint: false, auto: false }],
           ['tinted', 'آبی شب', { dark: true, tint: true, auto: false }],
-          ['auto', 'مثل ویندوز', { auto: true }]
+          ['auto', TOUCH ? 'مثل گوشی' : 'مثل ویندوز', { auto: true }]
         ];
         var curTheme = p.auto ? 'auto' : p.dark ? (p.tint ? 'tinted' : 'night') : 'day';
         var themes = sec('تم');
@@ -356,15 +410,29 @@
       } else {
         s.append(row('edit', 'تغییر رمز محلی', '', { onclick: function () { go('passcode'); } }),
           row('lock-key', 'الان قفل کن', 'Ctrl + L', { onclick: closeFor(lock) }),
-          row('close', 'خاموش کردن رمز محلی', '', { danger: true, onclick: function () { saveLock(null); MP.toast('رمز محلی خاموش شد'); drawRail(); PAGES.privacy(); } }));
-        var auto = sec('قفل خودکار بعد از بی‌کاری');
+          row('close', 'خاموش کردن رمز محلی', '', { danger: true, onclick: function () { saveLock(null); MP.toast('رمز محلی خاموش شد'); drawRail(); MP.emit('lockcfg'); PAGES.privacy(); } }));
+        var bioRow = el('div');
+        s.insertBefore(bioRow, s.children[2] || null);
+        bioAvail().then(function (yes) {
+          if (!yes) return;
+          bioRow.replaceWith(row('lock-key', 'باز کردن با ' + bioName(), 'به‌جای نوشتن رمز؛ رمز محلی همیشه هم کار می‌کند', { end: sw(!!c.bio, function (on) {
+            if (!on) { delete c.bio; delete c.cred; saveLock(c); return; }
+            bioEnroll().then(function (x) {
+              if (!x) { MP.toast('تأیید انجام نشد', { error: true }); PAGES.privacy(); return; }
+              Object.assign(c, x); saveLock(c); MP.toast(bioName() + ' روشن شد');
+            });
+          }) }));
+        });
+        var auto = sec(TOUCH ? 'قفل خودکار وقتی از برنامه بیرون می‌روید' : 'قفل خودکار بعد از بی‌کاری');
         auto.append(el('div', { class: 'tg-scale' }, AFTER.map(function (a) {
           return el('button', { type: 'button', class: (c.after || 0) === a[0] ? 'on' : '', 'aria-pressed': String((c.after || 0) === a[0]), text: a[1], onclick: function () { c.after = a[0]; saveLock(c); PAGES.privacy(); } });
         })));
         b.append(s, auto);
       }
       if (!c) b.append(s);
-      b.append(el('p', { class: 'tg-hint', text: 'رمز فقط روی همین دستگاه نگه داشته می‌شود. با هر بار باز شدن برنامه، با Ctrl + L و بعد از مدت بی‌کاری، مربع چت قفل می‌شود و اعلان‌ها هم بدون نام و متن می‌آیند. اگر رمز را فراموش کنید، با خروج از حساب پاک می‌شود.' }));
+      b.append(el('p', { class: 'tg-hint', text: TOUCH
+        ? 'رمز فقط روی همین گوشی نگه داشته می‌شود. با هر بار باز شدن برنامه، با دکمه قفل بالای فهرست و وقتی مدتی بیرون از برنامه بوده‌اید، مربع چت قفل می‌شود' + (APP ? '؛ محتوای آن در فهرست برنامه‌های باز گوشی و اسکرین‌شات هم دیده نمی‌شود' : '') + '. اگر رمز را فراموش کنید، با خروج از حساب پاک می‌شود.'
+        : 'رمز فقط روی همین دستگاه نگه داشته می‌شود. با هر بار باز شدن برنامه، با Ctrl + L و بعد از مدت بی‌کاری، مربع چت قفل می‌شود و اعلان‌ها هم بدون نام و متن می‌آیند. اگر رمز را فراموش کنید، با خروج از حساب پاک می‌شود.' }));
     });
   };
   PAGES.folders = function () {
@@ -392,9 +460,10 @@
         var salt = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
         digest(v, salt).then(function (h) {
           var old = lockCfg();
-          saveLock({ salt: salt, hash: h, after: old ? old.after : 15 });
+          saveLock(Object.assign({}, old || {}, { salt: salt, hash: h, after: old ? old.after : TOUCH ? 1 : 15 }));
           MP.toast('رمز محلی ذخیره شد');
           drawRail();
+          MP.emit('lockcfg');
           back();
         });
       };
@@ -417,7 +486,7 @@
   /** «مقیاس رابط»: default switch + steps, like Telegram's «Default interface scale». */
   function scaleSec() {
     var s = sec('مقیاس رابط'), z = scale();
-    s.append(row('zoom', 'مقیاس پیش‌فرض', 'Ctrl + = و Ctrl + − هم کار می‌کند', { end: sw(z === 1, function (on) { MP.setScale(on ? 1 : 1.25); redraw(); }) }),
+    s.append(row('zoom', 'مقیاس پیش‌فرض', TOUCH ? 'اندازه همه چیز در برنامه' : 'Ctrl + = و Ctrl + − هم کار می‌کند', { end: sw(z === 1, function (on) { MP.setScale(on ? 1 : 1.25); redraw(); }) }),
       el('div', { class: 'tg-scale' }, SCALES.map(function (x) {
         return el('button', { type: 'button', class: z === x ? 'on' : '', 'aria-pressed': String(z === x), text: fa(Math.round(x * 100)) + '٪', onclick: function () { MP.setScale(x); redraw(); } });
       })));
@@ -466,7 +535,40 @@
 
   var LKEY = 'mp_lock_' + (C.user || 'u');
   function lockCfg() { try { return JSON.parse(read(LKEY) || 'null'); } catch (e) { return null; } }
-  function saveLock(c) { store(LKEY, c ? JSON.stringify(c) : null); if (!c) { store('mp_locked_at', null); } }
+  function saveLock(c) { store(LKEY, c ? JSON.stringify(c) : null); if (!c) { store('mp_locked_at', null); } appCall('secure', !!c); }
+  MP.hasLock = function () { return !!lockCfg(); };
+  appCall('secure', !!lockCfg()); // Android: no content in the recent-apps list or screenshots while a passcode is set
+
+  /* Fingerprint / Face ID: the Android app asks the phone (BiometricPrompt); the installed web app uses the
+     device's own screen lock through WebAuthn (a key that never leaves the phone). Either only opens the
+     local lock, exactly like typing the passcode. */
+  var bioOk = null, bioWait = null;
+  function bioAvail() {
+    if (bioOk) return bioOk;
+    if (APP && typeof APP.canBiometric === 'function') bioOk = Promise.resolve(!!appCall('canBiometric'));
+    else if (TOUCH && window.isSecureContext && window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) bioOk = PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function () { return false; });
+    else bioOk = Promise.resolve(false);
+    return bioOk;
+  }
+  function bioName() { return APP ? 'اثر انگشت' : IOS ? 'Face ID' : 'اثر انگشت'; }
+  window.__mpBio = function (ok) { var w = bioWait; bioWait = null; if (w) w(!!ok); };
+  function rand(n) { return crypto.getRandomValues(new Uint8Array(n)); }
+  function b64(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+  function unb64(t) { return Uint8Array.from(atob(t), function (ch) { return ch.charCodeAt(0); }); }
+  function bioCheck(c) {
+    if (APP) return new Promise(function (res) { bioWait = res; appCall('biometric', 'باز کردن مربع چت'); });
+    if (!c || !c.cred) return Promise.resolve(false);
+    return navigator.credentials.get({ publicKey: { challenge: rand(32), allowCredentials: [{ type: 'public-key', id: unb64(c.cred) }], userVerification: 'required', timeout: 60000 } }).then(function () { return true; }, function () { return false; });
+  }
+  function bioEnroll() {
+    if (APP) return bioCheck().then(function (ok) { return ok ? { bio: 'app' } : null; });
+    return navigator.credentials.create({ publicKey: {
+      challenge: rand(32), rp: { name: 'مربع چت' },
+      user: { id: rand(16), name: String(S.me && S.me.name || 'user'), displayName: String(S.me && S.me.name || 'user') },
+      pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' }, timeout: 60000
+    } }).then(function (cr) { return { bio: 'web', cred: b64(cr.rawId) }; }, function () { return null; });
+  }
   function digest(code, salt) {
     var data = salt + ':' + code;
     if (window.crypto && crypto.subtle && window.TextEncoder) {
@@ -498,6 +600,7 @@
       el('img', { src: C.assets + 'img/chat-192.png', alt: '' }),
       el('strong', { text: 'مربع چت قفل است' }), el('small', { text: 'رمز محلی را وارد کنید' }),
       input, err, el('button', { type: 'submit', class: 'btn btn-primary', text: 'باز کردن' }),
+      c.bio ? el('button', { type: 'button', class: 'btn btn-secondary tg-lock-bio', html: icon('lock-key') + 'باز کردن با ' + bioName(), onclick: tryBio }) : null,
       el('button', { type: 'button', class: 'link tg-lock-forgot', text: 'رمز را فراموش کرده‌اید؟ خروج از حساب', onclick: forgot }));
     box.onsubmit = function (e) {
       e.preventDefault();
@@ -509,9 +612,12 @@
         input.select();
       });
     };
+    function tryBio() { bioCheck(lockCfg()).then(function (ok) { if (ok) { unlock(); store('mp_locked_at', null); } }); }
     lockEl = el('div', { class: 'tg-lock', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'مربع چت قفل است' }, box);
     document.body.append(lockEl);
-    setTimeout(function () { input.focus(); }, 60);
+    // the Android app asks for the fingerprint by itself; a web page may only ask after a tap
+    if (c.bio && APP) setTimeout(function () { if (!document.hidden) tryBio(); }, 350);
+    else setTimeout(function () { if (!c.bio || !TOUCH) input.focus(); }, 60);
     MP.emit('lock', true);
   }
   function unlock() {
@@ -531,6 +637,14 @@
     });
   }
   MP.lockNow = lock;
+  // Phones: locked again after the app has been in the background longer than the chosen time.
+  var hiddenAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    var c = lockCfg();
+    if (c && c.after && !locked && hiddenAt && Date.now() - hiddenAt > c.after * 60000) lock();
+    hiddenAt = 0;
+  });
   window.addEventListener('storage', function (e) {
     if (e.key !== 'mp_locked_at') return;
     if (e.newValue) lock(); else unlock();
@@ -545,7 +659,9 @@
   /* ------------------------------------------------------------ First run: a short tour of the desktop shell */
 
   function tour() {
-    if (read('mp_tour_done') || !document.body.classList.contains('tg') || MP.isLocked()) return;
+    if (read('mp_tour_done') || MP.isLocked()) return;
+    if (document.body.classList.contains('tgm') && MP.mobileTour) { MP.mobileTour(); return; }
+    if (!document.body.classList.contains('tg')) return;
     var steps = [
       ['.tg-rail', 'پوشه‌ها', 'گفت‌وگوها دسته‌بندی شده‌اند؛ با Ctrl+1 تا Ctrl+9 بین پوشه‌ها بروید. پوشه‌های خودتان را هم از تنظیمات بسازید.'],
       ['.tg-burger', 'منو', 'پیام و گروه تازه، پیام‌های ذخیره‌شده، تنظیمات، حالت شب و قفل.'],
