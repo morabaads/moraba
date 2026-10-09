@@ -93,13 +93,17 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     one retry inside MP.apiRaw); «مرا به خاطر بسپار» is ticked by default and lasts 180 days (auth_cookie_expiration).
   - Calls (`class-mp-calls.php`, `assets/js/chat-calls.js`): `POST calls {user_id, video}` makes a two-person meeting room,
     the callee's live state carries `ring` (45 s, user meta `mp_ring`), `POST calls/{id} {action}`; caller gets `call`
-    state; the private chat gets system lines. Voice calls (`video` 0) stay in the app: `assets/js/call-voice.js`
-    (`MP.voice.start/join/end`), Telegram call screen `.vc` (mute, speaker = Android `MorabaApp.speaker` or next output
-    device, minimise → `#vc-bar`); direct WebRTC first (signals = relay record type 6: hi/offer/answer/ice/mute/bye;
-    ICE from `MP_Meet::ice()`; localStorage `mp_call_p2p=0` forces the relay), else Opus 40 kb/s 20 ms (μ-law 16 kHz
-    without AudioEncoder) through MP_Relay: sender every 40 ms with `nr=1`, held receiver `wait=1000` (relay waits
-    for new records), AudioWorklet capture + adaptive jitter buffer (60–300 ms), Chrome loopback for echo
-    cancellation. `calls/{id} {action:'end'}` writes «📞 تماس صوتی · mm:ss» and purges the relay (410 = ended).
+    state; the private chat gets system lines. Voice and video calls stay in the app: `assets/js/call-voice.js`
+    (`MP.voice.start(uid, video)/join(ring)/end/diag`), Telegram call screen `.vc` (mute, camera, flip on phones,
+    speaker = Android `MorabaApp.speaker` or next output device, minimise → `#vc-bar`, tap the quality pill = diagnostics
+    `.vc-diag`; stuck «در حال اتصال…» > 12 s → plain-words reason + `client-errors` report «call stuck connecting»);
+    direct WebRTC first (signals = relay record type 6: hi/offer/answer/ice/mute/cam/kf/bye; ICE from `MP_Meet::ice()`;
+    it takes over only when inbound audio bytes grow and its <audio> plays; localStorage `mp_call_p2p=0` forces the
+    relay), else Opus 40 kb/s 20 ms (μ-law 16 kHz without AudioEncoder) + VP8/H.264 480px 15 fps 350 kb/s (JPEG 6 fps
+    without WebCodecs; records 3/4/5 with codec/w/h header like meet.js) through MP_Relay: sender every 60 ms with
+    `nr=1` (slows down on 429/502/503/508), held receiver `wait=1000`; relay.php refused (403/404/5xx) → the WordPress
+    route; AudioWorklet capture (connected to a muted path so it always runs; ScriptProcessor fallback) + adaptive
+    jitter buffer (60–300 ms), Chrome loopback for echo cancellation. `calls/{id} {action:'end'}` writes «📞 تماس صوتی · mm:ss» and purges the relay (410 = ended).
     Android app: `MorabaApp.callAudio(bool)` = MODE_IN_COMMUNICATION, keep screen on, WebView not paused. Live state also has `st` (MP_Presence::status: busy/away) shown as
     «در تماس یا جلسه» / «دور از سیستم».
   - Chat extras: own folders (`chat-folders`, user meta `mp_chat_folders`, tabs `u{id}`), search filters (kind/from),

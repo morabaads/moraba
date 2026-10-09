@@ -101,11 +101,8 @@ class MP_Calls {
 		// Phones whose chat app is closed hear about it by push (the page rings when it opens within 45 s).
 		MP_Notify::send( $other, 'call', ( $video ? '📹 تماس تصویری از ' : '📞 تماس از ' ) . $me->display_name, 'برای پاسخ دادن بزنید', 'messages', $channel );
 		MP_Live::bump();
-		$out = array( 'id' => $id, 'url' => $url, 'channel' => $channel, 'ring' => self::RING );
-		if ( ! $video ) {
-			$out['voice'] = self::voice( $m, $uid, $other );
-		}
-		return $out;
+		// both kinds of call happen inside the app (call-voice.js); the room link stays for older pages
+		return array( 'id' => $id, 'url' => $url, 'channel' => $channel, 'ring' => self::RING, 'video' => $video ? 1 : 0, 'voice' => self::voice( $m, $uid, $other ) );
 	}
 
 	/** What the page needs to carry the sound: its signed relay address, the other side, ICE servers. */
@@ -154,7 +151,7 @@ class MP_Calls {
 				$secs = max( 0, time() - (int) $info['answered'] );
 				$info['ended'] = time();
 				set_transient( 'mp_call_' . $id, $info, DAY_IN_SECONDS );
-				MP_Client::system( $channel, 0, '📞 تماس صوتی · ' . MP_Jalali::digits( sprintf( '%02d:%02d', floor( $secs / 60 ), $secs % 60 ) ), array( 't' => 'call', 'id' => $id, 'secs' => $secs ) );
+				MP_Client::system( $channel, 0, ( empty( $info['video'] ) ? '📞 تماس صوتی · ' : '📹 تماس تصویری · ' ) . MP_Jalali::digits( sprintf( '%02d:%02d', floor( $secs / 60 ), $secs % 60 ) ), array( 't' => 'call', 'id' => $id, 'secs' => $secs ) );
 				MP_Relay::purge( $m->token );
 				MP_Live::bump();
 				return array( 'ok' => true, 'secs' => $secs );
@@ -170,11 +167,7 @@ class MP_Calls {
 			$info['answered'] = time();
 			set_transient( 'mp_call_' . $id, $info, DAY_IN_SECONDS );
 			MP_Live::bump();
-			$out = array( 'ok' => true, 'url' => MP_Meet::link( $m->token ) );
-			if ( empty( $info['video'] ) ) {
-				$out['voice'] = self::voice( $m, $uid, $uid === $caller ? $callee : $caller );
-			}
-			return $out;
+			return array( 'ok' => true, 'url' => MP_Meet::link( $m->token ), 'video' => empty( $info['video'] ) ? 0 : 1, 'voice' => self::voice( $m, $uid, $uid === $caller ? $callee : $caller ) );
 		} elseif ( 'decline' === $action && $uid === $callee ) {
 			update_user_meta( $caller, 'mp_call_state', array( 'id' => $id, 'state' => 'declined', 'at' => time() ) );
 			MP_Client::system( $channel, 0, $name . ' تماس را رد کرد', array( 't' => 'call', 'id' => $id ) );
@@ -182,9 +175,7 @@ class MP_Calls {
 			update_user_meta( $caller, 'mp_call_state', array( 'id' => $id, 'state' => 'missed', 'at' => time() ) );
 			MP_Client::system( $channel, 0, 'تماس بی‌پاسخ ماند', array( 't' => 'call', 'id' => $id ) );
 		}
-		if ( empty( $info['video'] ) ) {
-			MP_Relay::purge( $m->token ); // the caller's waiting screen hears it ended
-		}
+		MP_Relay::purge( $m->token ); // the caller's call screen hears it ended
 		MP_Live::bump();
 		return array( 'ok' => true, 'url' => MP_Meet::link( $m->token ) );
 	}
@@ -201,7 +192,7 @@ class MP_Calls {
 				delete_user_meta( $uid, 'mp_ring' );
 				update_user_meta( (int) $ring['from'], 'mp_call_state', array( 'id' => (int) $ring['id'], 'state' => 'missed', 'at' => time() ) );
 				MP_Client::system( (int) $ring['channel'], 0, 'تماس بی‌پاسخ ماند', array( 't' => 'call', 'id' => (int) $ring['id'] ) );
-				$m = empty( $ring['video'] ) ? MP_Meet::get( (int) $ring['id'] ) : null;
+				$m = MP_Meet::get( (int) $ring['id'] );
 				if ( $m ) {
 					MP_Relay::purge( $m->token ); // the caller's call screen stops ringing
 				}

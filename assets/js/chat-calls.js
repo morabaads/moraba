@@ -1,5 +1,5 @@
 /*
- * One-to-one calls with ringing (MP_Calls): «تماس» in a private chat opens a meeting room for the two people;
+ * One-to-one calls with ringing (MP_Calls): «تماس» in a private chat rings the other person (call-voice.js carries the call);
  * the other person's panel/chat app rings (overlay, tone; the Windows app comes forward and shows a notification)
  * for 45 seconds; accept opens the same room, decline tells the caller. Rooms open in their own window
  * (the Windows app: a native window; browsers: a popup).
@@ -18,8 +18,8 @@
 
   var outgoing = null;
   MP.call = function (uid, video) {
-    // a voice call stays in the app (call-voice.js); video calls open the meeting room
-    if (!video && MP.voice) { MP.voice.start(uid); return; }
+    // voice and video calls stay in the app (call-voice.js); the meeting room only without it
+    if (MP.voice) { MP.voice.start(uid, !!video); return; }
     var u = MP.user(uid);
     MP.api('calls', { method: 'POST', body: { user_id: uid, video: video ? 1 : 0 } }).then(function (d) {
       outgoing = { id: d.id, name: u.name };
@@ -62,7 +62,7 @@
   function answer(action) {
     var r = ringing; if (!r) return;
     hideRing();
-    if (action === 'accept' && !+r.video && MP.voice) { MP.voice.join(r); return; } // accepts it itself
+    if (action === 'accept' && MP.voice) { MP.voice.join(r); return; } // accepts it itself
     MP.api('calls/' + r.id, { method: 'POST', body: { action: action } }).then(function (d) {
       if (action === 'accept') openRoom(d.url || r.url, 'تماس با ' + r.name);
     }).catch(MP.soft);

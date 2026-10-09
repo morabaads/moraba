@@ -225,8 +225,8 @@ async function callPush(b) {
 /* Voice call between two browsers with fake microphones: through the site's relay, then device to device. */
 async function voice() {
   const vb = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
-  for (const direct of [false, true]) {
-    console.log('voice call ' + (direct ? '(direct)' : '(through the site)'));
+  for (const [direct, video] of [[false, false], [true, false], [false, true]]) {
+    console.log((video ? 'video' : 'voice') + ' call ' + (direct ? '(direct)' : '(through the site)'));
     const two = [];
     for (const user of ['admin', 'emp']) {
       const ctx = await vb.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone'] });
@@ -239,7 +239,7 @@ async function voice() {
     }
     const [A, B] = two;
     const emp = await A.p.evaluate(() => MP.S.users.find(u => /سارا/.test(u.name)).id);
-    await A.p.evaluate(u => MP.call(u, false), emp);
+    await A.p.evaluate(o => MP.call(o.u, o.vid), { u: emp, vid: video });
     ok(await A.p.evaluate(() => /زنگ/.test(document.querySelector('.vc-status').textContent)), 'caller: «در حال زنگ زدن…»');
     await B.p.waitForSelector('.call-ring', { timeout: 15000 });
     await B.p.click('.cr-yes');
@@ -247,6 +247,10 @@ async function voice() {
     ok(await up(A) && await up(B), 'both sides connected');
     await wait(3000);
     const st = await A.p.evaluate(() => { const v = MP.voice.current(); return { p2p: v.p2p, opus: !!v.enc, buf: (v.stats || {}).target || 0, txt: document.querySelector('.vc-status').textContent }; });
+    if (video) {
+      const pics = await Promise.all([A, B].map(x => x.p.evaluate(() => { const v = MP.voice.current(); return v.vrecv > 5 && document.querySelector('.vc').classList.contains('has-pic') ? v.vmode : ''; })));
+      ok(pics[0] && pics[1], 'both see the other\'s picture through the relay (' + pics.join(', ') + ')');
+    }
     if (direct) ok(st.p2p, 'direct connection between the two devices');
     else ok(!st.p2p && st.opus && st.buf > 0 && st.buf <= 300, 'Opus through the relay, jitter buffer ' + st.buf + ' ms');
     ok(/^[۰-۹]{2}:[۰-۹]{2}$/.test(st.txt), 'call timer ' + st.txt);
@@ -254,7 +258,7 @@ async function voice() {
     ok(await B.p.waitForFunction(() => !MP.voice.current() || MP.voice.current().ended, null, { timeout: 8000 }).then(() => true, () => false), 'hang-up reaches the other side');
     await wait(1500);
     const id = await A.p.evaluate(u => MP.S.channels.find(c => c.type === 'direct' && c.other === u).id, emp);
-    ok(/تماس صوتی · /.test(await A.p.evaluate(i => MP.api('channels/' + i + '/messages', { noCache: true }).then(d => d.messages.slice(-1)[0].body), id)), 'call length written in the chat');
+    ok((video ? /تماس تصویری · / : /تماس صوتی · /).test(await A.p.evaluate(i => MP.api('channels/' + i + '/messages', { noCache: true }).then(d => d.messages.slice(-1)[0].body), id)), 'call length written in the chat');
     ok(!A.p.errors.length && !B.p.errors.length, 'no page errors ' + A.p.errors.concat(B.p.errors).join(' | '));
     await A.ctx.close(); await B.ctx.close();
   }
