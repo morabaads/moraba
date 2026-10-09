@@ -221,6 +221,7 @@ class MP_Install {
 			client_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			pinned_at datetime DEFAULT NULL,
 			pinned_msg bigint(20) unsigned NOT NULL DEFAULT 0,
+			pins varchar(255) NOT NULL DEFAULT '',
 			settings text NULL,
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),

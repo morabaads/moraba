@@ -63,7 +63,28 @@
     return 'آخرین بازدید ' + J.format(iso, false);
   }
   function draftOf(id) { try { return localStorage.getItem('mp_draft_' + id) || ''; } catch (e) { return ''; } }
-  function saveDraft(id, v) { try { if (v) localStorage.setItem('mp_draft_' + id, v); else localStorage.removeItem('mp_draft_' + id); } catch (e) { /* private mode */ } }
+  function draftAt(id) { try { return +localStorage.getItem('mp_draft_t_' + id) || 0; } catch (e) { return 0; } }
+  var draftT = {};
+  function saveDraft(id, v) {
+    if (v === draftOf(id)) return;
+    var at = Date.now();
+    try { if (v) localStorage.setItem('mp_draft_' + id, v); else localStorage.removeItem('mp_draft_' + id); localStorage.setItem('mp_draft_t_' + id, String(at)); } catch (e) { /* private mode */ }
+    // the same draft on the other devices (a moment later, not on every key)
+    clearTimeout(draftT[id]);
+    draftT[id] = setTimeout(function () { MP.api('drafts', { method: 'POST', body: { channel: id, text: v || '', at: at } }).catch(function () {}); }, 1500);
+  }
+  /** Drafts written on another device (newer than what this one has) come in. */
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && MP.syncDrafts) MP.syncDrafts(); });
+  MP.syncDrafts = function () {
+    return MP.api('drafts', { noCache: true }).then(function (d) {
+      var changed = false;
+      Object.keys(d || {}).forEach(function (id) {
+        if (+id === current) return;
+        if (d[id][1] > draftAt(id)) { try { localStorage.setItem('mp_draft_' + id, d[id][0]); localStorage.setItem('mp_draft_t_' + id, String(d[id][1])); changed = true; } catch (e) { /* private */ } }
+      });
+      if (changed) renderList();
+    }).catch(function () {});
+  };
   function kindOf(m) {
     var x = m.x || {};
     if (x.poll) return 'poll';
@@ -1216,17 +1237,29 @@
 
   /* ------------------------------------------------------------ Pinned message bar */
 
-  var pinned = null;
+  // Several pinned messages (Telegram): the bar shows one («۲ از ۳»); a click jumps to it and shows the next older one.
+  var pinned = null, pinAt = 0;
+  function pinList() { return pinned ? (pinned.all && pinned.all.length ? pinned.all : [pinned]) : []; }
+  function isPinned(id) { return pinList().some(function (x) { return x.id === id; }); }
   function showPinned(p) {
+    var same = pinned && p && pinned.id === p.id && (pinned.all || []).length === (p.all || []).length;
     pinned = p;
+    if (!same) pinAt = 0;
     var bar = $('#chat-pinbar'); bar.hidden = !p;
     if (!p) return;
-    $('#chat-pin-text').textContent = (p.kind === 'photo' ? '🖼 ' : p.kind === 'voice' ? '🎤 ' : '') + (p.text || p.author);
+    var list = pinList(), cur = list[Math.min(pinAt, list.length - 1)];
+    $('#chat-pin-text').textContent = (cur.kind === 'photo' ? '🖼 ' : cur.kind === 'voice' ? '🎤 ' : '') + (cur.text || cur.author);
+    $('b', bar).textContent = list.length > 1 ? 'پیام سنجاق‌شده ' + fa(pinAt + 1) + ' از ' + fa(list.length) : 'پیام سنجاق‌شده';
+    bar.style.setProperty('--pin-n', list.length);
+    bar.dataset.at = pinAt;
     MP.emojify($('#chat-pin-text'));
   }
   $('#chat-pinbar').onclick = function (e) {
-    if (e.target.closest('#chat-pin-x')) { if (pinned) pin({ id: pinned.id }, false); return; }
-    if (pinned) jumpTo(pinned.id);
+    var list = pinList(), cur = list[Math.min(pinAt, list.length - 1)];
+    if (!cur) return;
+    if (e.target.closest('#chat-pin-x')) { pin({ id: cur.id }, false); return; }
+    jumpTo(cur.id);
+    if (list.length > 1) { pinAt = (pinAt + 1) % list.length; showPinned(pinned); }
   };
 
   /* ------------------------------------------------------------ Typing / recording indicator */
@@ -2308,7 +2341,7 @@
     if (c && c.can_post !== false) items.push(['reply', part ? 'پاسخ به بخش انتخاب‌شده' : 'پاسخ', function () { startReply(m, part); }]);
     if (body) items.push(['copy', part ? 'کپی بخش انتخاب‌شده' : 'کپی متن', function () { copyText(part || plainText(body)); }]);
     if (m.mine && !m.kind && k !== 'voice' && k !== 'poll' && k !== 'sticker' && k !== 'round') items.push(['edit', 'ویرایش', function () { startEdit(list.filter(function (x) { return x.body; })[0] || m); }]);
-    items.push(pinned && pinned.id === m.id ? ['pin', 'برداشتن سنجاق', function () { pin(m, false); }] : ['pin', 'سنجاق کردن', function () { pin(m, true); }]);
+    items.push(isPinned(m.id) ? ['pin', 'برداشتن سنجاق', function () { pin(m, false); }] : ['pin', 'سنجاق کردن', function () { pin(m, true); }]);
     items.push(['forward', 'فوروارد', function () { forwardPick(list); }]);
     items.push(['clip', 'کپی لینک پیام', function () { copyText(location.href.split('#')[0] + '#msg-' + m.id); }]);
     if (c && c.type !== 'saved') items.push(['bookmark', 'ذخیره در پیام‌های ذخیره‌شده', function () { forwardTo(list, null); }]);
@@ -3481,7 +3514,7 @@
   MP.loadChatFolders = function () { return MP.api('chat-folders').then(function (l) { S.chatFolders = l; renderList(); return l; }).catch(function () {}); };
   var foldersAsked = false;
   function open(opts) {
-    if (!foldersAsked) { foldersAsked = true; MP.loadChatFolders(); }
+    if (!foldersAsked) { foldersAsked = true; MP.loadChatFolders(); MP.syncDrafts(); }
     renderList();
     MP.loadChannels().then(function () {
       var target = opts.channel || current || (window.innerWidth > 860 && S.channels[0] && S.channels[0].id);

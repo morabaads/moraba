@@ -54,6 +54,8 @@ class MP_Chat {
 			array( "channels/$id/media", 'GET', 'media' ),
 			array( "channels/$id/media-counts", 'GET', 'media_counts' ),
 			array( 'chat-folders', 'GET', 'folders' ),
+			array( 'drafts', 'GET', 'drafts' ),
+			array( 'drafts', 'POST', 'save_draft' ),
 			array( 'chat-folders', 'POST', 'save_folders' ),
 			array( "channels/$id/mute", 'POST', 'mute' ),
 			array( "channels/$id/read", 'POST', 'read' ),
@@ -465,7 +467,7 @@ class MP_Chat {
 		global $wpdb;
 		$row  = $wpdb->get_row( $wpdb->prepare( 'SELECT MAX(id) a, MAX(updated_at) b, MAX(deleted_at) c FROM ' . self::t( 'messages' ) . ' WHERE channel_id = %d', $ch->id ), ARRAY_N );
 		$read = $wpdb->get_var( $wpdb->prepare( 'SELECT SUM(last_id) FROM ' . self::t( 'reads' ) . ' WHERE channel_id = %d', $ch->id ) ) . '-' . $wpdb->get_var( $wpdb->prepare( 'SELECT SUM(got_id) FROM ' . self::t( 'reads' ) . ' WHERE channel_id = %d', $ch->id ) );
-		$pin  = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT pinned_msg FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $ch->id ) );
+		$pin  = (string) $wpdb->get_var( $wpdb->prepare( "SELECT CONCAT(pinned_msg, ':', pins) FROM " . self::t( 'channels' ) . ' WHERE id = %d', $ch->id ) );
 		$act  = MP_Rest::activity_of( $ch->id, self::uid() );
 		$gone = get_transient( 'mp_purged_' . $ch->id );
 		return md5( implode( '|', (array) $row ) . '|' . $read . '|' . $pin . '|' . wp_json_encode( $act ) . '|' . ( is_array( $gone ) ? count( $gone ) : 0 ) );
@@ -491,17 +493,32 @@ class MP_Chat {
 
 	/* ------------------------------------------------------------------ Pinned message */
 
+	/** The pinned messages of a chat, newest pin first: the newest with its fields, and «all» of them (Telegram). */
 	public static function pinned( $ch, $uid ) {
 		global $wpdb;
-		$pid = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT pinned_msg FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $ch->id ) );
-		if ( ! $pid ) {
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT pinned_msg, pins FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $ch->id ) );
+		if ( ! $row ) {
 			return null;
 		}
-		$m = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d AND channel_id = %d', $pid, $ch->id ) );
-		if ( ! $m || ! empty( $m->deleted_at ) ) {
+		$ids = self::pin_ids( $row );
+		$all = array();
+		foreach ( $ids as $pid ) {
+			$m = $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t( 'messages' ) . ' WHERE id = %d AND channel_id = %d', $pid, $ch->id ) );
+			if ( $m && empty( $m->deleted_at ) ) {
+				$all[] = array( 'id' => (int) $m->id, 'author' => self::author( $m ), 'text' => self::snippet( $m ), 'kind' => self::kind_of( $m ) );
+			}
+		}
+		if ( ! $all ) {
 			return null;
 		}
-		return array( 'id' => (int) $m->id, 'author' => self::author( $m ), 'text' => self::snippet( $m ), 'kind' => self::kind_of( $m ) );
+		return $all[0] + array( 'all' => $all );
+	}
+	private static function pin_ids( $row ) {
+		$ids = array_filter( array_map( 'intval', explode( ',', (string) $row->pins ) ) );
+		if ( (int) $row->pinned_msg && ! in_array( (int) $row->pinned_msg, $ids, true ) ) {
+			array_unshift( $ids, (int) $row->pinned_msg ); // pinned before several pins existed
+		}
+		return array_values( $ids );
 	}
 
 	/** POST messages/{id}/pin {on} — one pinned message per chat, for every member. */
@@ -515,7 +532,13 @@ class MP_Chat {
 		if ( 'admin' !== self::role_of( $ch, self::uid() ) && 'channel' === self::settings( $ch )['mode'] ) {
 			return self::err( 'فقط مدیران کانال می‌توانند پیام سنجاق کنند.', 403 );
 		}
-		$wpdb->update( self::t( 'channels' ), array( 'pinned_msg' => $on ? (int) $m->id : 0 ), array( 'id' => $ch->id ) );
+		$row = $wpdb->get_row( $wpdb->prepare( 'SELECT pinned_msg, pins FROM ' . self::t( 'channels' ) . ' WHERE id = %d', $ch->id ) );
+		$ids = array_values( array_diff( self::pin_ids( $row ), array( (int) $m->id ) ) );
+		if ( $on ) {
+			array_unshift( $ids, (int) $m->id ); // several pins, newest first (at most 20)
+		}
+		$ids = array_slice( $ids, 0, 20 );
+		$wpdb->update( self::t( 'channels' ), array( 'pinned_msg' => $ids ? $ids[0] : 0, 'pins' => implode( ',', $ids ) ), array( 'id' => $ch->id ) );
 		self::touch( $m->id );
 		MP_Live::bump();
 		return array( 'pinned' => self::pinned( $ch, self::uid() ) );
@@ -789,6 +812,32 @@ class MP_Chat {
 			'voice'  => $n( " AND f.mime LIKE 'audio/%%'" ),
 			'links'  => $links,
 		);
+	}
+
+	/** GET drafts — unsent text per chat, so a draft started on one device is there on the others: {id: [text, time]} */
+	public static function drafts() {
+		$d = get_user_meta( self::uid(), 'mp_drafts', true );
+		return (object) ( is_array( $d ) ? $d : array() );
+	}
+
+	/** POST drafts {channel, text, at} — empty text removes it; the newest 100 are kept. */
+	public static function save_draft( WP_REST_Request $r ) {
+		$uid = self::uid();
+		$ch  = MP_Rest::channel_for( (int) $r['channel'], $uid );
+		if ( ! $ch ) {
+			return self::err( 'گفت‌وگو پیدا نشد.', 404 );
+		}
+		$d = get_user_meta( $uid, 'mp_drafts', true );
+		$d = is_array( $d ) ? $d : array();
+		$t = MP_Util::long_text( (string) $r['text'], 4000 );
+		if ( '' === trim( $t ) ) {
+			unset( $d[ (int) $ch->id ] );
+		} else {
+			$d[ (int) $ch->id ] = array( $t, (int) $r['at'] ? (int) $r['at'] : time() * 1000 );
+		}
+		uasort( $d, function ( $a, $b ) { return $b[1] - $a[1]; } );
+		update_user_meta( $uid, 'mp_drafts', array_slice( $d, 0, 100, true ) );
+		return array( 'ok' => true );
 	}
 
 	/** GET chat-folders — my own chat folders (Telegram's «پوشه‌ها»): [{id, name, chats: [channel ids]}] */

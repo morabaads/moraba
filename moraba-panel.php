@@ -13,7 +13,7 @@
 defined( 'ABSPATH' ) || exit;
 
 define( 'MP_VERSION', '3.48.0' );
-define( 'MP_DB_VERSION', '28' );
+define( 'MP_DB_VERSION', '29' );
 define( 'MP_FILE', __FILE__ );
 define( 'MP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MP_URL', plugin_dir_url( __FILE__ ) );
