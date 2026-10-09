@@ -430,8 +430,30 @@ $mp_nav = array(
 <noscript><p class="noscript">برای استفاده از پنل، جاوااسکریپت مرورگر را فعال کنید.</p></noscript>
 <script>window.MP_CONFIG = <?php echo wp_json_encode( MP_Frontend::config() ); ?>;</script>
 <?php echo MP_Frontend::pwa_script(); // phpcs:ignore ?>
+<script>
+/* Start-up watchdog: the bundle did not load (a cache plugin kept an old page, a filtered host) → the separate files;
+   still on the splash after 15 s → say why, with «تلاش دوباره» and «پاک کردن حافظه». */
+(function(){
+  var errs=window.__mpBootErr=window.__mpBootErr||[],sep=<?php echo wp_json_encode( MP_Frontend::script_urls( true ) ); ?>;
+  window.addEventListener('error',function(e){if(document.body.classList.contains('is-loading')&&e.message)errs.push(e.message+' ('+String(e.filename||'').split('/').pop().split('?')[0]+':'+(e.lineno||0)+')');});
+  window.__mpFallback=function(){if(window.__mpFell)return;window.__mpFell=1;var l=sep.slice();(function next(){var u=l.shift();if(!u)return;var s=document.createElement('script');s.src=u;s.onload=s.onerror=next;document.body.appendChild(s);})();};
+  function stuck(){
+    var b=document.body;if(!b.classList.contains('is-loading')||document.getElementById('boot-stuck'))return;
+    var sp=b,box=document.createElement('div');box.id='boot-stuck';box.className='boot-stuck';
+    var why=errs.length?errs.slice(0,3).join('\n'):(navigator.onLine?'پاسخی از سایت نرسید.':'اینترنت وصل نیست.');
+    box.innerHTML='<strong>باز شدن طول کشید</strong><pre dir="auto"></pre><button type="button" class="btn btn-primary">تلاش دوباره</button><button type="button" class="btn btn-secondary">پاک کردن حافظه و تلاش دوباره</button>';
+    box.querySelector('pre').textContent=why;
+    var bt=box.querySelectorAll('button');
+    bt[0].onclick=function(){location.reload();};
+    bt[1].onclick=function(){var w=[];try{if(navigator.serviceWorker)w.push(navigator.serviceWorker.getRegistrations().then(function(r){return Promise.all(r.map(function(x){return x.unregister();}));}));if(window.caches)w.push(caches.keys().then(function(k){return Promise.all(k.map(function(n){return caches.delete(n);}));}));indexedDB.deleteDatabase('moraba-panel');}catch(e){}Promise.all(w).then(function(){location.reload();},function(){location.reload();});};
+    sp.appendChild(box);
+    try{var C=window.MP_CONFIG||{};if(C.nonce&&C.root)fetch(C.root+'client-errors',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-WP-Nonce':C.nonce},body:JSON.stringify({msg:'stuck on start: '+why.slice(0,250),src:'boot',line:0,page:C.chatApp?'(chat)':'',app:window.__MP_DESKTOP?'windows':window.MorabaApp?'android':'web'})}).catch(function(){});}catch(e){}
+  }
+  setTimeout(stuck,15000);
+})();
+</script>
 <?php foreach ( MP_Frontend::script_urls() as $mp_script ) : ?>
-<script src="<?php echo esc_url( $mp_script ); ?>"></script>
+<script src="<?php echo esc_url( $mp_script ); ?>"<?php echo false !== strpos( $mp_script, '/bundle-' ) ? ' onerror="__mpFallback()"' : ''; ?>></script>
 <?php endforeach; ?>
 </body>
 </html>

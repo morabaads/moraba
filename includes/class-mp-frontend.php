@@ -586,12 +586,12 @@ JS;
 	 * named by the files' times so a changed file makes a new one). Separate files when uploads is not writable,
 	 * with ?mp_debug=1, or when MP_NO_BUNDLE is defined.
 	 */
-	public static function script_urls() {
+	public static function script_urls( $separate = false ) {
 		$sep = array_map( function ( $s ) { return MP_URL . 'assets/js/' . $s . '?ver=' . MP_VERSION; }, self::SCRIPTS );
-		if ( defined( 'MP_NO_BUNDLE' ) || isset( $_GET['mp_debug'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+		if ( $separate || defined( 'MP_NO_BUNDLE' ) || isset( $_GET['mp_debug'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			return $sep;
 		}
-		$sig = '';
+		$sig = 'iso1'; // the bundle's own format
 		foreach ( self::SCRIPTS as $f ) {
 			$sig .= $f . @filemtime( MP_DIR . 'assets/js/' . $f ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 		}
@@ -603,17 +603,19 @@ JS;
 			if ( ! wp_mkdir_p( $dir ) ) {
 				return $sep;
 			}
+			// Each file runs on its own, as separate <script> tags would: an error in one does not stop the rest.
 			$js = '';
 			foreach ( self::SCRIPTS as $f ) {
-				$js .= '/* ' . $f . " */\n" . file_get_contents( MP_DIR . 'assets/js/' . $f ) . "\n;\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions
+				$js .= '/* ' . $f . " */\ntry {\n" . file_get_contents( MP_DIR . 'assets/js/' . $f ) . "\n;\n} catch (e) { (window.__mpBootErr = window.__mpBootErr || []).push(" . wp_json_encode( $f ) . " + ': ' + (e && e.message || e)); if (window.console) console.error(e); }\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions
 			}
 			$tmp = $file . '.' . wp_generate_password( 6, false, false );
 			if ( false === @file_put_contents( $tmp, $js ) || ! @rename( $tmp, $file ) ) { // phpcs:ignore
 				@unlink( $tmp ); // phpcs:ignore
 				return $sep;
 			}
-			foreach ( (array) glob( $dir . '/bundle-*.js' ) as $old ) { // earlier builds go
-				if ( $old && $old !== $file ) {
+			// Earlier builds go after two days: a page kept by a cache plugin or a phone may still ask for them.
+			foreach ( (array) glob( $dir . '/bundle-*.js' ) as $old ) {
+				if ( $old && $old !== $file && @filemtime( $old ) < time() - 2 * DAY_IN_SECONDS ) { // phpcs:ignore
 					@unlink( $old ); // phpcs:ignore
 				}
 			}

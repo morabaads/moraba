@@ -4134,3 +4134,7 @@ html.glass.bd-plain body.chat-app,html.glass.bd-plain body.chat-login{--glass-bg
 .tg-bd.bd-soft .tg-bdprev{background:radial-gradient(120% 90% at 85% 0%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 70%),var(--bg)}
 html.glass body.tgm .chat-list{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
 .tgm-info>*{justify-self:start}
+/* start-up watchdog (templates/panel.php) */
+.boot-stuck{position:fixed;z-index:300;left:50%;bottom:12vh;transform:translateX(-50%);display:grid;gap:10px;justify-items:center;width:min(360px,calc(100vw - 32px));padding:18px;border-radius:18px;background:var(--surface);box-shadow:var(--sh-3);text-align:center;color:var(--ink)}
+.boot-stuck pre{max-width:100%;white-space:pre-wrap;word-break:break-word;font:13px/1.7 Dana,Tahoma,sans-serif;color:var(--muted);margin:0;unicode-bidi:plaintext}
+.boot-stuck .btn{width:100%}
