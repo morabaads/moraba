@@ -841,6 +841,7 @@
   /** One live update: chat list changes, typing, presence and whether the open chat has news. */
   function onLive(d) {
     if (!d) return;
+    MP.emit('live', d);
     if (d.v) live.v = d.v;
     var prevSeen = S.seen;
     S.seen = d.seen || S.seen; S.act = d.act || {};
@@ -1084,7 +1085,9 @@
   }
   function fileCard(m) {
     var f = m.file, ext = (f.name.split('.').pop() || '').slice(0, 4).toUpperCase();
-    return el('a', { class: 'b-file', href: f.url + (f.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1', target: '_blank', rel: 'noopener', onclick: function (e) { if (selecting) e.preventDefault(); e.stopPropagation(); } },
+    var dlUrl = new URL(f.url + (f.url.indexOf('?') >= 0 ? '&' : '?') + 'download=1', location.href).href;
+    // Drag it out onto the desktop or into a folder: the browser saves it there (Chromium's DownloadURL).
+    return el('a', { class: 'b-file', href: dlUrl, target: '_blank', rel: 'noopener', draggable: 'true', title: 'برای ذخیره، روی دسکتاپ یا یک پوشه بکشید', ondragstart: function (e) { try { e.dataTransfer.setData('DownloadURL', (f.mime || 'application/octet-stream') + ':' + f.name.replace(/:/g, '_') + ':' + dlUrl); } catch (er) { /* not Chromium */ } }, onclick: function (e) { if (selecting) e.preventDefault(); e.stopPropagation(); } },
       el('span', { class: 'bf-ico' + (f.image ? ' img' : '') }, f.image ? el('img', { src: f.url, alt: '', loading: 'lazy' }) : el('b', { text: ext || 'FILE' })),
       el('span', { class: 'bf-copy' }, el('strong', { text: f.name, dir: 'auto' }), el('small', { text: MP.fileSize(f.size) + ' · دانلود' })));
   }
@@ -2035,7 +2038,8 @@
             grid('user', 'blue', 'مخاطب', function () { closeAttach(); MP.chatKit.pickContact().then(function (c2) { if (c2) sendNow({ body: '', x: { contact: c2 } }); }); }),
             grid('video', 'red', 'پیام ویدیویی', function () { closeAttach(); recordRound(); }),
             grid('smile', 'orange', 'استیکر و GIF', function () { closeAttach(); openStickers(); }),
-            grid('tasks', 'teal', 'تسک یا پروژه', function () { closeAttach(); pickCard(); })),
+            grid('tasks', 'teal', 'تسک یا پروژه', function () { closeAttach(); pickCard(); }),
+            MP.desktop && MP.desktop.snip ? grid('image', 'violet', 'اسکرین‌شات', function () { closeAttach(); MP.desktop.snip(); }) : null),
           recent),
         el('div', { class: 'as-tabs' },
           tab('image', 'گالری', function () { pick('composer-media', 'photo'); }, true),
@@ -2916,8 +2920,29 @@
     },
     folder: function (id) { if (id === undefined) return listTab; listTab = id; listArch = false; try { localStorage.setItem('mp_chat_tab', listTab); } catch (e) { /* private mode */ } renderList(); },
     archive: function () { listArch = true; renderList(); },
-    newDirect: function () { newDirect(); }
+    newDirect: function () { newDirect(); },
+    /** Files from outside (a screenshot, «ارسال به مربع چت» in Explorer): into the open chat, or pick one first. */
+    send: function (files) {
+      if (!files || !files.length) return;
+      if (current) { sendSheet(files); return; }
+      pickChat('ارسال ' + (files.length > 1 ? fa(files.length) + ' فایل' : '«' + files[0].name + '»') + ' به…', function (id) { select(id); setTimeout(function () { sendSheet(files); }, 600); });
+    },
+    pick: function (title, fn) { pickChat(title, fn); }
   };
+  /** A quick list of chats (search + recent first) for sending something in. */
+  function pickChat(title, fn) {
+    var q = el('input', { type: 'search', class: 'input', placeholder: 'جستجوی گفت‌وگو…', 'aria-label': 'جستجوی گفت‌وگو' });
+    var list = el('div', { class: 'pick-list' });
+    function draw() {
+      var v = MP.norm(q.value);
+      list.replaceChildren.apply(list, S.channels.filter(function (c) { return c.can_post !== false && (!v || MP.norm(c.title).indexOf(v) >= 0); }).sort(listOrder).slice(0, 40).map(function (c) {
+        return el('button', { type: 'button', class: 'chat-item', onclick: function () { MP.dialog.close(); fn(c.id); } }, channelIcon(c, 'sm'), el('span', { class: 'ci-copy' }, el('strong', { text: c.title })));
+      }));
+    }
+    q.oninput = draw; draw();
+    MP.dialog.open(title, el('div', { class: 'form' }, q, list));
+    setTimeout(function () { q.focus(); }, 50);
+  }
   MP.clientSettings = function (c) { clientSettings(c); };
   MP.startDirect = function (userId) {
     MP.api('channels', { method: 'POST', body: { type: 'direct', user_id: userId } }).then(function (ch) {

@@ -88,6 +88,7 @@
     ['Ctrl + =  /  Ctrl + −', 'بزرگ‌تر / کوچک‌تر کردن کل رابط'],
     ['Ctrl + W  /  Ctrl + Q', 'رفتن کنار ساعت / خروج کامل (اپ ویندوز)'],
     ['Ctrl + L', 'قفل با رمز محلی'],
+    ['Ctrl + Shift + S', 'اسکرین‌شات و ارسال در گفت‌وگو (اپ ویندوز)'],
     ['Ctrl + /', 'همین فهرست']
   ];
   function keysHelp() {
@@ -168,7 +169,13 @@
   MP.updateBadges = function (c) { origBadges(c); if (C.pop) return; var n = (c || S.boot.counts || {}).messages || 0; post({ t: 'badge', n: n }); };
 
   // While the window is hidden the host wakes the page every few seconds: news become Windows notifications.
-  var lastId = -1, busy = false, focused = true;
+  var lastId = -1, busy = false, focused = true, pending = {};
+  // read or opened: that chat's notification lines start again
+  MP.on('view', function () { pending = {}; });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && focused) pending = {}; });
+  // the live connection says something changed: look at once (no waiting for the 15-second tick)
+  var liveT = 0;
+  MP.on('live', function () { clearTimeout(liveT); liveT = setTimeout(check, 400); });
   function check() {
     if (busy || C.pop) return; busy = true;
     var u = C.chat && C.chat.feed ? C.chat.feed : '/?mp_push_feed=1&chat=1';
@@ -179,7 +186,11 @@
       // Hidden, minimised, or behind other windows: a Windows notification (an open chat in front shows it anyway).
       // Locked with the local passcode: no name, no text, no reply box.
       var lk = MP.isLocked && MP.isLocked();
-      if (lastId >= 0 && n.id > lastId && (document.hidden || !focused || lk)) post(lk ? { t: 'notify', id: n.id, title: 'مربع چت', body: 'پیام تازه', channel: 0, noreply: 1 } : { t: 'notify', id: n.id, title: n.title, body: n.body, channel: n.channel || 0 });
+      if (lastId >= 0 && n.id > lastId && (document.hidden || !focused || lk)) {
+        // A few messages of the same chat in one notification (the newest replaces the toast of that chat).
+        var ch = n.channel || 0, lines = pending[ch] = (pending[ch] || []).concat([n.body || '']).slice(-3);
+        post(lk ? { t: 'notify', id: n.id, title: 'مربع چت', body: 'پیام تازه', channel: 0, noreply: 1 } : { t: 'notify', id: n.id, title: n.title + (lines.length > 1 ? ' (' + MP.fa(lines.length) + ')' : ''), body: lines.join('\n'), channel: ch });
+      }
       lastId = Math.max(lastId, n.id);
     }).catch(function () { busy = false; });
   }
@@ -196,11 +207,35 @@
     else if (d.t === 'panel') window.open(C.panel, '_blank');
     else if (d.t === 'activity') presence(d);
     else if (d.t === 'reply' && d.channel) toastReply(+d.channel, String(d.text || ''));
+    else if (d.t === 'clip') clipImage();
+    else if (d.t === 'share') shareFiles(e.additionalObjects || []);
     else if (d.t === 'read' && d.channel) toastRead(+d.channel);
   });
 
+  /* A screenshot (Windows' own snipping, started by the app) lands on the clipboard: into the chat. */
+  function clipImage() {
+    if (!navigator.clipboard || !navigator.clipboard.read) return;
+    navigator.clipboard.read().then(function (items) {
+      var it = items.filter(function (x) { return x.types.some(function (t) { return /^image\//.test(t); }); })[0];
+      if (!it) return;
+      var type = it.types.filter(function (t) { return /^image\//.test(t); })[0];
+      return it.getType(type).then(function (blob) {
+        MP.chatDesk.send([new File([blob], 'screenshot-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.png', { type: type })]);
+      });
+    }).catch(function () { MP.toast('تصویر از کلیپ‌بورد خوانده نشد؛ با Ctrl+V در کادر پیام بچسبانید.'); });
+  }
+  MP.desktop.snip = function () { post({ t: 'snip' }); };
+  /* Files sent from Explorer (right-click → «ارسال به» → «مربع چت»): handles from the app. */
+  function shareFiles(handles) {
+    Promise.all(Array.prototype.map.call(handles, function (h) { return h && h.getFile ? h.getFile() : null; })).then(function (files) {
+      files = files.filter(Boolean);
+      if (files.length) MP.chatDesk.send(files);
+    }).catch(function () { MP.toast('فایل‌ها خوانده نشدند.', { error: true }); });
+  }
+
   /* Answers typed into a Windows notification and its «خوانده شد» button: done here, the window stays hidden. */
   function toastRead(ch) {
+    delete pending[ch];
     return MP.api('channels/' + ch + '/read', { method: 'POST' }).then(function () { MP.refreshCounts(); MP.loadChannels(); check(); }).catch(function () {});
   }
   function toastReply(ch, text) {

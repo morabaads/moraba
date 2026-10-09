@@ -19,6 +19,8 @@
   function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
   function read(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
+  if (host && window.__MP_DESKTOP.mica) document.documentElement.classList.add('mica');
+
   /* ------------------------------------------------------------ Interface scale */
 
   var SCALES = [1, 1.1, 1.25, 1.5, 1.75, 2];
@@ -254,6 +256,10 @@
         themes.append(el('div', { class: 'tg-accents', role: 'radiogroup', 'aria-label': 'رنگ اصلی' }, ACC.map(function (a) {
           return el('button', { type: 'button', role: 'radio', class: 'tg-acc' + ((p.accent || '') === a ? ' on' : ''), 'aria-checked': String((p.accent || '') === a), title: a ? a : 'نارنجی مربع (پیش‌فرض)', style: { background: a || '#f28a24' }, onclick: function () { p.accent = a; MP.savePrefs(); PAGES.chat(); } });
         })));
+        if (host && window.__MP_DESKTOP.micaok) themes.append(row('monitor', 'پشت پنجره: دسکتاپ (Acrylic ویندوز ۱۱)', 'پنجره نیمه‌شفاف روی دسکتاپ؛ با باز کردن دوباره برنامه اعمال می‌شود', { end: sw(window.__MP_DESKTOP.mica, function (on) {
+          MP.desktop.set('mica', on);
+          MP.confirm('باز کردن دوباره', 'برای اعمال، مربع چت بسته و دوباره باز شود؟', 'باز کردن دوباره').then(function (ok) { if (ok) post({ t: 'restart' }); });
+        }) }));
         themes.append(row('palette', 'شیشه‌ای (مات و محو)', 'ستون‌ها و پنجره‌ها نیمه‌شفاف با پس‌زمینه محو؛ خاموش برای کامپیوترهای کند', { end: sw(p.glass !== false, function (on) { p.glass = on; MP.savePrefs(); }) }));
         b.append(themes);
         var L = MP.chatLooks;
@@ -376,6 +382,8 @@
     // The Windows app, like Telegram Desktop: Ctrl+W hides the window beside the clock (closes a separate chat
     // window), Ctrl+Q quits.
     if (host && !e.shiftKey && (e.code === 'KeyW' || e.code === 'KeyQ')) { e.preventDefault(); post({ t: e.code === 'KeyW' ? 'hide' : 'quit' }); return; }
+    // Ctrl+Shift+S: Windows' snipping, the picture comes into the chat
+    if (host && e.shiftKey && e.code === 'KeyS') { e.preventDefault(); post({ t: 'snip' }); return; }
     if (e.key === '=' || e.key === '+' || e.code === 'NumpadAdd') { e.preventDefault(); stepScale(1); return; }
     if (e.key === '-' || e.key === '_' || e.code === 'NumpadSubtract') { e.preventDefault(); stepScale(-1); return; }
     if (!document.body.classList.contains('tg') || e.shiftKey) return;
