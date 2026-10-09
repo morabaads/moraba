@@ -8,7 +8,7 @@ import android.net.Uri;
 final class App {
     private App() {}
 
-    static final String VERSION = Config.CHAT ? "chat-1.1" : "2.2";
+    static final String VERSION = Config.CHAT ? "chat-1.2" : "2.3";
 
     private static SharedPreferences prefs(Context c) {
         return c.getApplicationContext().getSharedPreferences("moraba_app", Context.MODE_PRIVATE);

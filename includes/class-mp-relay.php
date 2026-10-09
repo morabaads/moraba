@@ -132,7 +132,9 @@ class MP_Relay {
 	 * Body: u32 json length, json {r:[[type,length],…] records to add, c:{peer:[gen,offset]} read cursors,
 	 * w:{peer:'hi'|'lo'|'off'} wanted video, kf:[peer…] start those from their last keyframe},
 	 * then the records' bytes.
-	 * Record types: 1 μ-law sound, 2 Opus sound, 3 JPEG frame, 4 video keyframe, 5 video frame.
+	 * Record types: 1 μ-law sound, 2 Opus sound, 3 JPEG frame, 4 video keyframe, 5 video frame, 6 call signal (JSON).
+	 * Query extras for voice calls: wait=ms holds the request (≤ 1.5 s) until the others send something, so sound
+	 * arrives as soon as it is written; nr=1 only sends (the call's sender runs beside a held receiver).
 	 * Reply: u32 json length, json {c, items:[[peer,type,length]]}, then the bytes.
 	 *
 	 * @return array [http status, body]
@@ -171,7 +173,7 @@ class MP_Relay {
 			$len  = isset( $rec[1] ) ? max( 0, min( 1048576, (int) $rec[1] ) ) : 0;
 			$data = substr( $body, $pos, $len );
 			$pos += $len;
-			if ( $type < 1 || $type > 5 || strlen( $data ) !== $len || ( $muted && $type <= 2 ) ) {
+			if ( $type < 1 || $type > 6 || strlen( $data ) !== $len || ( $muted && $type <= 2 ) ) {
 				continue;
 			}
 			if ( 3 === $type || 4 === $type ) {
@@ -200,7 +202,29 @@ class MP_Relay {
 		}
 		touch( $d );
 
-		// What the others sent.
+		if ( ! empty( $q['nr'] ) ) {
+			$json = '{"c":{},"items":[]}';
+			return array( 200, pack( 'N', strlen( $json ) ) . $json );
+		}
+		// What the others sent; with wait, held until there is something (checked every 10 ms).
+		$wait  = isset( $q['wait'] ) ? max( 0, min( 1500, (int) $q['wait'] ) ) : 0;
+		$until = microtime( true ) + $wait / 1000;
+		while ( true ) {
+			$got = self::read_others( $d, $p, $j );
+			if ( $got[0] || microtime( true ) >= $until ) {
+				break;
+			}
+			usleep( 10000 );
+			if ( ! is_dir( $d ) ) {
+				return array( 410, '' );
+			}
+		}
+		$json = json_encode( array( 'c' => (object) $got[2], 'items' => $got[0] ) ); // phpcs:ignore
+		return array( 200, pack( 'N', strlen( $json ) ) . $json . $got[1] );
+	}
+
+	/** @return array [items, bytes, new cursors] of everything the others wrote after this peer's cursors. */
+	private static function read_others( $d, $p, $j ) {
 		$cur   = isset( $j['c'] ) && is_array( $j['c'] ) ? $j['c'] : array();
 		$wants = isset( $j['w'] ) && is_array( $j['w'] ) ? $j['w'] : array();
 		$kf    = isset( $j['kf'] ) && is_array( $j['kf'] ) ? array_map( 'intval', $j['kf'] ) : array();
@@ -275,8 +299,7 @@ class MP_Relay {
 			}
 			$nc[ $o ] = $c;
 		}
-		$json = json_encode( array( 'c' => (object) $nc, 'items' => $items ) ); // phpcs:ignore
-		return array( 200, pack( 'N', strlen( $json ) ) . $json . $data );
+		return array( $items, $data, $nc );
 	}
 
 	/** Host-enforced mute: the relay drops this person's sound until it is lifted. */

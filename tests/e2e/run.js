@@ -222,7 +222,47 @@ async function callPush(b) {
   await q.ctx.close(); await ctx.close();
 }
 
+/* Voice call between two browsers with fake microphones: through the site's relay, then device to device. */
+async function voice() {
+  const vb = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
+  for (const direct of [false, true]) {
+    console.log('voice call ' + (direct ? '(direct)' : '(through the site)'));
+    const two = [];
+    for (const user of ['admin', 'emp']) {
+      const ctx = await vb.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone'] });
+      await ctx.addInitScript(d => { try { localStorage.setItem('mp_tour_done', '1'); if (!d) localStorage.setItem('mp_call_p2p', '0'); } catch (e) { /* private */ } }, direct);
+      const p = await ctx.newPage(); p.errors = [];
+      p.on('pageerror', e => { if (!/wp is not/.test(e.message)) p.errors.push(e.message); });
+      await p.goto(BASE + '/chat/'); await p.fill('#user_login', user); await p.fill('#user_pass', user); await p.press('#user_pass', 'Enter');
+      await p.waitForSelector('body:not(.is-loading)', { timeout: 15000 }); await wait(1500);
+      two.push({ ctx, p });
+    }
+    const [A, B] = two;
+    const emp = await A.p.evaluate(() => MP.S.users.find(u => /سارا/.test(u.name)).id);
+    await A.p.evaluate(u => MP.call(u, false), emp);
+    ok(await A.p.evaluate(() => /زنگ/.test(document.querySelector('.vc-status').textContent)), 'caller: «در حال زنگ زدن…»');
+    await B.p.waitForSelector('.call-ring', { timeout: 15000 });
+    await B.p.click('.cr-yes');
+    const up = async x => x.p.waitForFunction(() => MP.voice.current() && MP.voice.current().state === 'active', null, { timeout: 15000 }).then(() => true, () => false);
+    ok(await up(A) && await up(B), 'both sides connected');
+    await wait(3000);
+    const st = await A.p.evaluate(() => { const v = MP.voice.current(); return { p2p: v.p2p, opus: !!v.enc, buf: (v.stats || {}).target || 0, txt: document.querySelector('.vc-status').textContent }; });
+    if (direct) ok(st.p2p, 'direct connection between the two devices');
+    else ok(!st.p2p && st.opus && st.buf > 0 && st.buf <= 300, 'Opus through the relay, jitter buffer ' + st.buf + ' ms');
+    ok(/^[۰-۹]{2}:[۰-۹]{2}$/.test(st.txt), 'call timer ' + st.txt);
+    await A.p.evaluate(() => MP.voice.end());
+    ok(await B.p.waitForFunction(() => !MP.voice.current() || MP.voice.current().ended, null, { timeout: 8000 }).then(() => true, () => false), 'hang-up reaches the other side');
+    await wait(1500);
+    const id = await A.p.evaluate(u => MP.S.channels.find(c => c.type === 'direct' && c.other === u).id, emp);
+    ok(/تماس صوتی · /.test(await A.p.evaluate(i => MP.api('channels/' + i + '/messages', { noCache: true }).then(d => d.messages.slice(-1)[0].body), id)), 'call length written in the chat');
+    ok(!A.p.errors.length && !B.p.errors.length, 'no page errors ' + A.p.errors.concat(B.p.errors).join(' | '));
+    await A.ctx.close(); await B.ctx.close();
+  }
+  await vb.close();
+}
+
 (async () => {
+  try { await voice(); } catch (e) { ok(false, 'voice: ' + e.message.split('\n')[0]); }
   const b = await chromium.launch();
   for (const t of [session, shell, lock, presence, android, iphone, callPush]) {
     try { await t(b); } catch (e) { ok(false, t.name + ': ' + e.message.split('\n')[0]); }

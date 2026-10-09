@@ -11,7 +11,7 @@ class MP_Frontend {
 	const CHAT_EXE_VERSION = '2.5.0';
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
-	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'chat-shell.js', 'chat-calls.js', 'chat-mobile.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
+	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'chat-shell.js', 'chat-calls.js', 'call-voice.js', 'chat-mobile.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'add_rewrite' ) );

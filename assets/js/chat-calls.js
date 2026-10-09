@@ -18,6 +18,8 @@
 
   var outgoing = null;
   MP.call = function (uid, video) {
+    // a voice call stays in the app (call-voice.js); video calls open the meeting room
+    if (!video && MP.voice) { MP.voice.start(uid); return; }
     var u = MP.user(uid);
     MP.api('calls', { method: 'POST', body: { user_id: uid, video: video ? 1 : 0 } }).then(function (d) {
       outgoing = { id: d.id, name: u.name };
@@ -60,6 +62,7 @@
   function answer(action) {
     var r = ringing; if (!r) return;
     hideRing();
+    if (action === 'accept' && !+r.video && MP.voice) { MP.voice.join(r); return; } // accepts it itself
     MP.api('calls/' + r.id, { method: 'POST', body: { action: action } }).then(function (d) {
       if (action === 'accept') openRoom(d.url || r.url, 'تماس با ' + r.name);
     }).catch(MP.soft);

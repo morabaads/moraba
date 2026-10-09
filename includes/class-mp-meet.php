@@ -141,8 +141,8 @@ class MP_Meet {
 		return self::get_settings();
 	}
 
-	/** ICE servers for the room page (WebRTC mode). */
-	private static function ice() {
+	/** ICE servers for the room page (WebRTC mode) and voice calls. */
+	public static function ice() {
 		$s   = self::settings();
 		$out = array();
 		foreach ( preg_split( '/[\s,]+/', (string) $s['stun'] ) as $u ) {

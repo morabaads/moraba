@@ -3,8 +3,8 @@
      Config.CHAT = true and renamed to ir.moraba.chat, so both install side by side. No widgets. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="ir.moraba.panel"
-    android:versionCode="2"
-    android:versionName="1.1">
+    android:versionCode="3"
+    android:versionName="1.2">
 
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
     <uses-permission android:name="android.permission.INTERNET" />

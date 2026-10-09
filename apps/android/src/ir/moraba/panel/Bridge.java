@@ -122,6 +122,17 @@ final class Bridge {
 
     @JavascriptInterface public void clearShared() { if (ours()) a.clearShared(); }
 
+    /** A voice call starts / ends: the phone's call audio mode, the screen and the page keep running. */
+    @JavascriptInterface public void callAudio(final boolean on) {
+        if (!ours()) return;
+        ui(new Runnable() { @Override public void run() { a.callAudio(on); } });
+    }
+
+    /** «بلندگو» in a voice call: speakerphone on / earpiece. */
+    @JavascriptInterface public void speaker(final boolean on) {
+        ui(new Runnable() { @Override public void run() { a.speaker(on); } });
+    }
+
     @JavascriptInterface public void haptic() {
         ui(new Runnable() { @Override public void run() { a.getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); } });
     }

@@ -114,7 +114,7 @@ public class MainActivity extends Activity {
         super.onPause();
         foreground = false;
         CookieManager.getInstance().flush();
-        if (web != null) web.onPause();
+        if (web != null && !inCall) web.onPause(); // a voice call goes on while another app is in front
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
@@ -266,6 +266,28 @@ public class MainActivity extends Activity {
             @Override public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult r) { js("window.__mpBio&&window.__mpBio(true)"); }
             @Override public void onAuthenticationError(int code, CharSequence msg) { js("window.__mpBio&&window.__mpBio(false)"); }
         });
+    }
+
+    /* ------------------------------------------------------------ Voice calls (call-voice.js) */
+
+    static volatile boolean inCall;
+
+    /** Communication mode: the phone's own echo canceller and the earpiece; the call keeps going behind other apps. */
+    void callAudio(boolean on) {
+        inCall = on;
+        android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am != null) {
+            am.setMode(on ? android.media.AudioManager.MODE_IN_COMMUNICATION : android.media.AudioManager.MODE_NORMAL);
+            if (!on) am.setSpeakerphoneOn(false);
+        }
+        if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setVolumeControlStream(on ? android.media.AudioManager.STREAM_VOICE_CALL : android.media.AudioManager.USE_DEFAULT_STREAM_TYPE);
+    }
+
+    void speaker(boolean on) {
+        android.media.AudioManager am = (android.media.AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am != null) am.setSpeakerphoneOn(on);
     }
 
     void notifySettings() {
