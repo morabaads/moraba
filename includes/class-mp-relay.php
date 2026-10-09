@@ -121,10 +121,32 @@ class MP_Relay {
 			http_response_code( 503 ); // the page then uses the WordPress route
 			exit;
 		}
-		$res = self::handle( $base, $_GET, (string) file_get_contents( 'php://input', false, null, 0, self::MAXBODY ) ); // phpcs:ignore
+		$res = self::handle( $base, $_GET, self::body( isset( $_POST['d'] ) ? (string) $_POST['d'] : null, (string) file_get_contents( 'php://input', false, null, 0, self::MAXBODY ) ) ); // phpcs:ignore
+		self::reply( $res, ! empty( $_GET['t'] ) ); // phpcs:ignore
+	}
+
+	/**
+	 * Web firewalls on shared hosts (ModSecurity: «406 Not Acceptable») refuse raw binary bodies, so pages send the
+	 * records as an ordinary form field d=base64url(…) and ask (t=1) for the answer as base64 text. Raw bodies still work.
+	 */
+	public static function body( $field, $raw ) {
+		if ( null === $field || '' === $field ) {
+			return $raw;
+		}
+		$b = base64_decode( strtr( $field, '-_', '+/' ), true ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions
+		return false === $b ? '' : $b;
+	}
+
+	public static function reply( $res, $text ) {
 		http_response_code( $res[0] );
-		header( 'Content-Type: application/octet-stream' );
-		echo $res[1]; // phpcs:ignore
+		header( 'Cache-Control: no-store' );
+		if ( $text ) {
+			header( 'Content-Type: text/plain; charset=us-ascii' );
+			echo base64_encode( $res[1] ); // phpcs:ignore
+		} else {
+			header( 'Content-Type: application/octet-stream' );
+			echo $res[1]; // phpcs:ignore
+		}
 		exit;
 	}
 

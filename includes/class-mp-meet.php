@@ -1539,12 +1539,9 @@ class MP_Meet {
 		if ( ! self::by_token( (string) $r['token'] ) ) {
 			return self::err( 'جلسه پیدا نشد.', 404 );
 		}
-		$res = MP_Relay::handle( MP_Relay::base_wp(), $r->get_query_params(), $r->get_body() );
-		status_header( $res[0] );
-		header( 'Content-Type: application/octet-stream' );
-		header( 'Cache-Control: no-store' );
-		echo $res[1]; // phpcs:ignore
-		exit;
+		$d   = $r->get_body_params();
+		$res = MP_Relay::handle( MP_Relay::base_wp(), $r->get_query_params(), MP_Relay::body( isset( $d['d'] ) ? (string) $d['d'] : null, $r->get_body() ) );
+		MP_Relay::reply( $res, ! empty( $r->get_query_params()['t'] ) );
 	}
 
 	public static function room_end( WP_REST_Request $r ) {

@@ -356,19 +356,39 @@
     var r = v.relay;
     return (v.rest ? r.rest + (r.rest.indexOf('?') >= 0 ? '&' : '?') : r.relay + '?') + r.q + extra;
   }
+  function b64enc(u8) {
+    var s = '';
+    for (var i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_');
+  }
+  function b64dec(t) {
+    var s = atob(t.replace(/\s+/g, '')), u = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    return u.buffer;
+  }
+  /**
+   * One call to the relay. Web firewalls on shared hosts (ModSecurity, «406») refuse raw binary bodies, so the
+   * records go as an ordinary form field in base64 and come back as base64 text; v.raw (raw bytes) only if the
+   * host refuses that instead.
+   */
   function post(v, recs, extra, cursor) {
     var head = { r: recs.map(function (x) { return [x[0], x[1].length]; }), c: cursor ? v.c : {}, w: {} };
-    var hj = new TextEncoder().encode(JSON.stringify(head)), len = new Uint8Array(4);
-    new DataView(len.buffer).setUint32(0, hj.length);
+    var hj = new TextEncoder().encode(JSON.stringify(head)), total = 4 + hj.length;
+    recs.forEach(function (x) { total += x[1].length; });
+    var buf = new Uint8Array(total), at = 4;
+    new DataView(buf.buffer).setUint32(0, hj.length); buf.set(hj, 4); at += hj.length;
+    recs.forEach(function (x) { buf.set(x[1], at); at += x[1].length; });
     var ctl = window.AbortController ? new AbortController() : null, to = ctl ? setTimeout(function () { ctl.abort(); }, 12000) : 0;
-    return fetch(relayUrl(v, extra), {
-      method: 'POST', body: new Blob([len, hj].concat(recs.map(function (x) { return x[1]; })), { type: 'application/octet-stream' }),
-      headers: v.rest && C.nonce ? { 'X-WP-Nonce': C.nonce } : {}, credentials: v.rest ? 'same-origin' : 'omit', cache: 'no-store', signal: ctl ? ctl.signal : undefined
+    var h = v.rest && C.nonce ? { 'X-WP-Nonce': C.nonce } : {};
+    if (!v.raw) h['Content-Type'] = 'application/x-www-form-urlencoded';
+    return fetch(relayUrl(v, extra + (v.raw ? '' : '&t=1')), {
+      method: 'POST', body: v.raw ? new Blob([buf], { type: 'application/octet-stream' }) : 'd=' + b64enc(buf),
+      headers: h, credentials: v.rest ? 'same-origin' : 'omit', cache: 'no-store', signal: ctl ? ctl.signal : undefined
     }).then(function (r) {
       clearTimeout(to);
       v.codes[r.status] = (v.codes[r.status] || 0) + 1;
       if (!r.ok) { var e = new Error('relay'); e.status = r.status; throw e; }
-      return r.arrayBuffer();
+      return v.raw ? r.arrayBuffer() : r.text().then(b64dec);
     }, function (e) { clearTimeout(to); v.codes.net = (v.codes.net || 0) + 1; throw e; });
   }
   /** @return true when the call is over. */
@@ -377,8 +397,11 @@
     var st = e && e.status;
     if (st === 410) { setTimeout(function () { if (V === v && !v.ended) end(v.state === 'ringing' ? 'پاسخ داده نشد' : 'تماس پایان یافت', true); }, 1500); return true; }
     // relay.php refused by the host (firewall, no PHP in plugins, missing key): the WordPress route instead
-    if (!v.rest && (st === 403 || st === 404 || st === 405 || st === 406 || st === 500 || st === 503 || !st) && v.fails > 1) { v.rest = true; v.fails = 0; return false; }
-    if (v.rest && st === 403 && v.fails > 3) { end('دسترسی به تماس رد شد', true); return true; }
+    if ((st === 403 || st === 404 || st === 405 || st === 406 || st === 415 || st === 500 || st === 503 || !st) && v.fails > 1) {
+      if (!v.rest) { v.rest = true; v.fails = 0; return false; }
+      if ((st === 406 || st === 415 || st === 403) && !v.raw) { v.raw = true; v.rest = false; v.fails = 0; return false; }
+    }
+    if (v.rest && v.raw && st === 403 && v.fails > 3) { end('دسترسی به تماس رد شد', true); return true; }
     if (st === 429 || st === 503 || st === 508 || st === 502) v.gap = Math.min(200, v.gap + 40); // the host asks to slow down
     return false;
   }
@@ -388,7 +411,10 @@
     clearTimeout(v.sendT);
     flushOpus(v);
     if (v.sendBusy || !v.out.length) { v.sendT = setTimeout(sendTick, Math.min(40, v.gap)); return; }
-    var recs = v.out.splice(0), t0 = Date.now();
+    // at most ~48 KB per request (form fields on shared hosts have size limits); the rest goes next time
+    var n = 0, size = 0;
+    while (n < v.out.length && (n === 0 || size + v.out[n][1].length < 49152)) { size += v.out[n][1].length; n++; }
+    var recs = v.out.splice(0, n), t0 = Date.now();
     v.sendBusy = true;
     post(v, recs, '&nr=1', false).then(function () {
       v.fails = 0; v.sent += recs.length;
@@ -600,6 +626,7 @@
   function hint(v) {
     if (v.actx && v.actx.state !== 'running') return 'صدای برنامه متوقف است؛ روی صفحه بزنید.';
     if (!v.frames) return 'صدایی از میکروفون نمی‌رسد؛ اجازه میکروفون و دستگاه صدا را بررسی کنید.';
+    if ((v.codes[406] || v.codes[415]) && (!v.okAt || Date.now() - v.okAt > 5000)) return 'فایروال هاست (ModSecurity) درخواست‌های تماس را رد می‌کند (' + codes(v) + ')؛ از پشتیبانی هاست بخواهید آدرس relay.php و wp-json/moraba-panel را از فایروال مستثنا کند.';
     if (!v.okAt || Date.now() - v.okAt > 5000) return 'سایت به تماس جواب نمی‌دهد (' + codes(v) + ')؛ احتمالاً هاست درخواست‌های هم‌زمان را محدود کرده است.';
     if (v.rtt > 1500) return 'سایت خیلی دیر جواب می‌دهد (' + MP.faDigits(String(v.rtt)) + ' میلی‌ثانیه)؛ هاست شلوغ است یا محدودیت دارد.';
     if (v.oldPeer && !v.peerCaps) return v.name + ' با نسخه قدیمی برنامه پاسخ داد؛ برنامه یا صفحه‌اش را یک بار ببندد و دوباره باز کند.';
@@ -610,7 +637,7 @@
   function codes(v) { return Object.keys(v.codes).map(function (k) { return k + '×' + v.codes[k]; }).join(' ') || 'بی‌پاسخ'; }
   function diagText(v) {
     return [
-      'مسیر: ' + (v.p2p ? 'مستقیم' : v.rest ? 'سایت (وردپرس)' : 'سایت (relay.php)') + ' · ICE: ' + (v.ice || '—'),
+      'مسیر: ' + (v.p2p ? 'مستقیم' : v.rest ? 'سایت (وردپرس)' : 'سایت (relay.php)') + (v.raw ? ' · دودویی' : ' · فرم') + ' · ICE: ' + (v.ice || '—'),
       'زمان رفت‌وبرگشت: ' + (v.rtt || '—') + ' ms · فاصله ارسال: ' + v.gap + ' ms',
       'بافر: ' + ((v.stats || {}).buf || 0) + '/' + ((v.stats || {}).target || 0) + ' ms · قطعی پخش: ' + ((v.stats || {}).under || 0),
       'میکروفون: ' + v.frames + ' قطعه، سطح ' + Math.round(v.micLvl * 1000) + ' · صدا: ' + (v.actx ? v.actx.state + ' ' + v.actx.sampleRate : '—'),

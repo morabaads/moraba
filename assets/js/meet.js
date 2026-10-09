@@ -591,6 +591,16 @@
     });
     return w;
   }
+  function b64enc(u8) {
+    var s = '';
+    for (var i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_');
+  }
+  function b64dec(t) {
+    var s = atob(t.replace(/\s+/g, '')), u = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    return u.buffer;
+  }
   function relayInterval() { var n = room.peers.length; return n <= 3 ? 120 : n <= 6 ? 200 : 300; }
   function relayTick() {
     clearTimeout(R.timer);
@@ -601,13 +611,18 @@
     var started = Date.now(), recs = R.out.splice(0); R.outBytes = 0;
     var kf = Object.keys(R.kf).map(Number); R.kf = {};
     var head = { r: recs.map(function (x) { return [x[0], x[1].length]; }), c: R.c, w: wantsMap(), kf: kf };
-    var hj = new TextEncoder().encode(JSON.stringify(head)), len = new Uint8Array(4);
-    new DataView(len.buffer).setUint32(0, hj.length);
-    var body = new Blob([len, hj].concat(recs.map(function (x) { return x[1]; })), { type: 'application/octet-stream' });
-    var url = R.rest ? C.api + '/relay?' + R.q : info.relay + '?' + R.q;
+    var hj = new TextEncoder().encode(JSON.stringify(head)), total = 4 + hj.length;
+    recs.forEach(function (x) { total += x[1].length; });
+    var raw = new Uint8Array(total), at0 = 4 + hj.length;
+    new DataView(raw.buffer).setUint32(0, hj.length); raw.set(hj, 4);
+    recs.forEach(function (x) { raw.set(x[1], at0); at0 += x[1].length; });
+    // shared hosts' web firewalls (ModSecurity, «406») refuse raw binary bodies: a base64 form field unless that fails too
+    var url = (R.rest ? C.api + '/relay?' : info.relay + '?') + R.q + (R.raw ? '' : '&t=1');
     var h = R.rest && C.nonce ? { 'X-WP-Nonce': C.nonce } : {};
+    if (!R.raw) h['Content-Type'] = 'application/x-www-form-urlencoded';
+    var body = R.raw ? new Blob([raw], { type: 'application/octet-stream' }) : 'd=' + b64enc(raw);
     fetch(url, { method: 'POST', body: body, headers: h, credentials: R.rest ? 'same-origin' : 'omit', cache: 'no-store' })
-      .then(function (r) { if (!r.ok) { var e = new Error('relay'); e.status = r.status; throw e; } return r.arrayBuffer(); })
+      .then(function (r) { if (!r.ok) { var e = new Error('relay'); e.status = r.status; throw e; } return R.raw ? r.arrayBuffer() : r.text().then(b64dec); })
       .then(function (ab) {
         R.fails = 0;
         var rtt = Date.now() - started; net.rtt = net.rtt ? Math.round(net.rtt * 0.8 + rtt * 0.2) : rtt; net.bad = false;
@@ -624,9 +639,12 @@
       })
       .catch(function (e) {
         R.fails++; net.bad = R.fails > 2;
-        if (!R.rest && (e.status === 404 || e.status === 503 || e.status === 500 || e.status === 405 || !e.status) && R.fails > 1) R.rest = true; // relay.php blocked → WordPress route
+        if ((e.status === 403 || e.status === 404 || e.status === 503 || e.status === 500 || e.status === 405 || e.status === 406 || e.status === 415 || !e.status) && R.fails > 1) {
+          if (!R.rest) { R.rest = true; R.fails = 0; } // relay.php blocked → WordPress route
+          else if (!R.raw && (e.status === 406 || e.status === 415 || e.status === 403)) { R.raw = true; R.rest = false; R.fails = 0; }
+        }
         if (recs.length && R.fails < 3) recs.filter(function (x) { return x[0] <= 2; }).forEach(function (x) { R.out.unshift(x); }); // keep sound across a short hiccup
-        if (e.status === 410 || e.status === 403) R.q = ''; // ended / removed: the next poll explains
+        if (e.status === 410 || (e.status === 403 && R.rest && R.raw)) R.q = ''; // ended / removed: the next poll explains
       })
       .then(function () { R.busy = false; paintBars(); R.timer = setTimeout(relayTick, Math.max(20, relayInterval() - (Date.now() - started)) + (R.fails > 3 ? 1500 : 0)); });
   }

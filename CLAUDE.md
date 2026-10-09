@@ -101,8 +101,9 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     it takes over only when inbound audio bytes grow and its <audio> plays; localStorage `mp_call_p2p=0` forces the
     relay), else Opus 40 kb/s 20 ms (μ-law 16 kHz without AudioEncoder) + VP8/H.264 480px 15 fps 350 kb/s (JPEG 6 fps
     without WebCodecs; records 3/4/5 with codec/w/h header like meet.js) through MP_Relay: sender every 60 ms with
-    `nr=1` (slows down on 429/502/503/508), held receiver `wait=1000`; relay.php refused (403/404/5xx) → the WordPress
-    route; AudioWorklet capture (connected to a muted path so it always runs; ScriptProcessor fallback) + adaptive
+    `nr=1` (slows down on 429/502/503/508), held receiver `wait=1000`; bodies go as a form field `d=` base64url and
+    answers come back as base64 text (`t=1`, `MP_Relay::body/reply`) because shared hosts' ModSecurity refuses raw
+    binary bodies with 406 (meet.js does the same); refusals step through relay.php → WordPress route → raw bytes; AudioWorklet capture (connected to a muted path so it always runs; ScriptProcessor fallback) + adaptive
     jitter buffer (60–300 ms), Chrome loopback for echo cancellation. `calls/{id} {action:'end'}` writes «📞 تماس صوتی · mm:ss» and purges the relay (410 = ended).
     Android app: `MorabaApp.callAudio(bool)` = MODE_IN_COMMUNICATION, keep screen on, WebView not paused. Live state also has `st` (MP_Presence::status: busy/away) shown as
     «در تماس یا جلسه» / «دور از سیستم».

@@ -225,14 +225,15 @@ async function callPush(b) {
 /* Voice call between two browsers with fake microphones: through the site's relay, then device to device. */
 async function voice() {
   const vb = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
-  for (const [direct, video] of [[false, false], [true, false], [false, true]]) {
-    console.log((video ? 'video' : 'voice') + ' call ' + (direct ? '(direct)' : '(through the site)'));
+  for (const [direct, video, waf] of [[false, false], [true, false], [false, true], [false, false, true]]) {
+    console.log((video ? 'video' : 'voice') + ' call ' + (direct ? '(direct)' : '(through the site)') + (waf ? ' behind a firewall that refuses binary bodies (406)' : ''));
     const two = [];
     for (const user of ['admin', 'emp']) {
       const ctx = await vb.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone'] });
       await ctx.addInitScript(d => { try { localStorage.setItem('mp_tour_done', '1'); if (!d) localStorage.setItem('mp_call_p2p', '0'); } catch (e) { /* private */ } }, direct);
       const p = await ctx.newPage(); p.errors = [];
       p.on('pageerror', e => { if (!/wp is not/.test(e.message)) p.errors.push(e.message); });
+      if (waf) await p.route(/relay/, r => /octet-stream/.test(r.request().headers()['content-type'] || '') ? r.fulfill({ status: 406, body: 'Not Acceptable' }) : r.continue());
       await p.goto(BASE + '/chat/'); await p.fill('#user_login', user); await p.fill('#user_pass', user); await p.press('#user_pass', 'Enter');
       await p.waitForSelector('body:not(.is-loading)', { timeout: 15000 }); await wait(1500);
       two.push({ ctx, p });
