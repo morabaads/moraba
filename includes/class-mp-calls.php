@@ -163,7 +163,8 @@ class MP_Calls {
 			}
 		}
 		if ( 'accept' === $action ) {
-			update_user_meta( $caller, 'mp_call_state', array( 'id' => $id, 'state' => 'accepted', 'at' => time() ) );
+			// app = 1: the answering page carries the call itself (an older page opens the meeting room instead)
+			update_user_meta( $caller, 'mp_call_state', array( 'id' => $id, 'state' => 'accepted', 'at' => time(), 'app' => empty( $r['app'] ) ? 0 : 1 ) );
 			$info['answered'] = time();
 			set_transient( 'mp_call_' . $id, $info, DAY_IN_SECONDS );
 			MP_Live::bump();

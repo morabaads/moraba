@@ -43,7 +43,7 @@ async function session(b) {
   ok(r, 'an expired REST nonce is renewed and the call retried');
   const q = await (await b.newContext()).newPage();
   ok((await q.goto(BASE + '/?mp_nonce=1')).status() === 401, 'no fresh nonce without a sign-in');
-  ok(await p.evaluate(() => [...document.scripts].some(x => /\/moraba-panel\/bundle-[\w.-]+\.js$/.test(x.src))), 'scripts load as one bundle');
+  ok(await p.evaluate(() => [...document.scripts].some(x => /\/moraba-panel-pub\/bundle-[\w.-]+\.js$/.test(x.src))), 'scripts load as one bundle');
   ok(!p.errors.length, 'no page errors ' + p.errors.join(' | '));
   await ctx.close();
 }

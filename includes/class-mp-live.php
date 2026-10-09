@@ -22,6 +22,18 @@ class MP_Live {
 			'/live',
 			array( 'methods' => 'GET', 'callback' => array( __CLASS__, 'live' ), 'permission_callback' => array( 'MP_Rest', 'can_access' ) )
 		);
+		register_rest_route(
+			'moraba-panel/v1',
+			'/live-mode',
+			array(
+				'methods'             => 'POST',
+				'callback'            => function ( WP_REST_Request $r ) {
+					update_option( 'mp_live_mode', 'stream' === $r['mode'] ? 'stream' : 'light' );
+					return array( 'mode' => self::mode() );
+				},
+				'permission_callback' => array( 'MP_Rest', 'can_manage' ),
+			)
+		);
 	}
 
 	private static function t( $n ) {
@@ -32,9 +44,39 @@ class MP_Live {
 		return MP_Files::dir() . '/live.ver';
 	}
 
+	/**
+	 * A public folder for files the web server hands out without PHP: the script bundle and live.txt, the
+	 * «something changed» mark that pages in the light live mode watch (it says nothing else).
+	 */
+	public static function pub_dir() {
+		$up  = wp_upload_dir( null, false );
+		$dir = trailingslashit( $up['basedir'] ) . 'moraba-panel-pub';
+		if ( ! is_dir( $dir ) ) {
+			wp_mkdir_p( $dir );
+			@file_put_contents( $dir . '/index.php', "<?php\n// Silence.\n" ); // phpcs:ignore
+		}
+		return $dir;
+	}
+
+	public static function pub_url( $file ) {
+		$up = wp_upload_dir( null, false );
+		return wp_make_link_relative( trailingslashit( $up['baseurl'] ) . 'moraba-panel-pub/' . $file );
+	}
+
+	/**
+	 * light (default): pages watch live.txt (a static file, no PHP process waits) and ask for the state only when it
+	 * changes — right for shared hosts that cap how many PHP requests run at once. stream: one held connection per
+	 * open page (Server-Sent Events), for a server of your own.
+	 */
+	public static function mode() {
+		return 'stream' === get_option( 'mp_live_mode', 'light' ) ? 'stream' : 'light';
+	}
+
 	/** Something in the chats changed: every open panel hears about it within a moment. */
 	public static function bump() {
-		@file_put_contents( self::file(), uniqid( '', true ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors, WordPress.WP.AlternativeFunctions
+		$v = uniqid( '', true );
+		@file_put_contents( self::file(), $v ); // phpcs:ignore WordPress.PHP.NoSilencedErrors, WordPress.WP.AlternativeFunctions
+		@file_put_contents( self::pub_dir() . '/live.txt', substr( md5( $v ), 0, 10 ) ); // phpcs:ignore WordPress.PHP.NoSilencedErrors, WordPress.WP.AlternativeFunctions
 	}
 
 	public static function ver() {

@@ -126,7 +126,7 @@
     draw();
     media(v.video).then(function (s) {
       v.stream = s; selfView();
-      return MP.api('calls/' + v.id, { method: 'POST', body: { action: 'accept' } });
+      return MP.api('calls/' + v.id, { method: 'POST', body: { action: 'accept', app: 1 } });
     }).then(function (d) {
       if (!d.voice) throw new Error('این تماس دیگر در دسترس نیست');
       v.relay = d.voice;
@@ -600,8 +600,10 @@
   function hint(v) {
     if (v.actx && v.actx.state !== 'running') return 'صدای برنامه متوقف است؛ روی صفحه بزنید.';
     if (!v.frames) return 'صدایی از میکروفون نمی‌رسد؛ اجازه میکروفون و دستگاه صدا را بررسی کنید.';
-    if (!v.peerCaps) return 'طرف مقابل هنوز وصل نشده است.';
-    if (!v.okAt || Date.now() - v.okAt > 5000) return 'ارتباط با سایت برقرار نیست (' + codes(v) + ').';
+    if (!v.okAt || Date.now() - v.okAt > 5000) return 'سایت به تماس جواب نمی‌دهد (' + codes(v) + ')؛ احتمالاً هاست درخواست‌های هم‌زمان را محدود کرده است.';
+    if (v.rtt > 1500) return 'سایت خیلی دیر جواب می‌دهد (' + MP.faDigits(String(v.rtt)) + ' میلی‌ثانیه)؛ هاست شلوغ است یا محدودیت دارد.';
+    if (v.oldPeer && !v.peerCaps) return v.name + ' با نسخه قدیمی برنامه پاسخ داد؛ برنامه یا صفحه‌اش را یک بار ببندد و دوباره باز کند.';
+    if (!v.peerCaps) return 'طرف مقابل هنوز وصل نشده است؛ اگر پاسخ داده، صفحه او را یک بار دوباره باز کنید.';
     if (!v.sent) return 'صدای شما به سایت نمی‌رسد (' + codes(v) + ').';
     return 'صدای طرف مقابل نمی‌رسد؛ احتمالاً میکروفون یا ارتباط او مشکل دارد.';
   }
@@ -734,5 +736,12 @@
     }, true);
   });
 
+  // what the server says about our outgoing call: declined, or answered by a page too old to join it
+  MP.on('live', function (d) {
+    var v = V;
+    if (!v || v.ended || !v.outgoing || !d.call || +d.call.id !== +v.id) return;
+    if (d.call.state === 'declined') end(v.name + ' تماس را رد کرد', true);
+    else if (d.call.state === 'accepted' && !+d.call.app && !v.peerCaps) { v.oldPeer = true; }
+  });
   MP.voice = { start: start, join: join, end: function () { end('', true); }, show: show, mute: mute, camera: camera, current: function () { return V; }, diag: function () { return V ? diagText(V) : ''; } };
 })();

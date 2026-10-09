@@ -851,6 +851,7 @@
   function liveStart() {
     if (live.es || live.polling || document.hidden || !navigator.onLine) return;
     live.open = current;
+    if (C.liveMode !== 'stream' && C.liveFile && !live.noFile) { liveLight(); return; }
     if (live.mode === 'poll' || !window.EventSource) { livePoll(); return; }
     var es;
     try { es = new EventSource(C.root + 'live?_wpnonce=' + encodeURIComponent(C.nonce) + (current ? '&open=' + current : ''), { withCredentials: true }); } catch (e) { live.mode = 'poll'; livePoll(); return; }
@@ -882,6 +883,35 @@
   /** Telegram's «در حال اتصال…» in the title: 'ok' | 'connecting' (MP.connState, event 'conn'). */
   MP.connState = 'ok';
   function conn(st) { if (MP.connState !== st) { MP.connState = st; MP.emit('conn', st); } }
+  /**
+   * The light live mode (default; shared hosts): a static file the web server hands out without PHP changes with
+   * every chat change; it is read every 1.5 s and the state is asked for only when it changed (and every 20 s for
+   * who is online). No PHP process waits for this page.
+   */
+  function liveLight() {
+    var my = ++live.polling, mark = null, last = 0, busy = false;
+    (function tick() {
+      if (live.polling !== my) return;
+      if (document.hidden) { live.polling = 0; return; }
+      fetch(C.liveFile + '?' + Date.now(), { cache: 'no-store', credentials: 'omit' }).then(function (r) {
+        if (r.status === 404) { live.fileFails = 0; return ''; } // nothing changed since the plugin was installed
+        if (!r.ok) { var e = new Error('live ' + r.status); e.file = true; throw e; }
+        live.fileFails = 0;
+        return r.text();
+      }).then(function (t) {
+        if (live.polling !== my) return;
+        var due = t !== mark || Date.now() - last > 20000 || live.open !== current;
+        mark = t;
+        if (!due || busy) return;
+        busy = true; last = Date.now(); live.open = current;
+        return MP.api('live', { query: { mode: 'poll', v: 'now', open: current || '' }, noCache: true }).then(function (d) { conn('ok'); onLive(d); }).then(function () { busy = false; }, function (e) { busy = false; throw e; });
+      }, function (e) { if (!e.file) e.file = true; throw e; }).catch(function (e) {
+        conn('connecting');
+        // the host refuses the file: back to the held connection
+        if (e && e.file && ++live.fileFails > 3 && navigator.onLine) { live.noFile = true; live.polling = 0; liveStart(); }
+      }).then(function () { if (live.polling === my) setTimeout(tick, 1500); });
+    })();
+  }
   function liveStop() { clearTimeout(live.helloT); if (live.es) { live.es.close(); live.es = null; } live.polling = 0; }
   function liveRestart() { if (live.open === current && (live.es || live.polling)) return; liveStop(); liveStart(); }
   MP.liveStart = liveStart;

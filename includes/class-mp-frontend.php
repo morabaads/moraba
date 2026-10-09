@@ -597,7 +597,7 @@ JS;
 		}
 		$up   = wp_upload_dir( null, false );
 		$name = 'bundle-' . MP_VERSION . '-' . substr( md5( $sig ), 0, 10 ) . '.js';
-		$dir  = trailingslashit( $up['basedir'] ) . 'moraba-panel';
+		$dir  = MP_Live::pub_dir(); // not uploads/moraba-panel: that folder refuses every request (chat files)
 		$file = $dir . '/' . $name;
 		if ( ! file_exists( $file ) ) {
 			if ( ! wp_mkdir_p( $dir ) ) {
@@ -620,7 +620,7 @@ JS;
 				}
 			}
 		}
-		return array( trailingslashit( $up['baseurl'] ) . 'moraba-panel/' . $name );
+		return array( trailingslashit( $up['baseurl'] ) . 'moraba-panel-pub/' . $name );
 	}
 
 	/**
@@ -677,6 +677,8 @@ JS;
 			'panel'  => self::panel_url(),
 			'chat'   => array( 'url' => self::chat_url(), 'feed' => add_query_arg( array( 'mp_push_feed' => 1, 'chat' => 1 ), home_url( '/' ) ) ) + self::chat_downloads(),
 			'appEntry' => MP_App::url(),
+			'liveMode' => MP_Live::mode(),
+			'liveFile' => MP_Live::pub_url( 'live.txt' ),
 			'assets' => MP_URL . 'assets/',
 			'home'   => home_url( '/' ),
 			'version' => MP_VERSION,

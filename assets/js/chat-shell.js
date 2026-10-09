@@ -391,7 +391,10 @@
         b.append(perf, scaleSec());
         if (S.manager) {
           var diag = sec('برای ناظر');
-          diag.append(row('alarm', 'خطاهای برنامه', 'خطاهایی که در مرورگر یا برنامه همکاران رخ داده', { onclick: closeFor(errorsDialog) }));
+          diag.append(row('alarm', 'خطاهای برنامه', 'خطاهایی که در مرورگر یا برنامه همکاران رخ داده', { onclick: closeFor(errorsDialog) }),
+            row('repeat', 'اتصال زنده پیوسته', C.liveMode === 'stream' ? 'روشن: هر صفحه باز یک اتصال دائمی به سرور دارد (سرور اختصاصی)' : 'خاموش (پیشنهادی برای هاست اشتراکی): پیام‌ها تا ۱٫۵ ثانیه بعد می‌رسند و سرور منتظر نمی‌ماند', { end: sw(C.liveMode === 'stream', function (on) {
+              MP.api('live-mode', { method: 'POST', body: { mode: on ? 'stream' : 'light' } }).then(function (d) { C.liveMode = d.mode; MP.toast('برای همه همکاران با باز شدن دوباره برنامه اعمال می‌شود'); PAGES.advanced(); }).catch(MP.soft);
+            }) }));
           b.append(diag);
         }
         if (host) b.append(el('p', { class: 'tg-hint', text: 'برنامه ویندوز نسخه ' + MP.faDigits(version()) + ' · به‌روزرسانی خودکار از سایت' }));
