@@ -204,7 +204,7 @@
     opts = opts || {};
     var tag = opts.end ? 'label' : 'button';
     return el(tag, { type: tag === 'button' ? 'button' : null, class: 'tg-srow' + (opts.danger ? ' danger' : ''), onclick: opts.onclick || null },
-      el('span', { class: 'tg-sico', html: icon(ico) }),
+      el('span', { class: 'tg-sico i-' + ico, html: icon(ico) }),
       el('span', { class: 'tg-scopy' }, el('b', { text: title }), sub ? el('small', { text: sub }) : null),
       opts.end || (opts.value ? el('span', { class: 'tg-sval', text: opts.value }) : null));
   }
@@ -215,10 +215,12 @@
       modal.addEventListener('close', function () { modal.remove(); modal = null; stack = []; if (modalLayer) { var l = modalLayer; modalLayer = null; MP.popLayer(l); } });
       modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
       document.body.append(modal);
-      modal.showModal();
+      // phones: a page under the floating tab bar (a modal dialog would sit above it)
+      if (document.body.classList.contains('tgm')) { modal.show(); modal.classList.add('tg-page'); } else modal.showModal();
       modalLayer = MP.pushLayer(onModalBack);
     }
     var body = el('div', { class: 'tg-mbody' });
+    modal.classList.toggle('tg-sub', stack.length > 1);
     modal.replaceChildren(
       el('header', { class: 'tg-mhead' },
         stack.length > 1 ? el('button', { type: 'button', class: 'icon-btn sm', 'aria-label': 'بازگشت', html: icon('right'), onclick: back }) : null,
@@ -252,7 +254,7 @@
         b.append(q, found);
         b.append(
           el('button', { type: 'button', class: 'tg-me', onclick: closeFor(function () { MP.openProfile(me.id); }) }, MP.avatar(me, 'xl'),
-            el('span', null, el('strong', { text: me.name }), el('small', { class: 'online', text: presenceLine() || 'آنلاین' }), el('small', { text: me.title || S.boot.email || '' }))),
+            el('span', null, el('strong', { text: me.name }), el('small', { class: 'online', text: presenceLine() || 'آنلاین' }), el('small', { text: me.title || S.boot.email || '' })), el('i', { class: 'tg-me-cam', html: icon('camera') })),
           (function () {
             var s = sec();
             var phone = document.body.classList.contains('tgm');

@@ -103,10 +103,11 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     with `?mp_debug=1` or MP_NO_BUNDLE). Browser errors go to `client-errors` (MP_Diag, option `mp_js_errors`, supervisors:
     settings → advanced → «خطاهای برنامه»).
   - Phones (`assets/js/chat-mobile.js`, body `tgm` = chat app below the desktop shell; html `tgm-and` / `tgm-ios`):
-    Android: top bar `#tgm-head` (☰ → `MP.tgDrawer`, title «در حال اتصال…» from `MP.connState`/event `conn`, search),
-    underline folder tabs, ✎ `#tgm-fab`, edge swipe opens the drawer; iPhone: centred title + ✎, bottom `#tgm-tabs`
-    (مخاطبین · گفت‌وگوها · تنظیمات, unread badge, `navigator.setAppBadge`). `MP.contacts()` full-screen page
-    (`MP.lastSeenOf`, call button). Drawer/settings/pages close with the back button (`MP.pushLayer`). Settings are
+    Telegram's 2025 phone look on both: large title `#tgm-head` («در حال اتصال…» from `MP.connState`/event `conn`,
+    ⋮ → `MP.tgDrawer`, iPhone also ✎), round search, folder pills, floating tab bar `#tgm-tabs` (گفت‌وگوها · مخاطبین ·
+    تنظیمات · پروفایل, `MP.mobileTab`, unread badge, `navigator.setAppBadge`); Android ✎ `#tgm-fab` + edge swipe for the
+    drawer. Tab pages `.tgm-page[data-tab]`: `MP.contacts()` (`MP.lastSeenOf`, call button), `MP.myProfile()`;
+    settings on phones = non-modal `dialog.tg-modal.tg-page` under the bar, cards with coloured icons (`.tg-sico.i-{icon}`). Drawer/settings/pages close with the back button (`MP.pushLayer`). Settings are
     full screen. Backdrop behind the glass per person: `prefs.backdrop` color/soft/plain (html `bd-soft`/`bd-plain`). Passcode on phones: lock after `after` minutes in the background, fingerprint / Face ID
     (Android app `MorabaApp.biometric` → `window.__mpBio`; web app WebAuthn platform key, `cfg.cred`), Android
     FLAG_SECURE while a passcode is set. Shared files/text: `#share` → `MP.takeShared()` (Android app:

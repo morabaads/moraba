@@ -193,14 +193,17 @@ async function android(b) {
 async function iphone(b) {
   console.log('phone: iPhone web app');
   const { ctx, p } = await openPhone(b, 'admin', true);
-  ok(await p.evaluate(() => document.documentElement.classList.contains('tgm-ios') && document.querySelectorAll('#tgm-tabs .tgm-tab').length === 3), 'tab bar: contacts · chats · settings');
-  await p.click('#tgm-tabs .tgm-tab:last-child'); await wait(500);
+  ok(await p.evaluate(() => document.documentElement.classList.contains('tgm-ios') && document.querySelectorAll('#tgm-tabs .tgm-tab').length === 4), 'floating tab bar: chats · contacts · settings · profile');
+  await p.click('#tgm-tabs .tgm-tab:nth-child(3)'); await wait(500);
   ok(await p.evaluate(() => { const m = document.querySelector('.tg-modal'); return m && m.getBoundingClientRect().width >= innerWidth - 1; }), 'settings full screen');
   await p.goBack(); await wait(400);
   ok(await p.evaluate(() => !document.querySelector('.tg-modal')), 'back closes settings');
-  await p.click('#tgm-tabs .tgm-tab:first-child'); await wait(400);
-  ok(await p.evaluate(() => !!document.querySelector('.tgm-page')), 'contacts from the tab bar');
-  await p.evaluate(() => document.querySelector('.tgm-page .tgm-phead button').click()); await wait(400);
+  await p.click('#tgm-tabs .tgm-tab:nth-child(2)'); await wait(400);
+  ok(await p.evaluate(() => !!document.querySelector('.tgm-page[data-tab=contacts]') && document.querySelector('#tgm-tabs .tgm-tab:nth-child(2)').classList.contains('on')), 'contacts from the tab bar');
+  await p.click('#tgm-tabs .tgm-tab:nth-child(4)'); await wait(500);
+  ok(await p.evaluate(() => !document.querySelector('.tgm-page[data-tab=contacts]') && !!document.querySelector('.tgm-page[data-tab=profile] .tgm-hero')), 'profile tab replaces contacts');
+  await p.click('#tgm-tabs .tgm-tab:nth-child(1)'); await wait(500);
+  ok(await p.evaluate(() => !document.querySelector('.tgm-page') && document.body.classList.contains('tgm-root')), 'back to the chats');
   const id = await chatId(p);
   await p.evaluate(i => MP.chatDesk.select(i), id); await wait(1200);
   ok(await p.evaluate(() => document.body.classList.contains('chat-full') && getComputedStyle(document.querySelector('#tgm-tabs')).display === 'none'), 'open chat hides the tab bar');

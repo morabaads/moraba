@@ -3979,7 +3979,7 @@ html.mica body.chat-app .chat-messages{background-image:none}
 .chat-at{bottom:calc(var(--down-b, 84px) + 56px)!important;font-weight:800;font-size:18px;color:var(--brand)}
 .diag-list{display:grid;gap:8px}.diag-row{display:grid;gap:2px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}.diag-row b{font:600 13px/1.5 ui-monospace,Consolas,monospace;word-break:break-word}.diag-row small{color:var(--muted);font-size:12px}
 
-/* ===================================================================== «مربع چت» on phones (chat-mobile.js, body.tgm) */
+/* ===================================================================== «مربع چت» on phones (chat-mobile.js, body.tgm) — Telegram's 2025 look */
 body:not(.tgm) .tgm-fab,body:not(.tgm) .tgm-tabs,body:not(.tgm) .tgm-head{display:none!important}
 body.tgm .topbar,body.tgm #view-messages .page-head,body.tgm .chat-saved-btn{display:none!important}
 body.tgm{padding-bottom:0}
@@ -3987,76 +3987,119 @@ body.tgm .app{padding:0!important}
 body.tgm .main{gap:0;padding:0}
 body.tgm .chat-layout{display:block;height:auto;min-height:0}
 body.tgm .chat-layout .chat-list{margin:0}
-body.tgm .chat-list{overflow:visible;padding:0 0 90px;border-radius:0;border:0;box-shadow:none;background:transparent}
-html.tgm-ios body.tgm .chat-list{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
-.tgm-head{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:2px;min-height:56px;padding:calc(4px + env(safe-area-inset-top)) 4px 4px;background:var(--surface);box-shadow:0 1px 0 var(--line)}
-.tgm-title{flex:1;display:flex;align-items:center;gap:8px;min-width:0;padding-inline:8px}
-.tgm-title strong{font-size:19px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tgm-title.busy strong{font-size:16px;font-weight:700;color:var(--ink-2)}
-html.tgm-ios .tgm-title{justify-content:center}
-html.tgm-ios .tgm-title strong{font-size:17px}
-.tgm-spin{flex:none;width:14px;height:14px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:tgm-rot .8s linear infinite}
+body.tgm .chat-list{overflow:visible;padding:0 0 calc(170px + env(safe-area-inset-bottom));border-radius:0;border:0;box-shadow:none;background:transparent}
+/* large title */
+.tgm-head{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:2px;min-height:60px;padding:calc(6px + env(safe-area-inset-top)) 8px 2px 4px;background:var(--bg)}
+.tgm-title{flex:1;display:flex;align-items:center;gap:10px;min-width:0;padding-inline:14px 4px}
+.tgm-title strong{font-size:26px;font-weight:800;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tgm-title.busy strong{font-size:19px;font-weight:700;color:var(--ink-2)}
+.tgm-spin{flex:none;width:16px;height:16px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;animation:tgm-rot .8s linear infinite}
 @keyframes tgm-rot{to{transform:rotate(360deg)}}
 .tgm-hbtn{width:44px;height:44px;flex:none}
-.tgm-hbtn .icon{width:22px;height:22px}
+.tgm-hbtn .icon{width:23px;height:23px}
 .tgm-hgap{width:44px;flex:none}
-html.tgm-ios .tgm-hbtn{color:var(--brand)}
-html.tgm-and body.tgm:not(.tgm-find) .chat-list-top:not(.chat-arch-top){display:none}
-body.tgm .chat-list-top{padding:8px 12px 6px;margin:0}
-body.tgm.tgm-find .chat-tabs{display:none}
-body.tgm .chat-tabs{position:sticky;top:calc(56px + env(safe-area-inset-top));z-index:39;gap:0;padding:0 6px;margin:0 0 4px;background:var(--surface);border-bottom:1px solid var(--line)}
-body.tgm .chat-tabs button{position:relative;border:0;border-radius:0;padding:13px 14px 11px;background:none;color:var(--muted);font-size:14px}
-body.tgm .chat-tabs button[aria-selected=true]{background:none;color:var(--brand)}
-body.tgm .chat-tabs button[aria-selected=true]::after{content:'';position:absolute;inset-inline:8px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--brand)}
-body.tgm .chat-tabs button[aria-selected=true] i{background:var(--brand)}
-body.tgm .chat-tabs button i{background:var(--muted)}
+/* round search and folder pills */
+body.tgm .chat-list-top{padding:6px 14px 8px;margin:0}
+body.tgm .chat-list .chat-search{border-radius:999px;min-height:46px;padding-inline:16px;background:var(--surface);border:0;font-size:16px}
+body.tgm .chat-list .chat-search input{font-size:16px}
+body.tgm .chat-tabs{position:sticky;top:calc(60px + env(safe-area-inset-top));z-index:39;display:flex;gap:2px;margin:0 14px 8px;padding:4px;border:0;border-radius:999px;background:var(--surface)}
+body.tgm .chat-tabs button{border:0;border-radius:999px;padding:9px 14px;background:none;color:var(--ink-2);font-size:14.5px;font-weight:600;gap:6px}
+body.tgm .chat-tabs button[aria-selected=true]{background:color-mix(in srgb,var(--brand) 18%,transparent);color:var(--brand)}
+body.tgm .chat-tabs button i{background:color-mix(in srgb,var(--ink) 30%,transparent);color:var(--surface);min-width:20px;line-height:20px;border-radius:10px;font-weight:700}
+body.tgm .chat-tabs button[aria-selected=true] i{background:var(--brand);color:#fff}
 body.tgm .cs-wrap,body.tgm .chat-list .chat-item{border-radius:0}
 body.tgm .chat-list .chat-item{padding:9px 14px}
-body.tgm .chat-item .ci-av .initials,body.tgm .chat-item .avatar.md{width:54px;height:54px;font-size:19px}
-/* Android: the round ✎ button */
-.tgm-fab{position:fixed;z-index:44;bottom:calc(20px + env(safe-area-inset-bottom));inset-inline-end:18px;width:58px;height:58px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.28);transition:transform .22s var(--ease)}
+body.tgm .chat-item .ci-av .initials,body.tgm .chat-item .avatar.md{width:56px;height:56px;font-size:20px}
+/* ✎ (Android), above the tab bar */
+.tgm-fab{position:fixed;z-index:44;bottom:calc(96px + env(safe-area-inset-bottom));inset-inline-end:18px;width:58px;height:58px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.3);transition:transform .22s var(--ease)}
 .tgm-fab .icon{width:24px;height:24px}
 .tgm-fab:active{transform:scale(.92)}
-.tgm-fab.away{transform:translateY(120px)}
-body.chat-full .tgm-fab,body.keyboard .tgm-fab,body.tgm-find .tgm-fab,html.dialog-open .tgm-fab{display:none}
-/* iPhone: the tab bar */
-.tgm-tabs{position:fixed;z-index:44;inset-inline:0;bottom:0;display:flex;padding:6px 0 calc(4px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 84%,transparent);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-top:.5px solid var(--line-strong)}
-.tgm-tab{flex:1;display:grid;justify-items:center;gap:1px;padding:2px 0;background:none;border:0;color:var(--muted);font:inherit;font-size:10.5px;font-weight:600}
-.tgm-tab.on{color:var(--brand)}
-.tgm-tico{position:relative;display:grid}
-.tgm-tico .icon{width:27px;height:27px}
-.tgm-tbadge{position:absolute;top:-5px;inset-inline-end:-14px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--danger);color:#fff;font:700 11px/19px Dana,Tahoma,sans-serif;font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--surface)}
-body.chat-full .tgm-tabs,body.keyboard .tgm-tabs{display:none}
-/* full-screen pages (contacts) */
-.tgm-page{position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;background:var(--bg);animation:slide-fwd .26s var(--ease)}
-.tgm-page.out{transition:opacity .2s,transform .2s;opacity:0;transform:translateX(-28px)}
-.tgm-phead{display:flex;align-items:center;gap:4px;min-height:56px;padding:calc(4px + env(safe-area-inset-top)) 4px 4px;background:var(--surface);box-shadow:0 1px 0 var(--line)}
-.tgm-phead strong{flex:1;font-size:18px;padding-inline:6px}
-html.tgm-ios .tgm-phead strong{text-align:center;font-size:17px}
-.tgm-pbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px 0 calc(20px + env(safe-area-inset-bottom))}
-.tgm-psearch{display:block;width:calc(100% - 24px);margin:4px 12px 10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);color:var(--ink);font:inherit;font-size:16px}
+.tgm-fab.away{transform:translateY(190px)}
+body.chat-full .tgm-fab,body.keyboard .tgm-fab,html.dialog-open .tgm-fab,body:not(.tgm-root) .tgm-fab{display:none}
+/* the floating tab bar */
+.tgm-tabs{position:fixed;z-index:90;inset-inline:16px;bottom:calc(10px + env(safe-area-inset-bottom));display:flex;gap:2px;padding:5px;max-width:520px;margin:0 auto;border-radius:999px;background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);box-shadow:0 8px 28px rgba(0,0,0,.28),0 0 0 1px var(--line)}
+.tgm-tab{flex:1;display:grid;justify-items:center;gap:2px;padding:6px 0 5px;border:0;border-radius:999px;background:none;color:var(--ink);font:inherit;font-size:11.5px;font-weight:600;transition:background .2s}
+.tgm-tab.on{background:color-mix(in srgb,var(--brand) 16%,transparent);color:var(--brand)}
+.tgm-tico{position:relative;display:grid;place-items:center;height:28px}
+.tgm-tico .icon{width:26px;height:26px}
+.tgm-tme .avatar{width:28px;height:28px;font-size:11px}
+.tgm-tab.on .tgm-tme .avatar{box-shadow:0 0 0 2px var(--brand)}
+.tgm-tbadge{position:absolute;top:-6px;inset-inline-end:-14px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--brand);color:#fff;font:700 11px/20px Dana,Tahoma,sans-serif;font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+body.chat-full .tgm-tabs,body.keyboard .tgm-tabs,body:has(.tg-modal.tg-sub) .tgm-tabs,body:has(.tg-drawer) .tgm-tabs,html.dialog-open .tgm-tabs{display:none}
+/* tab pages (contacts, profile) */
+.tgm-page{position:fixed;inset:0;z-index:85;display:flex;flex-direction:column;background:var(--bg);animation:fade-in .18s}
+.tgm-page.out{transition:opacity .18s;opacity:0}
+.tgm-phead{display:flex;align-items:center;gap:4px;min-height:60px;padding:calc(6px + env(safe-area-inset-top)) 18px 2px}
+.tgm-phead strong{flex:1;font-size:26px;font-weight:800;letter-spacing:-.3px}
+.tgm-pbody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:4px 0 calc(110px + env(safe-area-inset-bottom))}
+.tgm-psearch{display:block;width:calc(100% - 28px);min-height:46px;margin:4px 14px 12px;padding:10px 18px;border:0;border-radius:999px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+.tgm-card{margin:0 14px 12px;padding:6px 0;border-radius:20px;background:var(--surface);overflow:hidden}
+.tgm-card>h4{color:var(--brand);font-size:14.5px;font-weight:600;padding:10px 18px 4px}
+.tgm-row{display:flex;align-items:center;gap:16px;width:100%;min-height:54px;padding:8px 16px;border:0;background:none;color:var(--ink);font:inherit;font-size:16px;text-align:start}
+.tgm-row:active,.tgm-cmain:active{background:var(--surface-2)}
+.tgm-rico{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:#fff;background:var(--muted)}
+.tgm-rico .icon{width:20px;height:20px}
+.c-blue{background:#3390ec}.c-green{background:#33b06b}.c-orange{background:#f28a24}.c-sky{background:#2aa6e0}.c-purple{background:#8e5be8}.c-red{background:#e5484d}
 .tgm-crow{display:flex;align-items:center;padding-inline-end:8px}
-.tgm-cmain{flex:1;display:flex;align-items:center;gap:12px;min-width:0;padding:8px 14px;background:none;border:0;color:inherit;font:inherit;text-align:start}
-.tgm-cmain:active{background:var(--surface-2)}
+.tgm-cmain{flex:1;display:flex;align-items:center;gap:14px;min-width:0;padding:8px 16px;background:none;border:0;color:inherit;font:inherit;text-align:start}
 .tgm-cav{position:relative;display:grid;flex:none}
-.tgm-cav .avatar{width:48px;height:48px}
-.tgm-cav.on::after{content:'';position:absolute;bottom:1px;inset-inline-start:1px;width:12px;height:12px;border-radius:50%;background:var(--success,#2fa36b);box-shadow:0 0 0 2px var(--bg)}
+.tgm-cav .avatar{width:50px;height:50px}
+.tgm-cav.on::after{content:'';position:absolute;bottom:1px;inset-inline-start:1px;width:13px;height:13px;border-radius:50%;background:var(--success,#2fa36b);box-shadow:0 0 0 2.5px var(--surface)}
 .tgm-ccopy{display:grid;gap:2px;min-width:0}
-.tgm-ccopy strong{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tgm-ccopy small{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tgm-ccopy strong{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tgm-ccopy small{color:var(--muted);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tgm-ccopy small.hot{color:var(--brand)}
 .tgm-ccall{color:var(--brand)}
-/* settings, drawer and tour on a phone */
-body.tgm .tg-modal{inset:0;margin:0;width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-body.tgm .tg-modal[open]{animation:slide-fwd .24s var(--ease)}
+/* profile tab */
+.tgm-hero{display:grid;justify-items:center;gap:4px;padding:8px 16px 18px;text-align:center}
+.tgm-hero-av{border:0;background:none;padding:0;border-radius:50%}
+.tgm-hero-av .avatar{width:110px;height:110px;font-size:40px}
+.tgm-hero strong{font-size:24px;font-weight:800;margin-top:10px}
+.tgm-hero small{color:var(--muted);font-size:15px}
+.tgm-acts{display:flex;gap:10px;margin:0 14px 14px}
+.tgm-acts button{flex:1;display:grid;justify-items:center;gap:4px;padding:12px 4px 10px;border:0;border-radius:18px;background:var(--surface);color:var(--ink);font:inherit;font-size:13.5px;font-weight:600}
+.tgm-acts .icon{width:26px;height:26px}
+.tgm-info{display:grid;gap:2px;padding:10px 18px}
+.tgm-info b{font-size:16px;font-weight:500}
+.tgm-info small{color:var(--muted);font-size:13.5px}
+/* settings on a phone: a page under the tab bar, cards with colourful icons */
+body.tgm .tg-modal{position:fixed;inset:0;z-index:86;margin:0;width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border-radius:0;padding-top:env(safe-area-inset-top);padding-bottom:0;background:var(--bg);box-shadow:none;border:0}
+body.tgm .tg-modal[open]{animation:fade-in .18s}
+body.tgm .tg-modal.tg-sub[open]{animation:slide-fwd .22s var(--ease)}
+body.tgm .tg-mbody{padding:0 0 calc(110px + env(safe-area-inset-bottom))}
+body.tgm .tg-modal:not(.tg-sub) .tg-mhead .icon-btn{display:none}
+body.tgm .tg-modal:not(.tg-sub) .tg-mhead h2{font-size:26px;font-weight:800;padding-inline-start:6px}
+body.tgm .tg-ssec{margin:0 14px 12px;padding:4px 0;border:0!important;border-radius:20px;background:var(--surface)}
+body.tgm .tg-ssec h4{padding:10px 18px 4px}
+body.tgm .tg-srow{gap:16px;padding:9px 16px;min-height:56px}
+body.tgm .tg-scopy b{font-size:16px;font-weight:500}
+body.tgm .tg-scopy small{font-size:13.5px}
+body.tgm .tg-sico{width:34px;height:34px;border-radius:10px;place-items:center;color:#fff;background:#8a94a3;flex:none}
+body.tgm .tg-sico .icon{width:20px;height:20px}
+body.tgm .tg-sico.i-user{background:#3390ec}body.tgm .tg-sico.i-bell{background:#e5484d}body.tgm .tg-sico.i-lock-key{background:#33b06b}
+body.tgm .tg-sico.i-folder{background:#2aa6e0}body.tgm .tg-sico.i-palette{background:#f28a24}body.tgm .tg-sico.i-monitor{background:#5b6ee1}
+body.tgm .tg-sico.i-edit{background:#8e5be8}body.tgm .tg-sico.i-info{background:#8a94a3}body.tgm .tg-sico.i-bookmark{background:#2aa6e0}
+body.tgm .tg-sico.i-zoom,body.tgm .tg-sico.i-repeat{background:#d79b1b}body.tgm .tg-sico.i-close{background:#e5484d}body.tgm .tg-sico.i-spell{background:#33b06b}
+body.tgm .tg-ssearch{width:calc(100% - 28px);margin:4px 14px 12px;min-height:46px;border:0;border-radius:999px;background:var(--surface);font-size:16px}
+body.tgm .tg-me{flex-direction:column;justify-content:center;text-align:center;gap:8px;padding:6px 16px 18px;position:relative}
+body.tgm .tg-me .avatar{width:104px;height:104px;font-size:38px}
+body.tgm .tg-me span{justify-items:center}
+body.tgm .tg-me strong{font-size:23px;font-weight:800}
+body.tgm .tg-me small{font-size:14px}
+.tg-me-cam{display:none}
+body.tgm .tg-me-cam{display:grid;place-items:center;position:absolute;top:76px;left:calc(50% - 50px);width:34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;box-shadow:0 0 0 3px var(--bg)}
+body.tgm .tg-me-cam .icon{width:18px;height:18px}
+body.tgm .tg-hint{padding:0 26px 14px}
 body.tgm .tg-drawer{padding-bottom:env(safe-area-inset-bottom)}
 body.tgm .tg-dhead{padding-top:calc(18px + env(safe-area-inset-top))}
-.tgm-tip{position:fixed;left:12px!important;right:12px!important;top:auto!important;bottom:calc(96px + env(safe-area-inset-bottom));width:auto!important;max-width:none!important;z-index:95}
+.tgm-tip{position:fixed;left:12px!important;right:12px!important;top:auto!important;bottom:calc(100px + env(safe-area-inset-bottom));width:auto!important;max-width:none!important;z-index:95}
 .tg-lock-bio{margin-top:6px}
 .tg-lock-bio .icon{width:18px;height:18px;margin-inline-end:6px}
 /* glass on a phone */
-html.glass body.tgm .tgm-head,html.glass body.tgm .chat-tabs,html.glass body.tgm .tgm-phead{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
-html.glass body.tgm .tgm-page{background:var(--glass-bg);background-attachment:fixed}
+html.glass body.tgm .tgm-head{background:transparent}
+html.glass body.tgm .chat-tabs,html.glass body.tgm .chat-list .chat-search,html.glass body.tgm .tgm-card,html.glass body.tgm .tg-ssec,html.glass body.tgm .tgm-acts button,html.glass body.tgm .tgm-psearch,html.glass body.tgm .tg-ssearch{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+html.glass body.tgm .tgm-page,html.glass body.tgm .tg-modal{background:var(--glass-bg);background-attachment:fixed}
+html.glass body.tgm .tgm-tabs{background:var(--glass-3)}
 html.glass body.tgm .chat-list .chat-item:not(.active){background:transparent}
 html.glass body.tgm .cs-wrap>.chat-item:not(.active){background:transparent}
 html.glass body.tgm .cs-wrap{background:transparent}
@@ -4076,7 +4119,7 @@ html.glass body.tgm .cs-wrap:has(>.chat-item[style*="translate"])>.chat-item{bac
 .att-review strong{margin-inline-end:6px}
 .att-review .chip{cursor:pointer}
 body.tgm:has(.tgm-page) .ios-install,body.tgm:has(.tg-modal[open]) .ios-install,body.tgm:has(.tg-drawer) .ios-install{display:none}
-html.tgm-and body.tgm .ios-install{bottom:calc(92px + env(safe-area-inset-bottom,0px))}
+body.tgm .ios-install{bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 /* the backdrop behind the glass, per person (prefs.backdrop): colourful (default), soft, plain */
 html.glass.bd-soft body.chat-app,html.glass.bd-soft body.chat-login{--glass-bg:radial-gradient(90vw 70vh at 85% 0%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 70%),var(--bg)}
 html.glass.bd-plain body.chat-app,html.glass.bd-plain body.chat-login{--glass-bg:var(--bg)}
@@ -4089,3 +4132,5 @@ html.glass.bd-plain body.chat-app,html.glass.bd-plain body.chat-login{--glass-bg
 .tg-bd.on small{color:var(--brand);font-weight:700}
 .tg-bd.bd-color .tg-bdprev{background:radial-gradient(60% 70% at 85% 10%,color-mix(in srgb,var(--brand) 62%,transparent),transparent 70%),radial-gradient(55% 65% at 10% 90%,rgba(124,77,255,.5),transparent 70%),radial-gradient(50% 60% at 30% 25%,rgba(0,170,210,.4),transparent 70%),var(--bg)}
 .tg-bd.bd-soft .tg-bdprev{background:radial-gradient(120% 90% at 85% 0%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 70%),var(--bg)}
+html.glass body.tgm .chat-list{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+.tgm-info>*{justify-self:start}
