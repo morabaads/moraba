@@ -326,6 +326,11 @@
             MP.toast('حافظه پاک شد؛ با باز کردن دوباره، از سرور خوانده می‌شود');
           } }));
         b.append(perf, scaleSec());
+        if (S.manager) {
+          var diag = sec('برای ناظر');
+          diag.append(row('alarm', 'خطاهای برنامه', 'خطاهایی که در مرورگر یا برنامه همکاران رخ داده', { onclick: closeFor(errorsDialog) }));
+          b.append(diag);
+        }
         if (host) b.append(el('p', { class: 'tg-hint', text: 'برنامه ویندوز نسخه ' + MP.faDigits(version()) + ' · به‌روزرسانی خودکار از سایت' }));
       });
     }
@@ -398,6 +403,17 @@
     });
   };
 
+  function errorsDialog() {
+    var body = MP.dialog.open('خطاهای برنامه', MP.skeleton(3), { wide: true });
+    MP.api('client-errors', { noCache: true }).then(function (l) {
+      if (!l.length) { body.replaceChildren(el('p', { class: 'hint', text: 'خطایی گزارش نشده است.' })); return; }
+      body.replaceChildren(el('div', { class: 'diag-list' }, l.map(function (e) {
+        return el('div', { class: 'diag-row' }, el('b', { text: e.msg, dir: 'ltr' }),
+          el('small', { dir: 'ltr', text: (e.src || '').replace(/^.*\/assets\//, '') + (e.line ? ':' + e.line : '') + ' · v' + e.ver + ' · ' + e.app }),
+          el('small', { text: MP.fa(e.n) + ' بار · ' + MP.fa(e.people) + ' نفر (' + e.users.join('، ') + ') · آخرین: ' + MP.faDigits(String(e.last).slice(0, 16)) + (e.page ? ' · ' + e.page : '') }));
+      })), el('div', { class: 'dialog-actions' }, el('button', { type: 'button', class: 'btn btn-secondary btn-sm', text: 'پاک کردن فهرست', onclick: function () { MP.api('client-errors', { method: 'DELETE' }).then(function () { MP.dialog.close(); MP.toast('پاک شد'); }); } })));
+    }).catch(function (er) { body.replaceChildren(el('p', { class: 'hint', text: er.message })); });
+  }
   /** «مقیاس رابط»: default switch + steps, like Telegram's «Default interface scale». */
   function scaleSec() {
     var s = sec('مقیاس رابط'), z = scale();

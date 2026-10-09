@@ -430,8 +430,8 @@ $mp_nav = array(
 <noscript><p class="noscript">برای استفاده از پنل، جاوااسکریپت مرورگر را فعال کنید.</p></noscript>
 <script>window.MP_CONFIG = <?php echo wp_json_encode( MP_Frontend::config() ); ?>;</script>
 <?php echo MP_Frontend::pwa_script(); // phpcs:ignore ?>
-<?php foreach ( MP_Frontend::SCRIPTS as $mp_script ) : ?>
-<script src="<?php echo MP_Frontend::asset( 'js/' . $mp_script ); // phpcs:ignore ?>"></script>
+<?php foreach ( MP_Frontend::script_urls() as $mp_script ) : ?>
+<script src="<?php echo esc_url( $mp_script ); ?>"></script>
 <?php endforeach; ?>
 </body>
 </html>

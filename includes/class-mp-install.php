@@ -226,7 +226,8 @@ class MP_Install {
 			PRIMARY KEY  (id),
 			KEY project_id (project_id),
 			KEY token (token),
-			KEY client_id (client_id)
+			KEY client_id (client_id),
+			KEY direct (type,user_a,user_b)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'contracts' ) . " (
@@ -432,7 +433,9 @@ class MP_Install {
 			PRIMARY KEY  (id),
 			KEY channel_id (channel_id),
 			KEY updated (channel_id,updated_at),
-			KEY topic (channel_id,topic_id)
+			KEY topic (channel_id,topic_id),
+			KEY file_id (file_id),
+			KEY author (user_id,channel_id)
 		) $c;";
 
 		// Chat extras: poll votes, edit history, «delete for me», topics, roles, scheduled messages, stickers.
@@ -531,7 +534,8 @@ class MP_Install {
 			user_id bigint(20) unsigned NOT NULL,
 			last_id bigint(20) unsigned NOT NULL DEFAULT 0,
 			got_id bigint(20) unsigned NOT NULL DEFAULT 0,
-			PRIMARY KEY  (channel_id,user_id)
+			PRIMARY KEY  (channel_id,user_id),
+			KEY user_id (user_id)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'meetings' ) . " (
@@ -739,7 +743,8 @@ class MP_Install {
 			flags varchar(120) NOT NULL DEFAULT '',
 			PRIMARY KEY  (id),
 			KEY user_date (user_id,work_date),
-			KEY open_auto (source,check_out)
+			KEY open_auto (source,check_out),
+			KEY user_open (user_id,check_out)
 		) $c;";
 
 		$t[] = 'CREATE TABLE ' . self::table( 'leaves' ) . " (

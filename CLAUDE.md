@@ -78,6 +78,34 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
   - Glass (frosted) look: `prefs.glass` (default on, settings → تنظیمات گفت‌وگو) = html class `glass`; every rule is scoped
     `html.glass body.chat-app` (the panel is untouched): coloured radial backdrop on body, panels `--glass*` + backdrop-filter
     blur, translucent bubbles (blur off with reduced motion).
+  - 2.4/2.5 host: signed self-update — `build.sh` signs the pristine EXE with `apps/windows/update-key.pem` (ECDSA P-256,
+    `sign.py`; the key and `update-key.h` live only in apps/, never in the plugin zip — keep them and the repo private;
+    a new key = installed copies refuse updates) → `assets/app/MorabaChat.exe.sig`; the app downloads `?mp_chat_exe=V&raw=1`
+    + `&sig=1`, verifies with BCrypt, then writes its own site address over the placeholder and swaps. The placeholder text
+    must appear only once in the binary (the update code assembles it at run time). Ctrl+Shift+S / tray «اسکرین‌شات» runs
+    Windows snipping and sends the clipboard picture (`{t:'clip'}`); «ارسال به» in Explorer (SendTo shortcut, `--share`
+    paths → WebView2 file handles, `{t:'share'}` with additionalObjects); `{t:'window', url}` opens any same-origin page
+    (call rooms) in its own window; opt-in Acrylic (registry `mica`, Windows 11 22621+, page html class `mica`);
+    toast COM activator (CLSID 8E3B7A4C-…, HKCU Classes LocalServer32, shortcut ToastActivatorCLSID; `-Embedding` starts
+    hidden; actions queue until the page is loaded and are de-duplicated). Test builds: `-DHOST_TEST` (no snipping tool),
+    `-DUPD_DEBUG` (C:\upd.log), `-DAPP_VERSION=L"2.3.9"` to exercise an update.
+  - Session: `?mp_nonce=1` gives a fresh REST nonce (MP.renewNonce every 4 h, on wake, and on rest_cookie_invalid_nonce with
+    one retry inside MP.apiRaw); «مرا به خاطر بسپار» is ticked by default and lasts 180 days (auth_cookie_expiration).
+  - Calls (`class-mp-calls.php`, `assets/js/chat-calls.js`): `POST calls {user_id, video}` makes a two-person meeting room,
+    the callee's live state carries `ring` (45 s, user meta `mp_ring`), `POST calls/{id} {action}`; caller gets `call`
+    state; the private chat gets system lines. Live state also has `st` (MP_Presence::status: busy/away) shown as
+    «در تماس یا جلسه» / «دور از سیستم».
+  - Chat extras: own folders (`chat-folders`, user meta `mp_chat_folders`, tabs `u{id}`), search filters (kind/from),
+    several pins (`channels.pins`, newest first; bar «۱ از ۳»), drafts synced (`drafts`, user meta `mp_drafts`), undo send
+    (localStorage `mp_undo_send`; sender may hard-delete own message ≤ 30 s), Ctrl+↑/↓ reply picking, «@» jump button,
+    scroll position per chat, settings search, first-run tour (`mp_tour_done`), tablet landscape gets the shell.
+  - Scripts are served as one bundle (`MP_Frontend::script_urls`, uploads/moraba-panel/bundle-VER-HASH.js; separate files
+    with `?mp_debug=1` or MP_NO_BUNDLE). Browser errors go to `client-errors` (MP_Diag, option `mp_js_errors`, supervisors:
+    settings → advanced → «خطاهای برنامه»).
+- Tests: `tests/README.md` — `tests/e2e/setup.sh` (throwaway WordPress + SQLite + sample data), `node tests/e2e/run.js`,
+  `php tests/presence-test.php`; CI `.github/workflows/tests.yml` runs them and builds + verifies the signed EXE.
+- Automatic attendance review: `attendance.stats` / `attendance.flags` (idle0, nobreak, night, device, browser) from
+  MP_Presence::track; supervisors see «حضور خودکار نیازمند بررسی» and `POST attendance/{id}/review` sets `ok`.
 - Automatic attendance (`class-mp-presence.php`, options `mp_presence_on` / `mp_presence_idle`, «حضور خودکار» in the
   attendance page for supervisors): sessions with `attendance.source = 'auto'` from first to last real input, closed at the last
   report when reports stop (sleep/shutdown), cut at midnight, merged across gaps < 2 min, < 1 min dropped; manual «خروج» pauses

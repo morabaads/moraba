@@ -3974,3 +3974,4 @@ html.mica body.chat-app .chat-messages{background-image:none}
 .cl-filters{display:flex;flex-wrap:wrap;gap:6px;padding:4px 12px 8px}.cl-filters .chip{cursor:pointer}.cl-filters .chip.on{background:var(--brand);color:#fff}.cl-from{border:1px solid var(--line);border-radius:999px;padding:2px 8px;background:var(--surface-2);font-size:12px}
 .msg-row.flash .bubble{box-shadow:0 0 0 2px var(--brand)}
 .chat-at{bottom:calc(var(--down-b, 84px) + 56px)!important;font-weight:800;font-size:18px;color:var(--brand)}
+.diag-list{display:grid;gap:8px}.diag-row{display:grid;gap:2px;padding:10px 12px;border-radius:12px;background:var(--surface-2)}.diag-row b{font:600 13px/1.5 ui-monospace,Consolas,monospace;word-break:break-word}.diag-row small{color:var(--muted);font-size:12px}

@@ -48,7 +48,7 @@
 #include "update-key.h" /* the public key updates are signed with (sign.py) */
 
 #ifndef APP_VERSION
-#define APP_VERSION L"2.4.0"
+#define APP_VERSION L"2.5.0"
 #endif
 #define APP_ID L"Moraba.Chat"
 #define APP_NAME L"\x0645\x0631\x0628\x0639 \x0686\x062A" /* مربع چت */
@@ -169,11 +169,17 @@ static void post_json(const wchar_t *json) { if (g_web) ICoreWebView2_PostWebMes
 static const wchar_t *json_find(const wchar_t *j, const wchar_t *key) {
     wchar_t pat[40];
     swprintf(pat, 40, L"\"%ls\":", key);
-    const wchar_t *p = wcsstr(j, pat);
-    if (!p) return NULL;
-    p += wcslen(pat);
-    while (*p == L' ') p++;
-    return p;
+    /* a key of the object itself: right after { or , (so «"on":» inside a text value is not taken for one) */
+    for (const wchar_t *p = wcsstr(j, pat); p; p = wcsstr(p + 1, pat)) {
+        const wchar_t *b = p;
+        while (b > j && (b[-1] == L' ' || b[-1] == L'\n')) b--;
+        if (b == j || b[-1] == L'{' || b[-1] == L',') {
+            p += wcslen(pat);
+            while (*p == L' ') p++;
+            return p;
+        }
+    }
+    return NULL;
 }
 static long json_num(const wchar_t *j, const wchar_t *key, long def) {
     const wchar_t *p = json_find(j, key);
@@ -375,6 +381,64 @@ static HRESULT STDMETHODCALLTYPE ta_invoke(void *self, void *sender, void *args)
 static void *ta_vtbl[] = { (void *)ta_qi, (void *)ta_ref, (void *)ta_ref, (void *)ta_invoke };
 static struct { void **vtbl; } g_toast_handler = { ta_vtbl };
 
+/*
+ * The toast activator: Windows starts «مربع چت» through COM (LocalServer32 … -Embedding) when a notification in
+ * the action centre is clicked or answered after the app was closed, and calls Activate with what was done. The
+ * Start-menu shortcut names this class (System.AppUserModel.ToastActivatorCLSID); the running app registers it
+ * too, so a click while it runs reaches it the same way.
+ */
+static const GUID CLSID_MorabaToast = { 0x8e3b7a4c, 0x5c1d, 0x4f1e, { 0x9b, 0x6a, 0x2d, 0x7c, 0x4e, 0x9f, 0x1a, 0x30 } };
+static const GUID IID_NotifActivation = { 0x53e31837, 0x6600, 0x4a81, { 0x93, 0x95, 0x75, 0xcf, 0xfe, 0x74, 0x6f, 0x94 } };
+static const PROPERTYKEY PKEY_ToastActivator = { { 0x9f4c2855, 0x9f79, 0x4b39, { 0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3 } }, 26 };
+typedef struct { LPCWSTR Key; LPCWSTR Value; } NOTIF_INPUT;
+static HRESULT STDMETHODCALLTYPE na_qi(void *self, REFIID riid, void **out) {
+    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_NotifActivation)) { *out = self; return S_OK; }
+    *out = NULL;
+    return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE na_ref(void *self) { (void)self; return 1; }
+static HRESULT STDMETHODCALLTYPE na_activate(void *self, LPCWSTR aumid, LPCWSTR args, const NOTIF_INPUT *data, ULONG count) {
+    (void)self; (void)aumid;
+    const wchar_t *text = L"";
+    for (ULONG i = 0; i < count; i++) if (data[i].Key && !wcscmp(data[i].Key, L"reply")) text = data[i].Value ? data[i].Value : L"";
+    size_t n = wcslen(args ? args : L"") + wcslen(text) + 2;
+    wchar_t *msg = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, n * sizeof(wchar_t));
+    if (!msg) return S_OK;
+    lstrcpyW(msg, args ? args : L""); lstrcatW(msg, L"\n"); lstrcatW(msg, text);
+    if (!PostMessageW(g_wnd, WM_TOAST, 0, (LPARAM)msg)) HeapFree(GetProcessHeap(), 0, msg);
+    return S_OK;
+}
+static void *na_vtbl[] = { (void *)na_qi, (void *)na_ref, (void *)na_ref, (void *)na_activate };
+static struct { void **vtbl; } g_activator = { na_vtbl };
+static HRESULT STDMETHODCALLTYPE cf_qi(void *self, REFIID riid, void **out) {
+    if (IsEqualIID(riid, &IID_IUnknown) || IsEqualIID(riid, &IID_IClassFactory)) { *out = self; return S_OK; }
+    *out = NULL;
+    return E_NOINTERFACE;
+}
+static HRESULT STDMETHODCALLTYPE cf_create(void *self, IUnknown *outer, REFIID riid, void **out) {
+    (void)self;
+    if (outer) return CLASS_E_NOAGGREGATION;
+    return na_qi(&g_activator, riid, out);
+}
+static HRESULT STDMETHODCALLTYPE cf_lock(void *self, BOOL l) { (void)self; (void)l; return S_OK; }
+static void *cf_vtbl[] = { (void *)cf_qi, (void *)na_ref, (void *)na_ref, (void *)cf_create, (void *)cf_lock };
+static struct { void **vtbl; } g_factory = { cf_vtbl };
+static DWORD g_factory_cookie;
+
+/* HKCU\Software\Classes\CLSID\{…}\LocalServer32 = "…\MorabaChat.exe" (COM adds -Embedding) */
+static void register_activator(const wchar_t *exe) {
+    wchar_t key[200], cmd[MAX_PATH + 8];
+    swprintf(key, 200, L"Software\\Classes\\CLSID\\{%08lX-%04X-%04X-%02X%02X-%02X%02X%02X%02X%02X%02X}\\LocalServer32",
+        (unsigned long)CLSID_MorabaToast.Data1, CLSID_MorabaToast.Data2, CLSID_MorabaToast.Data3, CLSID_MorabaToast.Data4[0], CLSID_MorabaToast.Data4[1],
+        CLSID_MorabaToast.Data4[2], CLSID_MorabaToast.Data4[3], CLSID_MorabaToast.Data4[4], CLSID_MorabaToast.Data4[5], CLSID_MorabaToast.Data4[6], CLSID_MorabaToast.Data4[7]);
+    swprintf(cmd, MAX_PATH + 8, L"\"%ls\"", exe);
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, NULL, 0, KEY_SET_VALUE, NULL, &k, NULL) == ERROR_SUCCESS) {
+        RegSetValueExW(k, NULL, 0, REG_SZ, (const BYTE *)cmd, (DWORD)((wcslen(cmd) + 1) * sizeof(wchar_t)));
+        RegCloseKey(k);
+    }
+}
+
 static int toast_init(void) {
     if (g_toast_ok >= 0) return g_toast_ok;
     g_toast_ok = 0;
@@ -481,8 +545,23 @@ static void json_add(wchar_t *buf, size_t cap, const wchar_t *s) {
 
 static void show_window(void);
 
-/** What the person did on a toast (WM_TOAST, UI thread). */
+/** What the person did on a toast (WM_TOAST, UI thread). Before the page is there (Windows started us for the
+    toast) it waits; the same action reported twice (in-process Activated and the COM activator) counts once. */
+static wchar_t *g_pending_toast;
 static void toast_action(wchar_t *m) {
+    static wchar_t last[2100];
+    static ULONGLONG last_at;
+    if (!wcscmp(last, m) && GetTickCount64() - last_at < 3000) return;
+    lstrcpynW(last, m, 2100);
+    last_at = GetTickCount64();
+    if (!g_loaded) {
+        size_t n = (wcslen(m) + 1) * sizeof(wchar_t);
+        if (g_pending_toast) HeapFree(GetProcessHeap(), 0, g_pending_toast);
+        g_pending_toast = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, n);
+        if (g_pending_toast) memcpy(g_pending_toast, m, n);
+        last[0] = 0;
+        return;
+    }
     wchar_t *text = wcschr(m, L'\n');
     if (text) *text++ = 0;
     const wchar_t *c = wcschr(m, L':');
@@ -825,7 +904,7 @@ static void share_files(const wchar_t *args) {
 static void command(const wchar_t *args) {
     if (!args) args = L"";
     if (wcsstr(args, L"--quit")) { g_quitting = 1; if (IsWindowVisible(g_wnd)) save_placement(); DestroyWindow(g_wnd); return; }
-    if (wcsstr(args, L"--tray")) return;
+    if (wcsstr(args, L"--tray") || wcsstr(args, L"-Embedding")) return; /* started by COM for a toast: it says what to do */
     show_window();
     if (wcsstr(args, L"--share")) { share_files(args); return; }
     if (wcsstr(args, L"--snip")) { snip(); return; }
@@ -966,6 +1045,7 @@ static HRESULT STDMETHODCALLTYPE on_navigated(void *self, ICoreWebView2 *sender,
             g_loaded = 1;
             activity(L"start");
             if (g_pending_share) { wchar_t *a = g_pending_share; g_pending_share = NULL; share_files(a); HeapFree(GetProcessHeap(), 0, a); }
+            if (g_pending_toast) { wchar_t *a = g_pending_toast; g_pending_toast = NULL; toast_action(a); HeapFree(GetProcessHeap(), 0, a); }
         }
         if (owner) KillTimer(owner, T_RETRY);
         return S_OK;
@@ -1747,9 +1827,14 @@ static void shortcut_args(const wchar_t *lnk, const wchar_t *target, const wchar
         PROPVARIANT pv;
         if (SUCCEEDED(pv_string(APP_ID, &pv))) {
             IPropertyStore_SetValue(ps, &PKEY_AppUserModel_ID, &pv);
-            IPropertyStore_Commit(ps);
             PropVariantClear(&pv);
         }
+        PROPVARIANT cv; /* toasts clicked later start us through this class */
+        PropVariantInit(&cv);
+        cv.vt = VT_CLSID;
+        cv.puuid = (CLSID *)CoTaskMemAlloc(sizeof(CLSID));
+        if (cv.puuid) { *cv.puuid = CLSID_MorabaToast; IPropertyStore_SetValue(ps, &PKEY_ToastActivator, &cv); PropVariantClear(&cv); }
+        IPropertyStore_Commit(ps);
         IPropertyStore_Release(ps);
     }
     IPersistFile *pf = NULL;
@@ -1792,6 +1877,7 @@ static int install(void) {
         swprintf(txt, MAX_PATH, L"%ls\\site.txt", g_home);
         if (SITE_URL[0] == L'h') DeleteFileW(txt);
     }
+    register_activator(target);
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_PROGRAMS, NULL, 0, folder))) { link_path(lnk, folder); shortcut(lnk, target, g_home); }
     /* Explorer: right-click a file → «ارسال به» → «مربع چت» */
     if (SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_SENDTO | CSIDL_FLAG_CREATE, NULL, 0, folder))) { link_path(lnk, folder); shortcut_args(lnk, target, g_home, L"--share"); }
@@ -1941,7 +2027,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
     WINDOWPLACEMENT wp = { sizeof(wp) };
     DWORD wsz = sizeof(wp);
     int placed = RegGetValueW(HKEY_CURRENT_USER, REG_KEY, L"placement", RRF_RT_REG_BINARY, NULL, &wp, &wsz) == ERROR_SUCCESS && wsz == sizeof(wp);
-    int start_hidden = wcsstr(cmdline, L"--tray") != NULL;
+    int start_hidden = wcsstr(cmdline, L"--tray") != NULL || wcsstr(cmdline, L"-Embedding") != NULL; /* COM: a toast decides */
     if (placed) {
         if (start_hidden) wp.showCmd = SW_HIDE;
         else if (wp.showCmd != SW_SHOWMAXIMIZED) wp.showCmd = SW_SHOWNORMAL;
@@ -1968,6 +2054,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
         edge_app();
         return 0;
     }
+    CoRegisterClassObject(&CLSID_MorabaToast, (IUnknown *)&g_factory, CLSCTX_LOCAL_SERVER, REGCLS_MULTIPLEUSE, &g_factory_cookie);
     SetTimer(g_wnd, T_UPDATE, 6 * 3600 * 1000, NULL);
     CloseHandle(CreateThread(NULL, 0, update_thread, NULL, 0, NULL));
     if (!start_hidden) command(cmdline);
@@ -1978,6 +2065,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmdline, int show) {
         DispatchMessageW(&m);
     }
     if (g_taskbar) ITaskbarList3_Release(g_taskbar);
+    if (g_factory_cookie) CoRevokeClassObject(g_factory_cookie);
     CoUninitialize();
     CloseHandle(single);
     return 0;

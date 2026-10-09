@@ -796,6 +796,13 @@ class MP_Chat {
 		}
 		$m    = self::t( 'messages' );
 		$f    = self::t( 'files' );
+		// kept until the chat changes (newest message, last edit/deletion), so opening the info column stays cheap
+		$ver  = $wpdb->get_row( $wpdb->prepare( "SELECT MAX(id) a, MAX(updated_at) b, MAX(deleted_at) c FROM $m WHERE channel_id = %d", $ch->id ), ARRAY_N ); // phpcs:ignore
+		$key  = 'mp_mc_' . $ch->id . '_' . $uid . '_' . md5( implode( '|', (array) $ver ) );
+		$hit  = get_transient( $key );
+		if ( is_array( $hit ) ) {
+			return $hit;
+		}
 		$base = "FROM $m m JOIN $f f ON f.id = m.file_id WHERE m.channel_id = %d AND m.deleted_at IS NULL AND m.file_id > 0" . self::not_hidden( $uid, 'm' );
 		$pic  = " AND m.as_file = 0 AND (m.extra IS NULL OR (m.extra NOT LIKE '%%sticker%%' AND m.extra NOT LIKE '%%\"gif\"%%'))";
 		$n    = function ( $where ) use ( $wpdb, $base, $ch ) {
@@ -805,13 +812,15 @@ class MP_Chat {
 		foreach ( $wpdb->get_col( $wpdb->prepare( "SELECT body FROM $m WHERE channel_id = %d AND deleted_at IS NULL AND body LIKE %s ORDER BY id DESC LIMIT 1000", $ch->id, '%http%' ) ) as $b ) { // phpcs:ignore
 			$links += preg_match_all( '#https?://[^\s<>"\']+#u', $b );
 		}
-		return array(
+		$out = array(
 			'photos' => $n( " AND f.mime LIKE 'image/%%'" . $pic ),
 			'videos' => $n( " AND f.mime LIKE 'video/%%'" . $pic ),
 			'files'  => $n( " AND f.mime NOT LIKE 'audio/%%' AND ((f.mime NOT LIKE 'image/%%' AND f.mime NOT LIKE 'video/%%') OR m.as_file = 1)" ),
 			'voice'  => $n( " AND f.mime LIKE 'audio/%%'" ),
 			'links'  => $links,
 		);
+		set_transient( $key, $out, 10 * MINUTE_IN_SECONDS );
+		return $out;
 	}
 
 	/** GET drafts — unsent text per chat, so a draft started on one device is there on the others: {id: [text, time]} */

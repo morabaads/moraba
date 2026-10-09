@@ -8,7 +8,7 @@ defined( 'ABSPATH' ) || exit;
 class MP_Frontend {
 
 	/** Version of the Windows app (apps/windows/moraba-chat.c APP_VERSION); installed copies update themselves to it. */
-	const CHAT_EXE_VERSION = '2.4.0';
+	const CHAT_EXE_VERSION = '2.5.0';
 
 	/** Panel scripts, in load order (also pre-cached by the service worker). */
 	const SCRIPTS = array( 'jalali.js', 'emoji-map.js', 'core.js', 'viewer.js', 'voice.js', 'tasks.js', 'templates.js', 'taskio.js', 'daily.js', 'invoices.js', 'pins.js', 'portal.js', 'digest.js', 'assistant.js', 'costs.js', 'payroll.js', 'dashboard.js', 'calendar.js', 'projects.js', 'chat-kit.js', 'messages.js', 'chat-desktop.js', 'chat-shell.js', 'chat-calls.js', 'clients.js', 'contracts.js', 'meetings.js', 'work.js', 'money.js', 'reports.js', 'widgets.js', 'app.js' );
@@ -366,9 +366,10 @@ class MP_Frontend {
 		header( 'Service-Worker-Allowed: ' . ( $chat ? self::chat_scope() : self::scope() ) );
 		header( 'Cache-Control: no-cache' );
 		$assets = array();
-		foreach ( array_merge( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'img/chat-192.png', 'js/pwa.js' ), array_map( function ( $s ) { return 'js/' . $s; }, self::SCRIPTS ) ) as $a ) {
+		foreach ( array( 'css/app.css', 'fonts/dana.woff2', 'img/logo.png', 'img/symbol.png', 'img/icon-192.png', 'img/icon-180.png', 'img/chat-192.png', 'js/pwa.js' ) as $a ) {
 			$assets[] = MP_URL . 'assets/' . $a . ( 0 === strpos( $a, 'fonts/' ) ? '' : '?ver=' . MP_VERSION ); // app.css asks for the font without ?ver
 		}
+		$assets = array_merge( $assets, self::script_urls() );
 		$cache = ( $chat ? 'mp-chat-' : 'mp-' ) . MP_VERSION;
 		$feed  = add_query_arg( $chat ? array( 'mp_push_feed' => 1, 'chat' => 1 ) : array( 'mp_push_feed' => 1 ), home_url( '/' ) );
 		echo "const CACHE=" . wp_json_encode( $cache ) . ",ASSETS=" . wp_json_encode( $assets ) . ',FEED=' . wp_json_encode( $feed ) . ',START=' . wp_json_encode( $chat ? self::chat_url() : self::panel_url() ) . ',ICON=' . wp_json_encode( MP_URL . 'assets/img/' . ( $chat ? 'chat-192.png' : 'icon-192.png' ) ) . ',APPNAME=' . wp_json_encode( $chat ? 'مربع چت' : 'پنل مربع' ) . ',FONT=' . wp_json_encode( MP_URL . 'assets/fonts/dana.woff2' ) . ',WAPI=' . wp_json_encode( rest_url( 'moraba-panel/v1/widget' ) ) . ";\n"; // phpcs:ignore
@@ -554,6 +555,46 @@ JS;
 			esc_attr( $title ),
 			esc_url( self::apk_url() )
 		);
+	}
+
+	/**
+	 * The panel's scripts as one file (one request instead of ~35; built once per version into uploads/moraba-panel,
+	 * named by the files' times so a changed file makes a new one). Separate files when uploads is not writable,
+	 * with ?mp_debug=1, or when MP_NO_BUNDLE is defined.
+	 */
+	public static function script_urls() {
+		$sep = array_map( function ( $s ) { return MP_URL . 'assets/js/' . $s . '?ver=' . MP_VERSION; }, self::SCRIPTS );
+		if ( defined( 'MP_NO_BUNDLE' ) || isset( $_GET['mp_debug'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			return $sep;
+		}
+		$sig = '';
+		foreach ( self::SCRIPTS as $f ) {
+			$sig .= $f . @filemtime( MP_DIR . 'assets/js/' . $f ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+		$up   = wp_upload_dir( null, false );
+		$name = 'bundle-' . MP_VERSION . '-' . substr( md5( $sig ), 0, 10 ) . '.js';
+		$dir  = trailingslashit( $up['basedir'] ) . 'moraba-panel';
+		$file = $dir . '/' . $name;
+		if ( ! file_exists( $file ) ) {
+			if ( ! wp_mkdir_p( $dir ) ) {
+				return $sep;
+			}
+			$js = '';
+			foreach ( self::SCRIPTS as $f ) {
+				$js .= '/* ' . $f . " */\n" . file_get_contents( MP_DIR . 'assets/js/' . $f ) . "\n;\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions
+			}
+			$tmp = $file . '.' . wp_generate_password( 6, false, false );
+			if ( false === @file_put_contents( $tmp, $js ) || ! @rename( $tmp, $file ) ) { // phpcs:ignore
+				@unlink( $tmp ); // phpcs:ignore
+				return $sep;
+			}
+			foreach ( (array) glob( $dir . '/bundle-*.js' ) as $old ) { // earlier builds go
+				if ( $old && $old !== $file ) {
+					@unlink( $old ); // phpcs:ignore
+				}
+			}
+		}
+		return array( trailingslashit( $up['baseurl'] ) . 'moraba-panel/' . $name );
 	}
 
 	public static function asset( $path ) {

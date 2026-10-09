@@ -136,6 +136,20 @@
    * The REST nonce lives a day at most; a page left open longer (the Windows app beside the clock) asks for a fresh
    * one (?mp_nonce=1, signed in by cookie) every few hours and whenever the server says it has expired.
    */
+  /* Errors in this page reach the supervisors (MP_Diag): a few per page, each once. */
+  var sentErrs = {}, errCount = 0;
+  function reportError(msg, src, line) {
+    msg = String(msg || '').slice(0, 300);
+    if (!msg || errCount >= 5 || sentErrs[msg + line] || /ResizeObserver|Script error\.?$/.test(msg) || !C.nonce) return;
+    sentErrs[msg + line] = 1; errCount++;
+    try {
+      fetch(C.root + 'client-errors', { method: 'POST', credentials: 'same-origin', keepalive: true, headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': C.nonce },
+        body: JSON.stringify({ msg: msg, src: String(src || '').slice(0, 200), line: line || 0, page: (S.view || '') + (C.chatApp ? ' (chat)' : ''), app: window.__MP_DESKTOP ? 'windows ' + window.__MP_DESKTOP.v : window.MorabaApp ? 'android' : 'web' }) }).catch(function () {});
+    } catch (e) { /* nothing to do */ }
+  }
+  window.addEventListener('error', function (e) { reportError(e.message, e.filename, e.lineno); });
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; if (r && (r.status || r.code)) return; reportError('Promise: ' + (r && r.message ? r.message : r), r && r.stack ? String(r.stack).split('\n')[1] : '', 0); });
+  MP.reportError = reportError;
   var renewing = null;
   MP.renewNonce = function () {
     if (renewing) return renewing;
