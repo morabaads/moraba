@@ -1709,7 +1709,9 @@ class MP_Rest {
 		$manager = MP_Util::is_manager();
 		// {hard: 1} — a manager erases it for good (with its file); everyone's screen drops it on the next poll.
 		if ( ! empty( $r['hard'] ) && 'false' !== $r['hard'] ) {
-			if ( ! $manager ) {
+			// …or the sender takes it back within half a minute («لغو ارسال»)
+			$own_fresh = (int) $m->user_id === $uid && strtotime( MP_Util::now() ) - strtotime( $m->created_at ) <= 30;
+			if ( ! $manager && ! $own_fresh ) {
 				return self::err( 'فقط ناظر می‌تواند پیام را برای همیشه پاک کند.', 403 );
 			}
 			$u = $m->user_id ? get_userdata( $m->user_id ) : null;

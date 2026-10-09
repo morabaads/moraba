@@ -334,7 +334,7 @@ $mp_nav = array(
 					</header>
 					<button type="button" class="chat-pinbar" id="chat-pinbar" hidden><span class="pb-ico"><?php echo $mp_i( 'pin' ); // phpcs:ignore ?></span><span class="pb-copy"><b>پیام سنجاق‌شده</b><small id="chat-pin-text"></small></span><span class="pb-x" id="chat-pin-x" role="button" aria-label="برداشتن سنجاق"><?php echo $mp_i( 'close' ); // phpcs:ignore ?></span></button>
 					<div class="chat-find-list" id="chat-find-list" hidden></div>
-					<div class="chat-messages" id="chat-messages"></div>
+					<div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="پیام‌ها"></div>
 					<button type="button" class="chat-down" id="chat-down" hidden aria-label="رفتن به آخرین پیام"><?php echo $mp_i( 'down' ); // phpcs:ignore ?><i class="badge" id="chat-down-n" hidden></i></button>
 					<div class="attach-sheet" id="attach-sheet" hidden></div>
 					<form class="composer" id="composer" hidden>

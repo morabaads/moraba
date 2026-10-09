@@ -17,10 +17,12 @@ const hostStub = () => {
   window.chrome.webview = { postMessage: m => window.__posted.push(m), addEventListener: (t, f) => ls.push(f) };
   window.__hostSend = d => ls.forEach(f => f({ data: d }));
   window.__MP_DESKTOP = { v: '9.9.9' };
+  try { localStorage.setItem('mp_tour_done', '1'); } catch (e) { /* private */ }
 };
 async function open(b, user, opts = {}) {
   const ctx = await b.newContext({ viewport: opts.viewport || { width: 1440, height: 860 } });
   if (opts.app !== false) await ctx.addInitScript(hostStub);
+  else await ctx.addInitScript(() => { try { localStorage.setItem('mp_tour_done', '1'); } catch (e) { /* private */ } });
   const p = await ctx.newPage();
   p.errors = [];
   p.on('pageerror', e => { if (!/wp is not/.test(e.message)) p.errors.push(e.message); });

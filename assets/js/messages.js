@@ -7,7 +7,7 @@
   'use strict';
   var MP = window.MP, S = MP.S, J = MP.J, el = MP.el, $ = MP.$, $$ = MP.$$, fa = MP.fa, icon = MP.icon;
   var chatLayer = null;
-  function closeChat() { finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx(); closeAttach();
+  function closeChat() { rememberScroll(); finishRecording(false); stopSpeaking(); endSelect(); closeFind(); clearCtx(); closeAttach();
     layout.classList.remove('open'); document.body.classList.remove('chat-full');
     current = 0; stop(); renderList(); liveRestart(); if (sideEl) drawSide();
     if (!MP.isMobile()) noChat();
@@ -543,7 +543,7 @@
     var c = chan(id);
     if (!c) return;
     opts = opts || {};
-    if (current && current !== id) { saveDraft(current, editing ? '' : text.value.trim()); }
+    if (current && current !== id) { saveDraft(current, editing ? '' : text.value.trim()); rememberScroll(); }
     endSelect(); closeFind(); clearCtx(false);
     current = id; resetRows(); sig = ''; since = ''; newBelow = 0; hasNewer = false;
     topic = opts.topic || 0;
@@ -772,6 +772,15 @@
     decorate();
   }
 
+  /** Where I was in each chat (the first message at the top), when I had scrolled up and left. */
+  var scrollMem = {};
+  function rememberScroll() {
+    if (!current) return;
+    delete scrollMem[current];
+    if (atBottom()) return;
+    var top = box.getBoundingClientRect().top, rows = $$('.msg-row', box);
+    for (var i = 0; i < rows.length; i++) { if (rows[i].getBoundingClientRect().bottom > top + 10) { var id = +rows[i].dataset.id; if (id) scrollMem[current] = id; break; } }
+  }
   /** First page: the newest ~80 messages; then the unread line and the right scroll position. */
   function fetchFirst(token, around) {
     var q = { after: 0, topic: topic > 0 ? topic : '' };
@@ -785,8 +794,10 @@
       afterBatch(d);
       decorate();
       if (!box.querySelector('.msg-row, .sys-msg')) box.append(MP.empty('chat', current && chan() && chan().type === 'saved' ? 'پیام‌های ذخیره‌شده' : 'اولین پیام را بفرستید', current && chan() && chan().type === 'saved' ? 'هر پیامی را اینجا فوروارد کنید یا یادداشت بگذارید؛ فقط خودتان می‌بینید.' : 'پیام‌ها برای همه اعضای گفت‌وگو نمایش داده می‌شود.', null, true));
-      var line = $('.unread-sep', box);
-      if (line) box.scrollTop = Math.max(0, line.offsetTop - 60); else box.scrollTop = box.scrollHeight;
+      var line = $('.unread-sep', box), back = scrollMem[current];
+      if (line) box.scrollTop = Math.max(0, line.offsetTop - 60);
+      else if (back && !around && rowsById[back] && rowsById[back].offsetTop) box.scrollTop = Math.max(0, rowsById[back].offsetTop - 20); // where I left this chat
+      else box.scrollTop = box.scrollHeight;
       downBtn();
       MP.refreshCounts();
       saveSnapshot();
@@ -1183,6 +1194,11 @@
     var b = $('#chat-down'), n = $('#chat-down-n');
     b.hidden = !current || (atBottom() && !hasNewer);
     n.hidden = !newBelow; n.textContent = fa(newBelow);
+    // «@»: someone mentioned me in this chat and I have not seen it yet — a click goes there (Telegram)
+    var c = chan(), at = $('#chat-at');
+    if (!at) { at = el('button', { type: 'button', id: 'chat-at', class: 'chat-down chat-at', 'aria-label': 'رفتن به پیامی که شما را صدا زده', title: 'شما را صدا زده‌اند', text: '@' }); b.after(at); }
+    at.hidden = !(c && c.mention && c.mention[0]);
+    at.onclick = function () { if (c && c.mention) { jumpTo(c.mention[1]); c.mention = [0, 0]; at.hidden = true; } };
   }
   // The date chip stuck at the top shows while scrolling and fades out a moment after (Telegram).
   var dayTimer = 0;
@@ -1637,6 +1653,19 @@
     if (mentionKeys(e)) return;
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !MP.isMobile()) { e.preventDefault(); $('#composer').requestSubmit(); }
     if (e.key === 'Escape' && (replyTo || editing)) { e.preventDefault(); clearCtx(); }
+    // Ctrl+↑ / Ctrl+↓: pick the message to answer, walking up and down the chat (Telegram Desktop)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      var all = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return typeof m.id === 'number' && !m.deleted && m.kind !== 'system'; }).sort(function (a, b) { return a.id - b.id; });
+      if (!all.length) return;
+      e.preventDefault();
+      var at = replyTo ? all.map(function (m) { return m.id; }).indexOf(replyTo.id) : all.length;
+      at += e.key === 'ArrowUp' ? -1 : 1;
+      if (at >= all.length) { clearCtx(); return; }
+      var target = all[Math.max(0, at)];
+      startReply(target);
+      var row = rowsById[target.id]; if (row) { row.scrollIntoView({ block: 'nearest' }); row.classList.add('flash'); setTimeout(function () { row.classList.remove('flash'); }, 900); }
+      return;
+    }
     if (e.key === 'ArrowUp' && !text.value) { // edit my last message, like Telegram desktop
       var mine = Object.keys(msgs).map(function (k) { return msgs[k]; }).filter(function (m) { return m.mine && typeof m.id === 'number' && !m.deleted && !m.kind && kindOf(m) !== 'voice'; }).sort(function (a, b) { return b.id - a.id; })[0];
       if (mine) { e.preventDefault(); startEdit(mine); }
@@ -1815,6 +1844,15 @@
       if (channel !== current) return MP.loadChannels();
       swapReal(m, real);
       MP.loadChannels();
+      // «لغو ارسال» (settings): a few seconds to take it back, the text returns to the box
+      if (undoOn() && real && real.id && !o.sendAt) {
+        MP.toast('پیام فرستاده شد', { icon: 'send', duration: 5000, action: 'برگرداندن', onAction: function () {
+          MP.api('messages/' + real.id, { method: 'DELETE', body: { hard: 1 } }).then(function () {
+            removeRow(real.id); MP.loadChannels();
+            if (channel === current && !text.value && m.body) { text.value = m.body; autoGrow(); composerState(); text.focus(); }
+          }).catch(MP.soft);
+        } });
+      }
     }).catch(function (err) {
       var offline = !navigator.onLine || /اینترنت/.test(err.message || '');
       m.pending = false; m.failed = true; m.offline = offline;
@@ -1825,6 +1863,7 @@
       if (!offline) MP.soft(err);
     });
   }
+  function undoOn() { try { return localStorage.getItem('mp_undo_send') === '1'; } catch (e) { return false; } }
   /** The real message takes the place of its stand-in (keeping an album together). */
   function swapReal(m, real) {
     var r = rowsById[m.id];

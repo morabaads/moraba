@@ -12,7 +12,7 @@
  */
 (function () {
   'use strict';
-  var MP = window.MP, S = MP.S, C = window.MP_CONFIG || {}, el = MP.el, $ = MP.$, fa = MP.fa, icon = MP.icon;
+  var MP = window.MP, S = MP.S, C = window.MP_CONFIG || {}, el = MP.el, $ = MP.$, $$ = MP.$$, fa = MP.fa, icon = MP.icon;
   var FINE = window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches;
   var host = window.chrome && window.chrome.webview && window.__MP_DESKTOP ? window.chrome.webview : null;
   function post(o) { if (host) { try { host.postMessage(o); } catch (e) { /* host gone */ } } }
@@ -57,7 +57,8 @@
   var FOLDER_ICONS = { all: 'chat', unread: 'checks', direct: 'user', group: 'users', project: 'folder', client: 'leave' };
   function wanted() {
     var b = document.body;
-    return b.classList.contains('chat-app') && !b.classList.contains('chat-pop') && FINE && window.innerWidth >= 861;
+    // a computer with a mouse, or a tablet held sideways
+    return b.classList.contains('chat-app') && !b.classList.contains('chat-pop') && window.innerWidth >= 861 && (FINE || window.innerWidth >= 1024);
   }
   function sync() {
     var on = wanted();
@@ -196,6 +197,20 @@
     home: function () {
       show('تنظیمات', function (b) {
         var me = S.me;
+        // search across every page (Telegram has it too)
+        var found = el('div', { class: 'tg-found', hidden: true });
+        var q = el('input', { type: 'search', class: 'tg-ssearch', placeholder: 'جستجو در تنظیمات…', 'aria-label': 'جستجو در تنظیمات' });
+        q.oninput = function () {
+          var v = MP.norm(q.value);
+          found.hidden = !v;
+          Array.prototype.forEach.call(b.children, function (c) { if (c !== q && c !== found) c.hidden = !!v; });
+          if (!v) return;
+          var hits = SEARCH.filter(function (x) { return MP.norm(x[0] + ' ' + x[2]).indexOf(v) >= 0; });
+          found.replaceChildren.apply(found, hits.length ? hits.map(function (x) {
+            return row(x[3] || 'settings', x[0], x[2], { onclick: function () { if (x[1] === 'profile') closeFor(function () { MP.openProfile(me.id); })(); else if (x[1] === 'account') closeFor(function () { MP.openAccount(); })(); else if (x[1] === 'home') { q.value = ''; q.oninput(); } else go(x[1]); } });
+          }) : [el('p', { class: 'tg-hint', text: 'چیزی پیدا نشد' })]);
+        };
+        b.append(q, found);
         b.append(
           el('button', { type: 'button', class: 'tg-me', onclick: closeFor(function () { MP.openProfile(me.id); }) }, MP.avatar(me, 'xl'),
             el('span', null, el('strong', { text: me.name }), el('small', { class: 'online', text: presenceLine() || 'آنلاین' }), el('small', { text: me.title || S.boot.email || '' }))),
@@ -279,6 +294,9 @@
           })));
           b.append(wall, bub, size);
         }
+        var send = sec('ارسال');
+        send.append(row('repeat', 'مهلت برگرداندن پیام', 'تا ۵ ثانیه بعد از ارسال، «برگرداندن» پیام را پس می‌گیرد', { end: sw(read('mp_undo_send') === '1', function (on) { store('mp_undo_send', on ? '1' : null); }) }));
+        b.append(send);
         var motion = sec('کارایی');
         motion.append(row('repeat', 'انیمیشن‌ها', 'حرکت‌های رابط؛ خاموش برای کامپیوترهای کند', { end: sw(!p.motion, function (on) { p.motion = !on; MP.savePrefs(); }) }));
         b.append(motion);
@@ -312,6 +330,18 @@
       });
     }
   };
+  // title, page, where/what, icon
+  var SEARCH = [
+    ['اعلان پیام‌های تازه', 'notify', 'اعلان‌ها و صداها', 'bell'], ['صدای اعلان', 'notify', 'اعلان‌ها و صداها', 'speaker'], ['پیش‌نمایش متن در اعلان', 'notify', 'اعلان‌ها و صداها', 'eye'],
+    ['تم روز / شب / آبی شب', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['رنگ اصلی', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['شیشه‌ای (مات و محو)', 'chat', 'تنظیمات گفت‌وگو', 'palette'],
+    ['پس‌زمینه گفت‌وگوها', 'chat', 'تنظیمات گفت‌وگو', 'image'], ['رنگ پیام‌های من', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['اندازه متن پیام‌ها', 'chat', 'تنظیمات گفت‌وگو', 'edit'],
+    ['انیمیشن‌ها', 'chat', 'کارایی', 'repeat'], ['مهلت برگرداندن پیام (لغو ارسال)', 'chat', 'ارسال', 'repeat'],
+    ['رمز محلی و قفل', 'privacy', 'حریم خصوصی و امنیت', 'lock-key'], ['قفل خودکار', 'privacy', 'حریم خصوصی و امنیت', 'clock'],
+    ['پوشه‌های گفت‌وگو', 'folders', 'پوشه‌ها', 'folder'],
+    ['اجرا با روشن شدن ویندوز', 'advanced', 'پیشرفته', 'monitor'], ['بستن پنجره و رفتن کنار ساعت', 'advanced', 'پیشرفته', 'monitor'], ['میانبر Ctrl+Shift+M', 'advanced', 'پیشرفته', 'menu'],
+    ['قاب پنجره ویندوز', 'advanced', 'پیشرفته', 'monitor'], ['غلط‌یاب املایی', 'advanced', 'پیشرفته', 'spell'], ['پاک کردن حافظه این دستگاه', 'advanced', 'پیشرفته', 'download'],
+    ['مقیاس رابط (بزرگ‌نمایی)', 'home', 'پایین همین صفحه', 'zoom'], ['ویرایش پروفایل و عکس', 'profile', 'پروفایل', 'user'], ['ایمیل، تلگرام، بله، پیامک', 'account', 'حساب کاربری', 'edit']
+  ];
   var AFTER = [[0, 'خاموش'], [1, '۱ دقیقه'], [5, '۵ دقیقه'], [15, '۱۵ دقیقه'], [60, '۱ ساعت'], [300, '۵ ساعت']];
   PAGES.privacy = function () {
     show('حریم خصوصی و امنیت', function (b) {
@@ -495,6 +525,42 @@
       if (lockCfg()) lock(); else MP.tgSettings('privacy');
     }
   });
+
+  /* ------------------------------------------------------------ First run: a short tour of the desktop shell */
+
+  function tour() {
+    if (read('mp_tour_done') || !document.body.classList.contains('tg') || MP.isLocked()) return;
+    var steps = [
+      ['.tg-rail', 'پوشه‌ها', 'گفت‌وگوها دسته‌بندی شده‌اند؛ با Ctrl+1 تا Ctrl+9 بین پوشه‌ها بروید. پوشه‌های خودتان را هم از تنظیمات بسازید.'],
+      ['.tg-burger', 'منو', 'پیام و گروه تازه، پیام‌های ذخیره‌شده، تنظیمات، حالت شب و قفل.'],
+      ['#chat-search', 'جستجو', 'گفت‌وگوها و پیام‌ها؛ با Ctrl+K از هر جا سریع به یک گفت‌وگو بروید.'],
+      ['#chat-who', 'ستون اطلاعات', 'روی نام گفت‌وگو بزنید: اعضا، عکس‌ها، فایل‌ها، لینک‌ها و اعلان همان گفت‌وگو.']
+    ];
+    if (host) steps.push(['.tg-rail-foot', 'برنامه ویندوز', 'کنار ساعت می‌ماند و اعلان می‌دهد؛ در خود اعلان پاسخ بدهید. حضور شما هم از روی کار با کامپیوتر ثبت می‌شود (فقط وقتی واقعاً کار می‌کنید).']);
+    steps = steps.filter(function (x) { var e = $(x[0]); return e && e.offsetParent; });
+    var i = 0, tip = null;
+    function end() { store('mp_tour_done', '1'); if (tip) tip.remove(); $$('.tour-on').forEach(function (e) { e.classList.remove('tour-on'); }); }
+    function show() {
+      $$('.tour-on').forEach(function (e) { e.classList.remove('tour-on'); });
+      if (tip) tip.remove();
+      if (i >= steps.length) { end(); return; }
+      var t = $(steps[i][0]); t.classList.add('tour-on');
+      var r = t.getBoundingClientRect();
+      tip = el('div', { class: 'tour-tip', role: 'dialog', 'aria-label': steps[i][1] },
+        el('strong', { text: steps[i][1] }), el('p', { text: steps[i][2] }),
+        el('div', { class: 'tour-acts' }, el('small', { text: MP.fa(i + 1) + ' از ' + MP.fa(steps.length) }),
+          el('button', { type: 'button', class: 'link', text: 'بعداً', onclick: end }),
+          el('button', { type: 'button', class: 'btn btn-primary btn-sm', text: i === steps.length - 1 ? 'شروع' : 'بعدی', onclick: function () { i++; show(); } })));
+      document.body.append(tip);
+      var left = r.left - tip.offsetWidth - 14 > 8 ? r.left - tip.offsetWidth - 14 : Math.min(innerWidth - tip.offsetWidth - 8, r.right + 14);
+      tip.style.left = Math.max(8, left) + 'px';
+      tip.style.top = Math.max(8, Math.min(innerHeight - tip.offsetHeight - 8, r.top)) + 'px';
+    }
+    show();
+  }
+  MP.tour = function () { store('mp_tour_done', null); tour(); };
+  MP.on('booted', function () { setTimeout(tour, 1200); });
+  setTimeout(tour, 4000);
 
   /* ------------------------------------------------------------ Spell checking in the composer */
 
