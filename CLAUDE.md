@@ -100,7 +100,7 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     (localStorage `mp_undo_send`; sender may hard-delete own message ≤ 30 s), Ctrl+↑/↓ reply picking, «@» jump button,
     scroll position per chat, settings search, first-run tour (`mp_tour_done`), tablet landscape gets the shell.
   - Scripts are served as one bundle (`MP_Frontend::script_urls`, uploads/moraba-panel/bundle-VER-HASH.js; separate files
-    with `?mp_debug=1` or MP_NO_BUNDLE). Browser errors go to `client-errors` (MP_Diag, option `mp_js_errors`, supervisors:
+    with `?mp_debug=1` or MP_NO_BUNDLE; each file is wrapped in try/catch in the bundle → `window.__mpBootErr`; old bundles kept 2 days; a bundle that fails to load falls back to the separate files; still on the splash after 15 s → the reason + «تلاش دوباره» / «پاک کردن حافظه», reported as `stuck on start`). Browser errors go to `client-errors` (MP_Diag, option `mp_js_errors`, supervisors:
     settings → advanced → «خطاهای برنامه»).
   - Phones (`assets/js/chat-mobile.js`, body `tgm` = chat app below the desktop shell; html `tgm-and` / `tgm-ios`):
     Telegram's 2025 phone look on both: large title `#tgm-head` («در حال اتصال…» from `MP.connState`/event `conn`,
