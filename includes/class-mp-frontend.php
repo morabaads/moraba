@@ -623,6 +623,19 @@ JS;
 		return array( trailingslashit( $up['baseurl'] ) . 'moraba-panel/' . $name );
 	}
 
+	/**
+	 * Dana from the page's own address (a path without the host): a font from another address — the site opened with
+	 * or without «www.», http vs https, the Windows app — is refused by browsers without a CORS header, and the
+	 * page falls back to Tahoma. Printed after app.css, so it wins over app.css's own @font-face.
+	 */
+	public static function font_url( $file = 'dana.woff2' ) {
+		return wp_make_link_relative( MP_URL . 'assets/fonts/' . $file );
+	}
+
+	public static function font_style() {
+		return '<style>@font-face{font-family:Dana;src:url(' . esc_url( self::font_url() ) . ") format('woff2'),url(" . esc_url( self::font_url( 'dana.ttf' ) ) . ") format('truetype');font-weight:10 990;font-style:normal;font-display:swap}</style>\n";
+	}
+
 	public static function asset( $path ) {
 		return esc_url( MP_URL . 'assets/' . $path . '?ver=' . MP_VERSION );
 	}

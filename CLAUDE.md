@@ -145,6 +145,7 @@ WordPress 6.6 + SQLite plugin in `/tmp/wp`, plugin symlinked into `wp-content/pl
 - No emulator here: the APK is checked with `aapt2 dump badging` + dexdump, the web side with a `MorabaApp` stub in Playwright.
 
 ## Conventions
+- Font Dana: `MP_Frontend::font_style()` after app.css in every page loads it from the page's own address (path only), so www/non-www or the Windows app never fall back to Tahoma; `assets/fonts/.htaccess` adds CORS.
 - UI text Persian; digits shown with `fa()` / `MP_Jalali::digits`; dates stored Gregorian, shown Jalali.
 - varchar columns must fit their values (past bugs: files.context, contracts.status).
 - Not testable here: real SMS, payment gateways, iOS/Android devices, real hosting speed, Windows widgets board.

@@ -16,6 +16,7 @@ $mp_t  = $mp_ch ? $mp_ch->title : 'پرتال پروژه';
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <?php MP_Frontend::client_head( $token, $mp_ch && $mp_ch->client_name ? $mp_ch->client_name : $mp_t ); ?>
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
+<?php echo MP_Frontend::font_style(); // phpcs:ignore ?>
 <script>document.documentElement.classList.add('dark')</script>
 </head>
 <body class="cp-body">

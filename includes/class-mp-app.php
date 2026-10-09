@@ -185,7 +185,7 @@ class MP_App {
 		?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0e0e10"><meta name="robots" content="noindex,nofollow"><title>MORABA | انتخاب</title>
-<link rel="stylesheet" href="<?php echo esc_url( MP_Frontend::asset( 'css/app.css' ) ); ?>"></head>
+<link rel="stylesheet" href="<?php echo esc_url( MP_Frontend::asset( 'css/app.css' ) ); ?>"><?php echo MP_Frontend::font_style(); // phpcs:ignore ?></head>
 <body class="mp-gate mp-login"><main class="login-card">
 <img src="<?php echo esc_url( MP_Frontend::asset( 'img/logo-light.png' ) ); ?>" alt="MORABA" class="login-logo">
 <h1>کجا برویم؟</h1><p class="login-sub">با این شماره به چند جا دسترسی دارید.</p>
