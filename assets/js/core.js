@@ -1333,9 +1333,11 @@
     root.classList.toggle('tinted', dark && !!p.tint);
     root.classList.toggle('reduced-motion', !!p.motion);
     root.classList.toggle('glass', p.glass !== false); // frosted panels (only «مربع چت» uses it)
+    root.classList.toggle('bd-soft', p.backdrop === 'soft'); // the backdrop behind them, chosen by each person
+    root.classList.toggle('bd-plain', p.backdrop === 'plain');
     if (p.accent) { root.style.setProperty('--brand', p.accent); root.style.setProperty('--brand-strong', p.accent); root.classList.add('accent'); }
     else { root.style.removeProperty('--brand'); root.style.removeProperty('--brand-strong'); root.classList.remove('accent'); }
-    try { localStorage.setItem('mp-prefs', JSON.stringify({ dark: !!p.dark, motion: !!p.motion, tint: !!p.tint, auto: !!p.auto, accent: p.accent || '', glass: p.glass !== false })); } catch (e) { /* ignore */ }
+    try { localStorage.setItem('mp-prefs', JSON.stringify({ dark: !!p.dark, motion: !!p.motion, tint: !!p.tint, auto: !!p.auto, accent: p.accent || '', glass: p.glass !== false, backdrop: p.backdrop || 'color' })); } catch (e) { /* ignore */ }
     var meta = $('meta[name=theme-color]'); if (meta) meta.content = dark ? (p.tint ? '#17212b' : '#0e0f10') : '#161616';
     MP.emit('theme', { dark: dark, tint: dark && !!p.tint });
   };

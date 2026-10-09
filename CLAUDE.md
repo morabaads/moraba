@@ -107,7 +107,7 @@ Active branch: `claude/awesome-hopper-84p492`. Reply to the owner in Persian; sa
     underline folder tabs, ✎ `#tgm-fab`, edge swipe opens the drawer; iPhone: centred title + ✎, bottom `#tgm-tabs`
     (مخاطبین · گفت‌وگوها · تنظیمات, unread badge, `navigator.setAppBadge`). `MP.contacts()` full-screen page
     (`MP.lastSeenOf`, call button). Drawer/settings/pages close with the back button (`MP.pushLayer`). Settings are
-    full screen. Passcode on phones: lock after `after` minutes in the background, fingerprint / Face ID
+    full screen. Backdrop behind the glass per person: `prefs.backdrop` color/soft/plain (html `bd-soft`/`bd-plain`). Passcode on phones: lock after `after` minutes in the background, fingerprint / Face ID
     (Android app `MorabaApp.biometric` → `window.__mpBio`; web app WebAuthn platform key, `cfg.cred`), Android
     FLAG_SECURE while a passcode is set. Shared files/text: `#share` → `MP.takeShared()` (Android app:
     `MorabaApp.shared()` + `/__mp_share/N` served by `shouldInterceptRequest`; web app: manifest `share_target`

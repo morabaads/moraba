@@ -134,7 +134,7 @@ class MP_Rest {
 		return array(
 			'me'        => MP_Util::user_payload( $uid ),
 			'email'     => wp_get_current_user()->user_email,
-			'prefs'     => wp_parse_args( is_array( $prefs ) ? $prefs : array(), array( 'dark' => true, 'motion' => false, 'emails' => true, 'telegram' => true, 'bale' => true, 'sms' => true, 'tint' => false, 'auto' => false, 'accent' => '', 'glass' => true ) ),
+			'prefs'     => wp_parse_args( is_array( $prefs ) ? $prefs : array(), array( 'dark' => true, 'motion' => false, 'emails' => true, 'telegram' => true, 'bale' => true, 'sms' => true, 'tint' => false, 'auto' => false, 'accent' => '', 'glass' => true, 'backdrop' => 'color' ) ),
 			'channels'  => array(
 				'telegram'      => (bool) get_option( 'mp_telegram_token', '' ),
 				'bale'          => (bool) get_option( 'mp_bale_token', '' ),
@@ -209,6 +209,8 @@ class MP_Rest {
 			}
 			// Theme colour (Telegram-style accent): a #rrggbb or nothing.
 			$out['accent'] = isset( $p['accent'] ) && preg_match( '/^#[0-9a-fA-F]{6}$/', (string) $p['accent'] ) ? strtolower( $p['accent'] ) : '';
+			// «مربع چت» backdrop behind the glass: colourful, soft (one gentle tint) or plain.
+			$out['backdrop'] = isset( $p['backdrop'] ) && in_array( $p['backdrop'], array( 'color', 'soft', 'plain' ), true ) ? $p['backdrop'] : 'color';
 			update_user_meta( $uid, 'mp_prefs', $out );
 		}
 		return self::bootstrap();

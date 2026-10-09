@@ -12,7 +12,7 @@ defined( 'ABSPATH' ) || exit;
 <link rel="icon" type="image/png" href="<?php echo MP_Frontend::asset( 'img/symbol.png' ); // phpcs:ignore ?>">
 <link rel="stylesheet" href="<?php echo MP_Frontend::asset( 'css/app.css' ); // phpcs:ignore ?>">
 </head>
-<script>try{var p=JSON.parse(localStorage.getItem('mp-prefs')||'{}'),r=document.documentElement;if(p.dark!==false)r.classList.add('dark');if(p.dark!==false&&p.tint)r.classList.add('tinted');if(p.glass!==false)r.classList.add('glass');if(/^#[0-9a-f]{6}$/i.test(p.accent||'')){r.style.setProperty('--brand',p.accent);r.classList.add('accent');}}catch(e){}</script>
+<script>try{var p=JSON.parse(localStorage.getItem('mp-prefs')||'{}'),r=document.documentElement;if(p.dark!==false)r.classList.add('dark');if(p.dark!==false&&p.tint)r.classList.add('tinted');if(p.glass!==false)r.classList.add('glass');if(p.backdrop==='soft'||p.backdrop==='plain')r.classList.add('bd-'+p.backdrop);if(/^#[0-9a-f]{6}$/i.test(p.accent||'')){r.style.setProperty('--brand',p.accent);r.classList.add('accent');}}catch(e){}</script>
 <body class="mp-gate mp-login<?php echo ! empty( $mp_chat_app ) ? ' chat-login' : ''; ?>">
 <?php
 $mp_ic = function ( $d ) {

@@ -330,6 +330,13 @@
           MP.desktop.set('mica', on);
           MP.confirm('باز کردن دوباره', 'برای اعمال، مربع چت بسته و دوباره باز شود؟', 'باز کردن دوباره').then(function (ok) { if (ok) post({ t: 'restart' }); });
         }) }));
+        if (p.glass !== false) {
+          var BDS = [['color', 'رنگی'], ['soft', 'ملایم'], ['plain', 'ساده']], bd = p.backdrop || 'color';
+          themes.append(el('div', { class: 'tg-bds', role: 'radiogroup', 'aria-label': 'پس‌زمینه برنامه' }, el('small', { text: 'پس‌زمینه برنامه' }), el('div', { class: 'tg-bds-row' }, BDS.map(function (x) {
+            return el('button', { type: 'button', role: 'radio', class: 'tg-bd bd-' + x[0] + (bd === x[0] ? ' on' : ''), 'aria-checked': String(bd === x[0]), onclick: function () { p.backdrop = x[0]; MP.savePrefs(); PAGES.chat(); } },
+              el('span', { class: 'tg-bdprev' }), el('small', { text: x[1] }));
+          }))));
+        }
         themes.append(row('palette', 'شیشه‌ای (مات و محو)', 'ستون‌ها و پنجره‌ها نیمه‌شفاف با پس‌زمینه محو؛ خاموش برای کامپیوترهای کند', { end: sw(p.glass !== false, function (on) { p.glass = on; MP.savePrefs(); }) }));
         b.append(themes);
         var L = MP.chatLooks;
@@ -393,7 +400,7 @@
   var SEARCH = [
     ['اعلان پیام‌های تازه', 'notify', 'اعلان‌ها و صداها', 'bell'], ['صدای اعلان', 'notify', 'اعلان‌ها و صداها', 'speaker'], ['پیش‌نمایش متن در اعلان', 'notify', 'اعلان‌ها و صداها', 'eye'],
     ['تم روز / شب / آبی شب', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['رنگ اصلی', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['شیشه‌ای (مات و محو)', 'chat', 'تنظیمات گفت‌وگو', 'palette'],
-    ['پس‌زمینه گفت‌وگوها', 'chat', 'تنظیمات گفت‌وگو', 'image'], ['رنگ پیام‌های من', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['اندازه متن پیام‌ها', 'chat', 'تنظیمات گفت‌وگو', 'edit'],
+    ['پس‌زمینه برنامه (رنگی / ملایم / ساده)', 'chat', 'تنظیمات گفت‌وگو', 'image'], ['پس‌زمینه گفت‌وگوها', 'chat', 'تنظیمات گفت‌وگو', 'image'], ['رنگ پیام‌های من', 'chat', 'تنظیمات گفت‌وگو', 'palette'], ['اندازه متن پیام‌ها', 'chat', 'تنظیمات گفت‌وگو', 'edit'],
     ['انیمیشن‌ها', 'chat', 'کارایی', 'repeat'], ['مهلت برگرداندن پیام (لغو ارسال)', 'chat', 'ارسال', 'repeat'],
     ['رمز محلی و قفل', 'privacy', 'حریم خصوصی و امنیت', 'lock-key'], ['قفل خودکار', 'privacy', 'حریم خصوصی و امنیت', 'clock'],
     ['پوشه‌های گفت‌وگو', 'folders', 'پوشه‌ها', 'folder'],
