@@ -3971,3 +3971,4 @@ html.mica body.chat-app .chat-messages{background-image:none}
 .cr-no{background:#e5484d}.cr-no .icon{transform:rotate(135deg)}
 .cr-yes{background:#2fa36b;animation:cr-shake 1.2s infinite}
 @keyframes cr-shake{0%,60%,100%{transform:none}70%{transform:rotate(-12deg)}80%{transform:rotate(12deg)}90%{transform:rotate(-8deg)}}
+.cl-filters{display:flex;flex-wrap:wrap;gap:6px;padding:4px 12px 8px}.cl-filters .chip{cursor:pointer}.cl-filters .chip.on{background:var(--brand);color:#fff}.cl-from{border:1px solid var(--line);border-radius:999px;padding:2px 8px;background:var(--surface-2);font-size:12px}

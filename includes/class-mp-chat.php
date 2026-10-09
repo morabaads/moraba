@@ -53,6 +53,8 @@ class MP_Chat {
 			array( "channels/$id/search", 'GET', 'search' ),
 			array( "channels/$id/media", 'GET', 'media' ),
 			array( "channels/$id/media-counts", 'GET', 'media_counts' ),
+			array( 'chat-folders', 'GET', 'folders' ),
+			array( 'chat-folders', 'POST', 'save_folders' ),
 			array( "channels/$id/mute", 'POST', 'mute' ),
 			array( "channels/$id/read", 'POST', 'read' ),
 			array( 'channels/saved', 'POST', 'saved' ),
@@ -787,6 +789,37 @@ class MP_Chat {
 			'voice'  => $n( " AND f.mime LIKE 'audio/%%'" ),
 			'links'  => $links,
 		);
+	}
+
+	/** GET chat-folders — my own chat folders (Telegram's «پوشه‌ها»): [{id, name, chats: [channel ids]}] */
+	public static function folders() {
+		$f = get_user_meta( self::uid(), 'mp_chat_folders', true );
+		return is_array( $f ) ? array_values( $f ) : array();
+	}
+
+	/** POST chat-folders {folders: [{id?, name, chats}]} — the whole list, at most 10, each up to 200 chats. */
+	public static function save_folders( WP_REST_Request $r ) {
+		$uid = self::uid();
+		$out = array();
+		$max = 0;
+		foreach ( is_array( $r['folders'] ) ? $r['folders'] : array() as $f ) {
+			$max = max( $max, isset( $f['id'] ) ? (int) $f['id'] : 0 );
+		}
+		foreach ( array_slice( is_array( $r['folders'] ) ? $r['folders'] : array(), 0, 10 ) as $f ) {
+			$name = MP_Util::text( isset( $f['name'] ) ? $f['name'] : '', 30 );
+			if ( '' === $name ) {
+				continue;
+			}
+			$chats = array();
+			foreach ( array_slice( isset( $f['chats'] ) && is_array( $f['chats'] ) ? $f['chats'] : array(), 0, 200 ) as $c ) {
+				if ( MP_Rest::channel_for( (int) $c, $uid ) ) {
+					$chats[] = (int) $c;
+				}
+			}
+			$out[] = array( 'id' => ! empty( $f['id'] ) ? (int) $f['id'] : ++$max, 'name' => $name, 'chats' => array_values( array_unique( $chats ) ) );
+		}
+		update_user_meta( $uid, 'mp_chat_folders', $out );
+		return $out;
 	}
 
 	/* ------------------------------------------------------------------ Mute, read, saved */

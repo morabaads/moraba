@@ -241,12 +241,14 @@
     (S.folders || []).forEach(function (f) { if (chs.some(function (c) { return c.type === 'project' && folderOf(c) === f.id; })) t.push(['f' + f.id, f.name]); });
     if (chs.some(function (c) { return c.type === 'project' && !folderOf(c); })) t.push(['project', (S.folders || []).length ? 'سایر پروژه‌ها' : 'پروژه‌ها']);
     if (chs.some(function (c) { return c.type === 'client'; })) t.push(['client', 'مشتری‌ها']);
+    (S.chatFolders || []).forEach(function (f) { t.push(['u' + f.id, f.name]); });
     return t;
   }
   function inTab(c, tab) {
     if (tab === 'all') return true;
     if (tab === 'unread') return isUnread(c) || c.id === current;
     if (tab.charAt(0) === 'f') return c.type === 'project' && folderOf(c) === +tab.slice(1);
+    if (tab.charAt(0) === 'u') { var uf = (S.chatFolders || []).filter(function (f) { return 'u' + f.id === tab; })[0]; return !!uf && uf.chats.indexOf(c.id) >= 0; }
     if (tab === 'project') return c.type === 'project' && !folderOf(c);
     if (tab === 'direct') return c.type === 'direct' || c.type === 'saved';
     return c.type === tab;
@@ -296,6 +298,7 @@
     var quiet = listArch ? [] : all.filter(function (c) { return (c.type === 'project' || c.type === 'saved') && !c.last && c.id !== current && !c.pinned; });
     var items = (q || showQuiet) ? all : all.filter(function (c) { return quiet.indexOf(c) < 0; });
     items.sort(listOrder);
+    if (q) list.append(findFilters());
     if (q && items.length) list.append(el('div', { class: 'chat-sec', text: 'گفت‌وگوها' }));
     items.forEach(function (c) { list.append(chatRow(c)); });
     if (q) {
@@ -321,11 +324,21 @@
     paintActivity();
     MP.emit('chatlist');
   }
+  var findKind = '', findFrom = 0;
+  /** Under the search box while searching: kind of message and who sent it. */
+  function findFilters() {
+    var kinds = [['', 'همه'], ['photo', 'عکس'], ['video', 'ویدیو'], ['file', 'فایل'], ['link', 'لینک'], ['voice', 'ویس']];
+    var who = el('select', { class: 'cl-from', 'aria-label': 'فرستنده', onchange: function () { findFrom = +who.value; foundMsgs = null; renderList(); findMessages(); } },
+      [el('option', { value: 0, text: 'از همه' })].concat(S.users.map(function (u) { return el('option', { value: u.id, text: 'از ' + u.name, selected: u.id === findFrom }); })));
+    return el('div', { class: 'cl-filters' }, kinds.map(function (k) {
+      return el('button', { type: 'button', class: 'chip' + (findKind === k[0] ? ' on' : ''), text: k[1], onclick: function () { findKind = k[0]; foundMsgs = null; renderList(); findMessages(); } });
+    }), who);
+  }
   function findMessages() {
     clearTimeout(findTimer);
     var q = listQ.trim(); if (MP.norm(q).length < 2) return;
     findTimer = setTimeout(function () {
-      MP.api('messages/search', { query: { q: q } }).then(function (l) { if (listQ.trim() === q) { foundMsgs = l; renderList(); } }).catch(function () {});
+      MP.api('messages/search', { query: { q: q, kind: findKind, from: findFrom || '' } }).then(function (l) { if (listQ.trim() === q) { foundMsgs = l; renderList(); } }).catch(function () {});
     }, 350);
   }
   /** One conversation: avatar, name (+ muted), last message or draft, time, my ticks, @, unread badge or pin. */
@@ -3218,6 +3231,7 @@
     if (c.type !== 'saved') items.push(c.muted ? ['bell', 'روشن کردن اعلان', function () { setMute(c, false); }] : ['bell-off', 'بی‌صدا کردن', function () { setMute(c, true); }]);
     items.push(isUnread(c) ? ['checks', 'علامت خوانده‌شده', function () { markRead(c); }] : ['chat', 'علامت نخوانده', function () { toggleRead(c); }]);
     items.push(['folder', c.arch_me ? 'بیرون آوردن از بایگانی' : 'بایگانی', function () { archiveChat(c, !c.arch_me); }]);
+    items.push(['folder', 'افزودن به پوشه…', function () { addToFolder(c); }]);
     if (c.pinned === 'me' && S.channels.filter(function (x) { return x.pinned === 'me'; }).length > 1) items.push(['list', 'ترتیب سنجاق‌ها', pinOrder]);
     items.push(['eye', 'اطلاعات گفت‌وگو', function () { if (sideWide() && c.id === current) { if (!sidePref()) toggleSide(); } else chatInfo(c); }]);
     if (S.boot.channels.ai && c.last) items.push(['list', 'خلاصه هوشمند پیام‌ها', function () { summarize(c); }]);
@@ -3240,6 +3254,41 @@
     while (items.length && !items[items.length - 1]) items.pop();
     return items;
   }
+  /** My folders: tick the ones this chat belongs to, or make a new one. */
+  function addToFolder(c) {
+    var fs = (S.chatFolders || []).map(function (f) { return Object.assign({}, f, { chats: f.chats.slice() }); });
+    var name = el('input', { class: 'input', maxlength: 30, placeholder: 'نام پوشه تازه، مثلاً «فوری» یا «چاپ»' });
+    var list = el('div', { class: 'check-list' }, fs.map(function (f) {
+      var cb = el('input', { type: 'checkbox', checked: f.chats.indexOf(c.id) >= 0 });
+      cb.onchange = function () { var i = f.chats.indexOf(c.id); if (cb.checked && i < 0) f.chats.push(c.id); if (!cb.checked && i >= 0) f.chats.splice(i, 1); };
+      return el('label', { class: 'check' }, cb, el('span', { text: f.name }));
+    }));
+    var form = el('form', { class: 'form' }, fs.length ? list : el('p', { class: 'hint', text: 'هنوز پوشه‌ای ندارید.' }), MP.field('پوشه تازه', name), MP.actions('ذخیره'));
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      if (name.value.trim()) fs.push({ name: name.value.trim(), chats: [c.id] });
+      MP.api('chat-folders', { method: 'POST', body: { folders: fs } }).then(function (l) { S.chatFolders = l; MP.dialog.close(); renderList(); MP.toast('پوشه‌ها ذخیره شد'); }).catch(MP.soft);
+    };
+    MP.dialog.open('«' + c.title + '» در پوشه‌ها', form);
+  }
+  MP.chatFolderEdit = function (f) {
+    var fs = (S.chatFolders || []).map(function (x) { return Object.assign({}, x, { chats: x.chats.slice() }); });
+    var cur = f ? fs.filter(function (x) { return x.id === f.id; })[0] : { name: '', chats: [] };
+    var name = el('input', { class: 'input', maxlength: 30, required: true, value: cur.name, placeholder: 'نام پوشه' });
+    var list = el('div', { class: 'check-list', style: { maxHeight: '45vh', overflow: 'auto' } }, S.channels.slice().sort(listOrder).map(function (c) {
+      var cb = el('input', { type: 'checkbox', checked: cur.chats.indexOf(c.id) >= 0 });
+      cb.onchange = function () { var i = cur.chats.indexOf(c.id); if (cb.checked && i < 0) cur.chats.push(c.id); if (!cb.checked && i >= 0) cur.chats.splice(i, 1); };
+      return el('label', { class: 'check' }, cb, channelIcon(c, 'sm'), el('span', { text: c.title }));
+    }));
+    var form = el('form', { class: 'form' }, MP.field('نام', name), el('div', { class: 'field' }, el('span', { text: 'گفت‌وگوهای این پوشه' }), list),
+      el('div', { class: 'dialog-actions' }, el('button', { type: 'submit', class: 'btn btn-primary', text: 'ذخیره' }),
+        f ? el('button', { type: 'button', class: 'btn btn-danger', text: 'حذف پوشه', onclick: function () { fs = fs.filter(function (x) { return x.id !== f.id; }); save(); } }) : null));
+    function save() {
+      MP.api('chat-folders', { method: 'POST', body: { folders: fs } }).then(function (l) { S.chatFolders = l; MP.dialog.close(); renderList(); }).catch(MP.soft);
+    }
+    form.onsubmit = function (e) { e.preventDefault(); cur.name = name.value.trim(); if (!f) fs.push(cur); save(); };
+    MP.dialog.open(f ? 'ویرایش پوشه' : 'پوشه تازه', form);
+  };
   function chatMenu(c, anchor) {
     if (openMenu) openMenu();
     var forAll = S.manager && c.type !== 'direct', items = chatMenuItems(c);
@@ -3429,7 +3478,10 @@
     MP.dialog.open('گروه اختصاصی مشتری', f);
   };
 
+  MP.loadChatFolders = function () { return MP.api('chat-folders').then(function (l) { S.chatFolders = l; renderList(); return l; }).catch(function () {}); };
+  var foldersAsked = false;
   function open(opts) {
+    if (!foldersAsked) { foldersAsked = true; MP.loadChatFolders(); }
     renderList();
     MP.loadChannels().then(function () {
       var target = opts.channel || current || (window.innerWidth > 860 && S.channels[0] && S.channels[0].id);

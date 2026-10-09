@@ -205,6 +205,7 @@
               row('user', 'ویرایش پروفایل', 'عکس، نام، سمت', { onclick: closeFor(function () { MP.openProfile(me.id); }) }),
               row('bell', 'اعلان‌ها و صداها', host ? 'اعلان ویندوز، صدا، پیش‌نمایش' : 'اعلان مرورگر', { onclick: function () { go('notify'); } }),
               row('lock-key', 'حریم خصوصی و امنیت', lockCfg() ? 'رمز محلی روشن است' : 'رمز محلی، قفل خودکار', { onclick: function () { go('privacy'); } }),
+              row('folder', 'پوشه‌های گفت‌وگو', (S.chatFolders || []).length ? MP.fa((S.chatFolders || []).length) + ' پوشه' : 'گفت‌وگوها را دسته‌بندی کنید', { onclick: function () { go('folders'); } }),
               row('palette', 'تنظیمات گفت‌وگو', 'تم، رنگ، پس‌زمینه، اندازه متن', { onclick: function () { go('chat'); } }),
               row('monitor', 'پیشرفته', host ? 'یکپارچگی با ویندوز، کارایی' : 'کارایی', { onclick: function () { go('advanced'); } }),
               row('edit', 'حساب کاربری', 'ایمیل، تلگرام، بله، پیامک', { onclick: closeFor(function () { MP.openAccount(); }) }),
@@ -329,6 +330,16 @@
       }
       if (!c) b.append(s);
       b.append(el('p', { class: 'tg-hint', text: 'رمز فقط روی همین دستگاه نگه داشته می‌شود. با هر بار باز شدن برنامه، با Ctrl + L و بعد از مدت بی‌کاری، مربع چت قفل می‌شود و اعلان‌ها هم بدون نام و متن می‌آیند. اگر رمز را فراموش کنید، با خروج از حساب پاک می‌شود.' }));
+    });
+  };
+  PAGES.folders = function () {
+    show('پوشه‌های گفت‌وگو', function (b) {
+      var s = sec('پوشه‌های من');
+      (S.chatFolders || []).forEach(function (f) {
+        s.append(row('folder', f.name, MP.fa(f.chats.length) + ' گفت‌وگو', { onclick: closeFor(function () { MP.chatFolderEdit(f); }) }));
+      });
+      s.append(row('plus', 'پوشه تازه', 'مثلاً «فوری»، «چاپ» یا «مشتری‌های VIP»', { onclick: closeFor(function () { MP.chatFolderEdit(null); }) }));
+      b.append(s, el('p', { class: 'tg-hint', text: 'پوشه‌ها کنار فهرست گفت‌وگوها می‌آیند (Ctrl+1 تا Ctrl+9). از منوی هر گفت‌وگو هم «افزودن به پوشه» هست.' }));
     });
   };
   PAGES.passcode = function () {
