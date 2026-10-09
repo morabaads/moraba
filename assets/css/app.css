@@ -3958,3 +3958,16 @@ html.glass body.chat-login .login-card{background:var(--glass-3);backdrop-filter
 /* Windows 11 Acrylic behind the app (opt-in): the page itself is see-through */
 html.mica,html.mica body.chat-app{background:transparent!important}
 html.mica body.chat-app .chat-messages{background-image:none}
+/* incoming call */
+.call-ring{position:fixed;inset:0;z-index:250;display:grid;place-items:center;background:rgba(0,0,0,.45);backdrop-filter:blur(10px);animation:fade-in .15s}
+.cr-card{display:grid;justify-items:center;gap:8px;padding:30px 40px 26px;border-radius:24px;background:color-mix(in srgb,var(--surface) 80%,transparent);box-shadow:var(--sh-3);border:1px solid rgba(255,255,255,.08);min-width:280px}
+.cr-av{border-radius:50%;animation:cr-pulse 1.6s infinite}
+@keyframes cr-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 55%,transparent)}100%{box-shadow:0 0 0 22px transparent}}
+.cr-card strong{font-size:19px;margin-top:6px}
+.cr-card small{color:var(--muted)}
+.cr-acts{display:flex;gap:46px;margin-top:16px}
+.cr-acts button{width:60px;height:60px;border-radius:50%;display:grid;place-items:center;color:#fff}
+.cr-acts .icon{width:26px;height:26px}
+.cr-no{background:#e5484d}.cr-no .icon{transform:rotate(135deg)}
+.cr-yes{background:#2fa36b;animation:cr-shake 1.2s infinite}
+@keyframes cr-shake{0%,60%,100%{transform:none}70%{transform:rotate(-12deg)}80%{transform:rotate(12deg)}90%{transform:rotate(-8deg)}}

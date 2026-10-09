@@ -126,7 +126,8 @@ class MP_Presence {
 		}
 		$devices = get_user_meta( $uid, 'mp_presence_devices', true );
 		$devices = is_array( $devices ) ? $devices : array();
-		$devices[ $device ] = array( 't' => $now, 'a' => $active ? 1 : 0, 'i' => $input );
+		$was = self::status( $uid, $now );
+		$devices[ $device ] = array( 't' => $now, 'a' => $active ? 1 : 0, 'i' => $input, 'b' => $busy && $active ? 1 : 0 );
 		// Forget devices silent for a day.
 		foreach ( $devices as $k => $d ) {
 			if ( $now - (int) $d['t'] > DAY_IN_SECONDS ) {
@@ -134,6 +135,9 @@ class MP_Presence {
 			}
 		}
 		update_user_meta( $uid, 'mp_presence_devices', $devices );
+		if ( self::status( $uid, $now ) !== $was ) {
+			MP_Live::bump(); // the chats show «دور از سیستم» / «در تماس» at once
+		}
 
 		$any_active = false;
 		$last_input = 0;
@@ -302,6 +306,41 @@ class MP_Presence {
 			)
 		);
 		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t() . ' WHERE id = %d', $wpdb->insert_id ) );
+	}
+
+	/**
+	 * What each person's computer says right now, for the chat (like Telegram's «last seen» but honest about why):
+	 * busy — a call or meeting keeps the screen on; away — the app runs but nobody has touched the computer for a
+	 * while, or it is locked. Nothing when there is no fresh report (the chat then shows the usual last seen).
+	 */
+	public static function status( $uid, $now = 0 ) {
+		$now = $now ? (int) $now : self::now_ts();
+		$dev = get_user_meta( $uid, 'mp_presence_devices', true );
+		$out = '';
+		foreach ( is_array( $dev ) ? $dev : array() as $d ) {
+			if ( $now - (int) $d['t'] > self::GAP ) {
+				continue;
+			}
+			if ( ! empty( $d['b'] ) ) {
+				return 'busy';
+			}
+			if ( ! empty( $d['a'] ) ) {
+				$out = 'on';
+			} elseif ( '' === $out ) {
+				$out = 'away';
+			}
+		}
+		return 'on' === $out ? '' : $out;
+	}
+	public static function statuses() {
+		$st = array();
+		foreach ( MP_Util::panel_users() as $id ) {
+			$s = self::status( (int) $id );
+			if ( '' !== $s ) {
+				$st[ (int) $id ] = $s;
+			}
+		}
+		return $st;
 	}
 
 	/** Automatic sessions whose computers went quiet: ended at their last report (cron and before every listing). */

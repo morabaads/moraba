@@ -177,7 +177,9 @@ class MP_Live {
 			'ch'   => (object) $chs,
 			'act'  => (object) self::activity( $uid ),
 			'seen' => (object) $seen,
-		);
+			// «دور از سیستم» / «در تماس» from the computers' own reports (MP_Presence::status)
+			'st'   => (object) MP_Presence::statuses(),
+		) + MP_Calls::live( $uid );
 		if ( $open ) {
 			$ch = MP_Rest::channel_for( $open, $uid );
 			if ( $ch ) {

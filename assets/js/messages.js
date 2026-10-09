@@ -49,6 +49,9 @@
     return J.format(d, d.slice(0, 4) !== S.today.slice(0, 4));
   }
   /** «آنلاین» or «آخرین بازدید …» from the heartbeat time (unix seconds). */
+  /** «در تماس» / «دور از سیستم» from the person's computer (automatic attendance), before the usual last seen. */
+  function statusOf(uid) { var st = (S.st || {})[uid]; return st === 'busy' ? 'در تماس یا جلسه' : st === 'away' ? 'دور از سیستم' : ''; }
+  MP.statusOf = statusOf;
   function lastSeen(ts) {
     if (!ts) return 'آخرین بازدید خیلی وقت پیش';
     var ago = Date.now() / 1000 - ts;
@@ -445,7 +448,7 @@
     $('#chat-title').replaceChildren(document.createTextNode(c.title));
     if (c.muted) $('#chat-title').append(el('i', { class: 'ci-mute', html: icon('bell-off') }));
     var sub = $('#chat-sub');
-    var ls = c.type === 'direct' ? lastSeen(Math.max(seenOf(c.other), c.last_seen || 0)) : '';
+    var ls = c.type === 'direct' ? (statusOf(c.other) || lastSeen(Math.max(seenOf(c.other), c.last_seen || 0))) : '';
     sub.classList.toggle('online', ls === 'آنلاین' && navigator.onLine);
     sub.textContent = !navigator.onLine ? 'در انتظار اتصال…' : c.type === 'direct' ? ls : c.settings && c.settings.mode === 'channel' ? 'کانال · ' + fa(c.members) + ' عضو' : c.type === 'saved' ? 'فقط خودتان می‌بینید' : c.pv ? 'خصوصی با مشتری · همکاران پروژه‌های این مشتری می‌بینند' : c.type === 'client' ? 'گروه مشتری · ' + c.client_name + (c.project_id && MP.project(c.project_id) ? ' · ' + MP.project(c.project_id).name : '') : fa(c.members) + ' عضو';
     schedBar();
@@ -460,7 +463,10 @@
       tools.prepend(el('button', { type: 'button', class: 'icon-btn sm keep' + (topic ? '' : ' on'), title: 'تاپیک‌ها', 'aria-label': 'تاپیک‌ها', html: icon('list'), onclick: function () { select(c.id, 0, { topics: true }); } }));
       if (topic) sub.textContent = topic > 0 ? '# ' + (topicName(c.id, topic) || 'تاپیک') : 'همه تاپیک‌ها';
     }
-    if (c.type !== 'saved') tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جلسه آنلاین', 'aria-label': 'جلسه آنلاین', html: icon('video'), onclick: function () { startMeeting(c); } }));
+    if (c.type === 'direct' && MP.call) {
+      tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'تماس صوتی', 'aria-label': 'تماس صوتی', html: icon('phone'), onclick: function () { MP.call(c.other, false); } }));
+      tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'تماس تصویری', 'aria-label': 'تماس تصویری', html: icon('video'), onclick: function () { MP.call(c.other, true); } }));
+    } else if (c.type !== 'saved') tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جلسه آنلاین', 'aria-label': 'جلسه آنلاین', html: icon('video'), onclick: function () { startMeeting(c); } }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', title: 'جستجو در گفت‌وگو', 'aria-label': 'جستجو در گفت‌وگو', html: icon('search'), onclick: openFind }));
     if (FINE && !MP_CONFIG_POP()) tools.append(el('button', { type: 'button', class: 'icon-btn sm keep side-btn' + (sidePref() ? ' on' : ''), title: 'ستون اطلاعات', 'aria-label': 'نمایش یا پنهان کردن ستون اطلاعات', 'aria-pressed': String(sidePref()), html: icon('sidebar'), onclick: toggleSide }));
     tools.append(el('button', { type: 'button', class: 'icon-btn sm keep', 'aria-label': 'گزینه‌های گفت‌وگو', title: 'گزینه‌ها', html: icon('more'), onclick: function (e) { chatMenu(c, e.currentTarget); } }));
@@ -844,7 +850,7 @@
     MP.emit('live', d);
     if (d.v) live.v = d.v;
     var prevSeen = S.seen;
-    S.seen = d.seen || S.seen; S.act = d.act || {};
+    S.seen = d.seen || S.seen; S.act = d.act || {}; S.st = d.st || {};
     var changed = false, total = 0;
     Object.keys(d.ch || {}).forEach(function (k) {
       var st = d.ch[k], c = chan(+k);
@@ -2717,7 +2723,7 @@
     }
     function home() {
       var st = c.settings || {}, sub, online = false;
-      if (c.type === 'direct') { online = isOnline(c.other); sub = online ? 'آنلاین' : lastSeen(Math.max(seenOf(c.other), c.last_seen || 0)); }
+      if (c.type === 'direct') { online = isOnline(c.other) && !statusOf(c.other); sub = statusOf(c.other) || (online ? 'آنلاین' : lastSeen(Math.max(seenOf(c.other), c.last_seen || 0))); }
       else sub = c.type === 'saved' ? 'فقط خودتان می‌بینید' : fa(c.members) + ((st.mode === 'channel') ? ' مشترک' : ' عضو');
       var hero = el('div', { class: 'tg-hero' }, channelIcon(c, 'xl'), el('div', null, el('h3', { text: c.title }), el('small', { class: online ? 'online' : '', text: sub })));
       var about = el('section', { class: 'tg-sec' });
@@ -2747,9 +2753,9 @@
           var v = MP.norm(q.value);
           people.replaceChildren.apply(people, c.member_ids.map(function (id) { return MP.user(id); }).filter(function (u) { return !v || MP.norm(u.name + ' ' + (u.title || '')).indexOf(v) >= 0; })
             .sort(function (a, b) { return (isOnline(b.id) ? 1 : 0) - (isOnline(a.id) ? 1 : 0); }).map(function (u) {
-              var on = isOnline(u.id);
+              var on = isOnline(u.id) && !statusOf(u.id);
               return el('button', { type: 'button', class: 'tg-person', onclick: function () { if (u.id !== S.me.id) MP.startDirect(u.id); } }, MP.avatar(u, 'sm'),
-                el('span', null, el('b', { text: u.name + (u.id === S.me.id ? ' (شما)' : '') }), el('small', { class: on ? 'online' : '', text: on ? 'آنلاین' : lastSeen(seenOf(u.id)) })));
+                el('span', null, el('b', { text: u.name + (u.id === S.me.id ? ' (شما)' : '') }), el('small', { class: on ? 'online' : '', text: statusOf(u.id) || (on ? 'آنلاین' : lastSeen(seenOf(u.id))) })));
             }));
         };
         q.oninput = drawPeople;

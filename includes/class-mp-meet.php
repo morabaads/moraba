@@ -172,7 +172,7 @@ class MP_Meet {
 		return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . self::t() . ' WHERE token = %s', $token ) );
 	}
 
-	private static function people( $mid ) {
+	public static function people( $mid ) {
 		global $wpdb;
 		return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( 'SELECT user_id FROM ' . self::t( 'meeting_people' ) . ' WHERE meeting_id = %d', $mid ) ) );
 	}

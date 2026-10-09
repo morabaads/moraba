@@ -852,6 +852,7 @@ static const wchar_t *path_of(const wchar_t *uri) { const wchar_t *p = uri + wcs
 static void open_outside(const wchar_t *uri) { ShellExecuteW(NULL, L"open", uri, NULL, NULL, SW_SHOWNORMAL); }
 
 static void open_pop(int channel, const wchar_t *title);
+static void open_pop_url(int channel, const wchar_t *url, const wchar_t *title, int w0, int h0);
 static HWND pop_window(ICoreWebView2 *web);
 static void apply_theme(const wchar_t *j);
 static void apply_zoom(double z);
@@ -891,6 +892,12 @@ static HRESULT STDMETHODCALLTYPE on_message(void *self, ICoreWebView2 *sender, I
     else if (!wcscmp(t, L"theme")) apply_theme(j);
     else if (!wcscmp(t, L"status")) { json_str(j, L"text", g_status, 64); set_title(); }
     else if (!wcscmp(t, L"snip")) snip();
+    else if (!wcscmp(t, L"window")) { /* a call room: its own window, camera and microphone allowed (same site) */
+        wchar_t url[1200], title[128];
+        json_str(j, L"url", url, 1200);
+        json_str(j, L"title", title, 128);
+        open_pop_url(0, url, title, 1100, 720);
+    }
     else if (!wcscmp(t, L"restart")) restart();
     else if (!wcscmp(t, L"zoom")) apply_zoom(json_dbl(j, L"v", 1.0));
     else if (!wcscmp(t, L"hide")) { HWND pw = pop_window(sender); if (pw) DestroyWindow(pw); else if (reg_get(L"tray", 1)) hide_window(); else ShowWindow(g_wnd, SW_MINIMIZE); } /* Ctrl+W */
@@ -933,7 +940,8 @@ static HRESULT STDMETHODCALLTYPE on_navigating(void *self, ICoreWebView2 *sender
     } else {
         const wchar_t *p = path_of(uri);
         size_t sl = wcslen(g_scope);
-        int ours = !_wcsnicmp(p, g_scope, sl) || wcsstr(p, L"wp-login.php") || wcsstr(p, L"mp_file=") || wcsstr(p, L"mp_panel=chat") || wcsstr(p, L"rest_route");
+        /* a separate window (a chat or a call room) may show any page of the site */
+        int ours = sender != g_web || !_wcsnicmp(p, g_scope, sl) || wcsstr(p, L"wp-login.php") || wcsstr(p, L"mp_file=") || wcsstr(p, L"mp_panel=chat") || wcsstr(p, L"rest_route");
         if (!wcscmp(p, L"/") || (!wcsncmp(p, L"/?", 2) && !wcsstr(p, L"mp_"))) { /* the site's home (after signing out): back to the chat */
             ICoreWebView2NavigationStartingEventArgs_put_Cancel(args, TRUE);
             ICoreWebView2_Navigate(sender, g_url);
@@ -1269,8 +1277,16 @@ static void apply_zoom(double z) {
 
 static void open_pop(int channel, const wchar_t *title) {
     if (!g_env || channel <= 0) return;
+    wchar_t url[1200];
+    swprintf(url, 1200, L"%ls%lspop=%d#chat-%d", g_url, wcschr(g_url, L'?') ? L"&" : L"?", channel, channel);
+    open_pop_url(channel, url, title, 480, 760);
+}
+
+/* any page of the site in a window of its own: a chat (channel > 0) or a call room (channel 0, found by its URL) */
+static void open_pop_url(int channel, const wchar_t *url, const wchar_t *title, int w0, int h0) {
+    if (!g_env || !same_origin(url)) return;
     for (int i = 0; i < 16; i++)
-        if (g_pops[i].wnd && g_pops[i].channel == channel) {
+        if (g_pops[i].wnd && (channel > 0 ? g_pops[i].channel == channel : !wcscmp(g_pops[i].url, url))) {
             if (IsIconic(g_pops[i].wnd)) ShowWindow(g_pops[i].wnd, SW_RESTORE);
             SetForegroundWindow(g_pops[i].wnd);
             return;
@@ -1281,13 +1297,13 @@ static void open_pop(int channel, const wchar_t *title) {
     Pop *p = &g_pops[i];
     memset(p, 0, sizeof(*p));
     p->channel = channel;
-    swprintf(p->url, 1200, L"%ls%lspop=%d#chat-%d", g_url, wcschr(g_url, L'?') ? L"&" : L"?", channel, channel);
+    lstrcpynW(p->url, url, 1200);
     wchar_t caption[200] = L"";
     if (title && *title) { lstrcpynW(caption, title, 120); lstrcatW(caption, L" \x2014 "); }
     lstrcatW(caption, APP_NAME);
     /* beside the main window, each new one a little lower */
     UINT dpi = GetDpiForWindow(g_wnd);
-    int w = MulDiv(480, dpi ? dpi : 96, 96), hgt = MulDiv(760, dpi ? dpi : 96, 96);
+    int w = MulDiv(w0, dpi ? dpi : 96, 96), hgt = MulDiv(h0, dpi ? dpi : 96, 96);
     RECT mr, wa;
     SystemParametersInfoW(SPI_GETWORKAREA, 0, &wa, 0);
     GetWindowRect(g_wnd, &mr);
